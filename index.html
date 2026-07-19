@@ -29,6 +29,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import * as A from './assets.js';
 
 // ================= world + lighting =================
@@ -401,121 +402,175 @@ const placeholder = A.createCharacter();
 char.add(placeholder);
 scene.add(char);
 
-// Real model (assets/natural_girl_02.glb) — skinned, no clips, so we drive
-// bones procedurally: idle breath + walk/run swing. Falls back to placeholder.
-const rig = { ready: false, bones: {}, model: null };
-new GLTFLoader().loadAsync('assets/natural_girl_02.glb').then(gltf => {
-  const model = gltf.scene;
-  // (model authored facing +Z — no flip needed)
+// Real model: Mixamo-rigged FBX. Idle_with_skin.fbx carries the mesh + skeleton
+// + an Idle clip; the rest are animation-only FBXs sharing that skeleton.
+// Only idle/walk/run are wired this session — the rest load into the clip
+// registry unused, ready for future states (jump, punch, swim, fight-idle).
+const CHAR_HEIGHT = 1.7;
+const CLIP_MANIFEST = [
+  { name: 'walk', file: 'Walking.fbx' },
+  { name: 'run', file: 'Fast Run.fbx' },
+  { name: 'idleAlt', file: 'idle_with_skin.fbx' },
+  { name: 'jump', file: 'Jump.fbx' },
+  { name: 'joyfulJump', file: 'Joyful Jump.fbx' },
+  { name: 'quadPunch', file: 'Quad Punch.fbx' },
+  { name: 'idleToFight', file: 'Standing Idle To Fight Idle.fbx' },
+  { name: 'fightToIdle', file: 'Fight Idle To Standing Idle.fbx' },
+  { name: 'swim', file: 'Swimming.fbx' },
+  { name: 'treadWater', file: 'Treading Water.fbx' },
+];
+
+function createLocomotion(mixer, clips) {
+  const actions = {};
+  for (const name in clips) actions[name] = mixer.clipAction(clips[name]);
+  let currentName = null, returnToName = 'idle';
+  function play(name, { fade = 0.2, oneShot = false } = {}) {
+    const next = actions[name];
+    if (!next || name === currentName) return;
+    const prev = currentName ? actions[currentName] : null;
+    next.reset();
+    if (oneShot) { next.setLoop(THREE.LoopOnce, 1); next.clampWhenFinished = true; }
+    else next.setLoop(THREE.LoopRepeat, Infinity);
+    next.enabled = true;
+    next.setEffectiveWeight(1);
+    next.play(); // crossFadeFrom only blends weights — an un-played action drives nothing (T-pose)
+    if (prev) next.crossFadeFrom(prev, fade, true);
+    if (oneShot) returnToName = currentName || returnToName;
+    currentName = name;
+  }
+  // one-shot clips (jump, punch, ...) hand control back to whatever was playing before them
+  mixer.addEventListener('finished', () => play(returnToName, { fade: 0.2 }));
+  return { setState: play, update: dt => mixer.update(dt) };
+}
+
+const fbxLoader = new FBXLoader().setPath('assets/mixamo_raw/');
+const clips = {};
+let locomotion = null;
+
+// Animation-only FBX downloads can name bones with a different namespace than
+// the skinned download ("mixamorig:Hips" vs "mixamorig1:Hips" vs "Hips").
+// A clip whose track names don't match any bone drives nothing — the rig just
+// freezes in T-pose. Rename every track to this model's actual bone names and
+// drop tracks with no match.
+function retargetClip(clip, boneNames, byStripped) {
+  const strip = n => n.slice(n.lastIndexOf(':') + 1);
+  const tracks = [];
+  for (const t of clip.tracks) {
+    const dot = t.name.lastIndexOf('.');
+    const node = t.name.slice(0, dot), prop = t.name.slice(dot);
+    const target = boneNames.has(node) ? node : byStripped[strip(node)];
+    if (!target) continue;
+    const nt = t.clone();
+    nt.name = target + prop;
+    tracks.push(nt);
+  }
+  const out = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  if (!tracks.length) console.warn(`[character] clip "${clip.name}" matched 0 bones — check skeleton names`);
+  const dropped = clip.tracks.length - tracks.length;
+  if (dropped) console.log(`[character] retarget dropped ${dropped} track(s):`, clip.tracks.filter(t => !tracks.find(n => n.name === t.name)).map(t => t.name).join(', '));
+  return out;
+}
+// Movement is controller-driven — remove the clip's net travel (start→end
+// drift) from a node's position track, keeping in-cycle bob and weight-shift.
+function removeTravel(clip, nodeNames) {
+  for (const t of clip.tracks) {
+    if (!nodeNames.some(n => t.name === n + '.position')) continue;
+    const nf = t.times.length, x0 = t.values[0], z0 = t.values[2];
+    const x1 = t.values[(nf - 1) * 3], z1 = t.values[(nf - 1) * 3 + 2];
+    const T = t.times[nf - 1] - t.times[0];
+    for (let i = 0; i < nf; i++) {
+      const f = T ? (t.times[i] - t.times[0]) / T : 0;
+      t.values[i * 3] -= (x1 - x0) * f;
+      t.values[i * 3 + 2] -= (z1 - z0) * f;
+    }
+  }
+  return clip;
+}
+
+fbxLoader.loadAsync('idle_with_skin.fbx').then(async model => {
+  // Rebind: FBXLoader can parse each SkinnedMesh with duplicate bone instances
+  // distinct from the scene-graph bones the AnimationMixer finds by name.
   model.traverse(o => {
-    if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; }
-    if (o.isBone) {
-      const n = o.name;
-      if (/collider/i.test(n)) return; // VRoid collider helpers shadow real bones
-      if (/L_UpperLeg/i.test(n)) rig.bones.lUpLeg = o;
-      else if (/R_UpperLeg/i.test(n)) rig.bones.rUpLeg = o;
-      else if (/L_LowerLeg/i.test(n)) rig.bones.lLoLeg = o;
-      else if (/R_LowerLeg/i.test(n)) rig.bones.rLoLeg = o;
-      else if (/L_UpperArm/i.test(n)) rig.bones.lUpArm = o;
-      else if (/R_UpperArm/i.test(n)) rig.bones.rUpArm = o;
-      else if (/L_LowerArm/i.test(n)) rig.bones.lLoArm = o;
-      else if (/R_LowerArm/i.test(n)) rig.bones.rLoArm = o;
-      else if (/C_Spine/i.test(n) && !rig.bones.spine) rig.bones.spine = o;
-      else if (/C_Chest|C_UpperChest/i.test(n)) rig.bones.chest = rig.bones.chest || o;
-      else if (/C_Neck/i.test(n)) rig.bones.neck = o;
-      else if (/C_Hips/i.test(n)) rig.bones.hips = o;
+    if (o.isSkinnedMesh) {
+      const bones = o.skeleton.bones.map(b => model.getObjectByName(b.name) || b);
+      o.skeleton = new THREE.Skeleton(bones, o.skeleton.boneInverses);
+      o.bind(o.skeleton, o.bindMatrix);
     }
   });
+  const boneNames = new Set();
+  model.traverse(o => { if (o.isBone) boneNames.add(o.name); });
+  // Whole-body translation/rotation lives on the Armature node (not a bone) —
+  // it must survive retargeting or the pelvis gets pinned and every clip's
+  // weight-shift turns into exaggerated upper-body sway.
+  const nodeNames = new Set(boneNames);
+  model.traverse(o => { if (o.name && (o.isBone || o.isGroup || o.isObject3D) && !o.isMesh) nodeNames.add(o.name); });
+  const rootBone = [...boneNames].find(n => /hips/i.test(n)) || [...boneNames][0];
+  const rootNodes = [rootBone, ...[...nodeNames].filter(n => /armature/i.test(n))];
+  console.log('[character] root nodes:', rootNodes.join(', '));
+  const byStripped = {};
+  for (const b of nodeNames) byStripped[b.slice(b.lastIndexOf(':') + 1)] = b;
+
+  clips.idle = retargetClip(model.animations[0], nodeNames, byStripped);
+  await Promise.all(CLIP_MANIFEST.map(c =>
+    fbxLoader.loadAsync(c.file)
+      .then(fbx => { clips[c.name] = removeTravel(retargetClip(fbx.animations[0], nodeNames, byStripped), rootNodes); })
+      .catch(e => console.warn(`[character] clip "${c.name}" (${c.file}) failed:`, e.message))
+  ));
+  model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  // Mixamo FBX ships its own lights — strip them or they blow out the scene.
+  const embeddedLights = [];
+  model.traverse(o => { if (o.isLight) embeddedLights.push(o); });
+  for (const l of embeddedLights) l.removeFromParent();
+  // FBX materials often come in with transparent=true + low opacity, and
+  // single-sided faces make thin parts vanish at glancing angles — force solid.
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      m.transparent = false;
+      m.opacity = 1;
+      m.alphaMap = null;
+      m.side = THREE.DoubleSide;
+    }
+  });
+  // Mixamo FBX exports ~100× scale; apply the nominal factor, measure, then
+  // fine-normalize to the brief's character height.
+  model.scale.setScalar(0.01);
+  model.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(model);
+  let size = box.getSize(new THREE.Vector3());
+  // Orientation guard: only stand the model up if it's actually authored Z-up
+  // (deeper than tall). Mixamo FBX is normally already Y-up — a blanket -90°
+  // X rotation is what laid her flat on the ground.
+  if (size.z > size.y * 1.4) {
+    model.rotation.x = -Math.PI / 2;
+    model.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(model);
+    size = box.getSize(new THREE.Vector3());
+  }
+  console.log(`[character] idle_with_skin.fbx — size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} u`);
+  model.scale.multiplyScalar(CHAR_HEIGHT / size.y);
+  model.updateMatrixWorld(true);
+  model.position.y -= new THREE.Box3().setFromObject(model).min.y; // feet at group origin
+
   char.remove(placeholder);
   char.add(model);
-  // Arms down: VRoid bone local axes aren't uniform, so rotate in WORLD space —
-  // measure the actual shoulder→elbow direction and swing it to hang downward.
-  char.updateMatrixWorld(true);
-  const armDown = (up, lo) => {
-    if (!up || !lo) return;
-    const a = up.getWorldPosition(new THREE.Vector3());
-    const b = lo.getWorldPosition(new THREE.Vector3());
-    const dir = b.sub(a).normalize();
-    const target = new THREE.Vector3(Math.sign(dir.x) * 0.22, -1, 0).normalize();
-    const qDelta = new THREE.Quaternion().setFromUnitVectors(dir, target);
-    const pq = up.parent.getWorldQuaternion(new THREE.Quaternion());
-    up.quaternion.premultiply(pq.clone().invert().multiply(qDelta).multiply(pq));
-    up.updateWorldMatrix(false, true);
-  };
-  armDown(rig.bones.lUpArm, rig.bones.lLoArm);
-  armDown(rig.bones.rUpArm, rig.bones.rLoArm);
-  // relaxed rest pose: slight permanent elbow bend (forward) + soft knees (backward),
-  // bent in world space about the lateral axis, then baked into the rest pose
-  const bendWorld = (bone, ang) => {
-    if (!bone) return;
-    const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion());
-    const qd = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading)), ang);
-    bone.quaternion.premultiply(pq.clone().invert().multiply(qd).multiply(pq));
-    bone.updateWorldMatrix(false, true);
-  };
-  bendWorld(rig.bones.lLoArm, -0.35);
-  bendWorld(rig.bones.rLoArm, -0.35);
-  bendWorld(rig.bones.lLoLeg, 0.06);
-  bendWorld(rig.bones.rLoLeg, 0.06);
-  bendWorld(rig.bones.lUpLeg, -0.06); // keep feet under hips despite soft knees
-  bendWorld(rig.bones.rUpLeg, -0.06);
-  for (const k in rig.bones) {
-    rig.bones[k].userData.rest = rig.bones[k].rotation.clone();
-    rig.bones[k].userData.restQ = rig.bones[k].quaternion.clone();
-  }
-  rig.model = model; rig.ready = true;
-  window.rig = rig;
-  console.log('[character] loaded, bones:', Object.keys(rig.bones).join(', '));
-}).catch(e => console.warn('[character] GLB failed, using placeholder:', e.message));
 
-let walkPhase = 0, moveBlend = 0, runBlend = 0;
-function animateRig(dt, moving, run) {
-  if (!rig.ready) {
+  const mixer = new THREE.AnimationMixer(model);
+  locomotion = createLocomotion(mixer, clips);
+  locomotion.setState('idle');
+  window.__setState = n => locomotion.setState(n); // console/debug hook
+  window.__clips = clips; window.__model = model; // console/debug hooks
+  console.log('[character] loaded, clips:', Object.keys(clips).join(', '));
+}).catch(e => console.warn('[character] FBX failed, using placeholder:', e.message));
+
+function updateLocomotion(dt, moving, running) {
+  if (!locomotion) {
+    // placeholder bob while the real model streams in
     char.children[0].children[0].position.y = 0.72 + (moving ? Math.abs(Math.sin(performance.now() * 0.009)) * 0.06 : 0);
     return;
   }
-  const b = rig.bones, t = performance.now() * 0.001;
-  moveBlend += ((moving ? 1 : 0) - moveBlend) * Math.min(1, dt * 8);
-  runBlend += ((moving && run ? 1 : 0) - runBlend) * Math.min(1, dt * 6);
-  walkPhase += dt * (7 + runBlend * 4) * moveBlend;
-  const s = Math.sin(walkPhase), c = Math.cos(walkPhase);
-  const amp = (0.5 + runBlend * 0.15) * moveBlend;
-  const set = (bone, ax, val) => { if (bone) bone.rotation[ax] = bone.userData.rest[ax] + val; };
-  // world-space swing about the character's lateral axis → true front/back arm motion,
-  // regardless of what the bone's local axes ended up as after the arms-down retarget
-  const _pq = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _ax = new THREE.Vector3();
-  const swing = (bone, ang) => {
-    if (!bone) return;
-    bone.parent.getWorldQuaternion(_pq);
-    _ax.set(Math.cos(heading), 0, -Math.sin(heading)); // character's right vector
-    _qd.setFromAxisAngle(_ax, ang);
-    bone.quaternion.copy(bone.userData.restQ)
-      .premultiply(_pq.clone().invert().multiply(_qd).multiply(_pq));
-  };
-  // legs: thigh swing + knee that bends most mid back-swing (double-frequency lift)
-  const kneeL = Math.max(0, Math.sin(walkPhase - 0.9)) ;
-  const kneeR = Math.max(0, Math.sin(walkPhase + Math.PI - 0.9));
-  set(b.lUpLeg, 'x', s * amp);
-  set(b.rUpLeg, 'x', -s * amp);
-  set(b.lLoLeg, 'x', kneeL * amp * 1.15);
-  set(b.rLoLeg, 'x', kneeR * amp * 1.15);
-  // arms: opposite swing (front–back in world space); idle breath sway
-  const armAmp = amp * 0.55;
-  swing(b.lUpArm, s * armAmp + Math.sin(t * 1.6) * 0.02);
-  swing(b.rUpArm, -s * armAmp + Math.sin(t * 1.6 + 1) * 0.02);
-  swing(b.lLoArm, Math.max(0, s) * -0.45 * amp);
-  swing(b.rLoArm, Math.max(0, -s) * -0.45 * amp);
-  // torso: slight lean, counter-rotation vs hips
-  set(b.spine, 'x', Math.sin(t * 1.6) * 0.015 * (1 - moveBlend) + moveBlend * 0.05);
-  set(b.spine, 'y', -s * 0.06 * moveBlend);
-  set(b.chest, 'y', -s * 0.05 * moveBlend);
-  set(b.neck, 'x', -moveBlend * 0.03);
-  if (b.hips) {
-    b.hips.userData.restY ?? (b.hips.userData.restY = b.hips.position.y);
-    b.hips.position.y = b.hips.userData.restY - (0.5 - 0.5 * Math.cos(walkPhase * 2)) * 0.035 * moveBlend;
-    set(b.hips, 'y', s * 0.07 * moveBlend);   // pelvis yaw with stride
-    set(b.hips, 'z', c * 0.045 * moveBlend);  // lateral hip roll
-  }
+  locomotion.setState(window.__forceState || (!moving ? 'idle' : running ? 'run' : 'walk'));
+  locomotion.update(dt);
 }
 if (BIOME.lantern) {
   const lamp = new THREE.PointLight(0xffc37a, 30, 22, 1.8);
@@ -566,16 +621,16 @@ cv.addEventListener('pointermove', e => {
 });
 function updateCharacter(dt) {
   // arrows = camera
-  if (keys.ArrowLeft) camYaw += dt * 2.0;
-  if (keys.ArrowRight) camYaw -= dt * 2.0;
-  if (keys.ArrowUp) camPitch += dt * 1.4;
-  if (keys.ArrowDown) camPitch -= dt * 1.4;
+  if (keys.KeyA) camYaw += dt * 2.0;
+  if (keys.KeyD) camYaw -= dt * 2.0;
+  if (keys.KeyW) camPitch += dt * 1.4;
+  if (keys.KeyS) camPitch -= dt * 1.4;
   camPitch = Math.max(0.06, Math.min(1.35, camPitch));
   let ix = 0, iz = 0;
-  if (keys.KeyW) iz -= 1;
-  if (keys.KeyS) iz += 1;
-  if (keys.KeyA) ix -= 1;
-  if (keys.KeyD) ix += 1;
+  if (keys.ArrowUp) iz -= 1;
+  if (keys.ArrowDown) iz += 1;
+  if (keys.ArrowLeft) ix -= 1;
+  if (keys.ArrowRight) ix += 1;
   const moving = ix !== 0 || iz !== 0;
   let running = false;
   if (moving) {
@@ -598,7 +653,7 @@ function updateCharacter(dt) {
   char.rotation.y = heading;
   const gy = groundHeight(char.position.x, char.position.z);
   char.position.y += (gy - char.position.y) * Math.min(1, dt * 14);
-  animateRig(dt, moving, running);
+  updateLocomotion(dt, moving, running);
 }
 let camDist = 7.5;
 addEventListener('wheel', e => {

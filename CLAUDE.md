@@ -26,7 +26,7 @@ Solo 3D learning project: a browser grassland world in vanilla Three.js, built i
 4. If a request conflicts with `docs/brief.md`, say so and propose the compliant version.
 5. Every new asset: add the factory to `assets.js` AND add it to the gallery `items` list in `index.html` so it shows up on the G-key inspection view.
 6. End of session: update the "Current status" block at the bottom of `docs/brief.md`, then commit with message `arcN: <what changed>`. Tag `arc-N` when an arc completes.
-7. Verify in the browser via a local static server (Live Server / `npx serve` / `python3 -m http.server`) — ES modules and GLBs don't load over `file://`.
+7. Never start or restart the dev server; the user always has one running. Keep progress narration to one line per step.
 
 ## Known state / open decisions
 - The procedural VRoid rig in `index.html` is **frozen**: it works, do not improve or extend it. Arc 3 proper replaces it with a self-modeled low-poly character + Mixamo clips (Idle/Walk/Run) via `AnimationMixer`. The VRoid model is earmarked to become an NPC villager later.
