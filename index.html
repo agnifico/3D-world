@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grassland World — Arc 1+2</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #9ed2e8; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; left: 14px; bottom: 14px; z-index: 2;
+    font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; color: #2e4632;
+    background: rgba(236, 233, 216, 0.82); border: 1px solid rgba(107, 79, 53, 0.35);
+    border-radius: 8px; padding: 8px 12px; max-width: 340px;
+  }
+  #hud label { cursor: pointer; user-select: none; color: #6b4f35; }
+  #hud b { color: #6b4f35; }
+  a { color: #4aa8b8; } a:hover { color: #6b4f35; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="hud"><span id="hudText"><b>Grassland World — Arc 1+2</b><br>WASD move · mouse / ←→ pan · ↑↓ overhead · Shift walk/run · <b>G</b> gallery</span><br><label><input type="checkbox" id="alwaysRun"> Always run</label> <span id="coords"></span></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as A from './assets.js';
+
+// ================= world + lighting =================
+// One biome (grassland). Day/Night changes ONLY lighting & colors — the
+// world content (flora mix, objects) is identical in both.
+const TREE_MIX = [0.30, 0.28, 0.27, 0.08, 0.07]; // pine oak birch willow dead
+const LIGHTING = {
+  day: {
+    name: 'Grassland', sky: 0x9ed2e8, fogNear: 70, fogFar: 250,
+    hemiSky: 0xbfe3f2, hemiGround: 0x7a9455, hemiI: 0.9, sunColor: 0xfff2d8, sunI: 1.6,
+    g1: 0x7cb356, g2: 0xa8c66c, grassAccent: 0xc4c96a, sand: 0xcdbb8a, bed: 0x3d6b5e,
+    water: 0x4aa8b8, waterOpacity: 0.82, flowerGlow: 0, lantern: false,
+  },
+  night: {
+    name: 'Grassland — Night', sky: 0x241f38, fogNear: 26, fogFar: 150,
+    hemiSky: 0x4a4270, hemiGround: 0x27403a, hemiI: 0.75, sunColor: 0xa8b4ff, sunI: 0.75,
+    g1: 0x3f5a55, g2: 0x577263, grassAccent: 0x6fae9c, sand: 0x565368, bed: 0x16333a,
+    water: 0x1e4d5c, waterOpacity: 0.88, flowerGlow: 0.45, lantern: true,
+  },
+};
+const modeKey = new URLSearchParams(location.search).get('mode') === 'night' ? 'night' : 'day';
+const BIOME = LIGHTING[modeKey];
+
+// ================= terrain definition =================
+const WATER_Y = -0.9;
+const PATH = [[-10,-45],[5,-28],[11,-11],[15,8],[24,32],[30,40]];
+const STREAM = [[42,18],[24,2],[11,-12],[-8,-30],[-30,-45],[-58,-58]];
+const LAKE = { x: 60, z: 55 };
+
+function distSeg(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
+  return Math.hypot(px - ax - dx * t, pz - az - dz * t);
+}
+function distPoly(px, pz, pts) {
+  let d = 1e9;
+  for (let i = 0; i < pts.length - 1; i++)
+    d = Math.min(d, distSeg(px, pz, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]));
+  return d;
+}
+const clamp01 = v => Math.max(0, Math.min(1, v));
+// 1 inside `inner`, fades to 0 at `outer`
+function fall(d, inner, outer) { const t = clamp01((d - inner) / (outer - inner)); return 1 - t * t * (3 - 2 * t); }
+
+function rawHeight(x, z) {
+  let h = Math.sin(x * 0.021 + 1.3) * Math.cos(z * 0.028 + 0.4) * 2.0
+        + Math.sin(x * 0.048 + 4.1) * Math.sin(z * 0.043 + 2.0) * 0.9
+        + Math.sin(x * 0.11 + 0.7) * Math.cos(z * 0.09 + 5.1) * 0.35 + 0.6;
+  const dx = x - LAKE.x, dz = z - LAKE.z, d = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+  const r = 34 + Math.sin(ang * 3 + 1.2) * 5 + Math.sin(ang * 7 + 0.5) * 2;
+  const tL = fall(d, r - 12, r + 8);
+  const tS = fall(distPoly(x, z, STREAM), 1.5, 5.5);
+  const sink = Math.max(tL, tS * 0.92);
+  return h * (1 - sink) - Math.max(tL * 4.2, tS * 2.4);
+}
+// flat pads for buildings
+const FLATTENS = [
+  { x: -14, z: -48, r: 7 }, { x: -4, z: -52, r: 7 }, { x: -16, z: -38, r: 7 },
+  { x: -8, z: -44, r: 4.5 }, { x: -2, z: -46, r: 4 },
+  { x: -55, z: 60, r: 7 }, { x: 55, z: -55, r: 7 }, { x: -60, z: -15, r: 7 },
+];
+for (const f of FLATTENS) f.h = rawHeight(f.x, f.z);
+function terrainHeight(x, z) {
+  let h = rawHeight(x, z);
+  for (const f of FLATTENS) {
+    const t = fall(Math.hypot(x - f.x, z - f.z), f.r * 0.55, f.r);
+    h = h + (f.h - h) * t;
+  }
+  return h;
+}
+
+// bridge (crosses the stream on the path)
+const BRIDGE = { x: 11, z: -11.5, rot: Math.atan2(10, 36), y: -0.35 };
+function bridgeHeight(x, z) {
+  const dx = x - BRIDGE.x, dz = z - BRIDGE.z;
+  const c = Math.cos(-BRIDGE.rot), s = Math.sin(-BRIDGE.rot);
+  const lx = dx * c - dz * s, lz = dx * s + dz * c;
+  if (Math.abs(lx) > 1.55 || Math.abs(lz) > 6.5) return -Infinity;
+  const t = Math.abs(lz) / 6.5;
+  return BRIDGE.y + 1.5 * (1 - t * t) + 0.25;
+}
+function groundHeight(x, z) { return Math.max(terrainHeight(x, z), bridgeHeight(x, z)); }
+
+// ================= renderer / scene / lights =================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(BIOME.sky);
+scene.fog = new THREE.Fog(BIOME.sky, BIOME.fogNear, BIOME.fogFar);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 600);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+scene.add(new THREE.HemisphereLight(BIOME.hemiSky, BIOME.hemiGround, BIOME.hemiI));
+const sun = new THREE.DirectionalLight(BIOME.sunColor, BIOME.sunI);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -55; sun.shadow.camera.right = 55;
+sun.shadow.camera.top = 55; sun.shadow.camera.bottom = -55;
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 220;
+sun.shadow.bias = -0.0005;
+scene.add(sun, sun.target);
+
+// ================= terrain mesh (vertex-colored) =================
+{
+  const geo = new THREE.PlaneGeometry(200, 200, 140, 140);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const cA = new THREE.Color(BIOME.g1), cB = new THREE.Color(BIOME.g2);
+  const dirt = new THREE.Color(A.C.brown), dirtD = new THREE.Color(A.C.brownDark);
+  const sand = new THREE.Color(BIOME.sand), bed = new THREE.Color(BIOME.bed);
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = terrainHeight(x, z);
+    pos.setY(i, h);
+    const n = Math.sin(x * 0.31 + z * 0.17) * 0.5 + Math.sin(x * 0.07 - z * 0.11) * 0.5;
+    c.lerpColors(cA, cB, clamp01(0.5 + n * 0.45));
+    if (h < WATER_Y + 0.7) c.lerp(sand, fall(h - WATER_Y, -0.2, 0.7));
+    if (h < WATER_Y - 0.4) c.lerp(bed, clamp01((WATER_Y - 0.4 - h) / 2.5));
+    if (h > WATER_Y + 0.2) {
+      const dP = distPoly(x, z, PATH);
+      if (dP < 3.8) { c.lerp(n > 0 ? dirt : dirtD, fall(dP, 2.0, 3.8) * 0.92); }
+      const dH = Math.hypot(x + 9, z + 45);
+      if (dH < 11) c.lerp(dirt, fall(dH, 4, 11) * 0.3);
+    }
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+}
+
+// ================= water =================
+const waterMat = new THREE.MeshStandardMaterial({
+  color: BIOME.water, transparent: true, opacity: BIOME.waterOpacity, flatShading: true, roughness: 0.35, metalness: 0.05,
+});
+waterMat.onBeforeCompile = shader => {
+  shader.uniforms.uTime = { value: 0 };
+  shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    `#include <begin_vertex>
+     transformed.y += (sin(position.x*0.25+uTime*1.3) + sin(position.z*0.31+uTime*1.7)*0.7 + sin((position.x+position.z)*0.12+uTime*0.9)*0.5) * 0.1;`
+  );
+  waterMat.userData.shader = shader;
+};
+{
+  const geo = new THREE.PlaneGeometry(200, 200, 64, 64);
+  geo.rotateX(-Math.PI / 2);
+  const water = new THREE.Mesh(geo, waterMat);
+  water.position.y = WATER_Y;
+  water.receiveShadow = true;
+  scene.add(water);
+}
+
+// ================= placement system (Arc 1) =================
+// Reusable: array of {make, x, z, rot, y?} snapped to terrain height.
+const animated = [];
+function place(make, x, z, rot = 0, y) {
+  const obj = make();
+  obj.position.set(x, y !== undefined ? y : terrainHeight(x, z), z);
+  obj.rotation.y = rot;
+  scene.add(obj);
+  if (obj.userData.blades) animated.push(dt => { obj.userData.blades.rotation.z += dt * 0.7; });
+  return obj;
+}
+// hamlet
+place(A.createHouseA, -14, -48, 0.5);
+place(A.createHouseB, -4, -52, -0.3);
+place(A.createHouseC, -16, -38, 1.9);
+place(A.createWell, -8, -44, 0.4);
+place(A.createCart, -2, -46, -1.2);
+place(A.createSignpost, 3, -31, 0.9);
+place(A.createSignpost, 22, 28, -2.2);
+// landmarks
+place(A.createWatchtower, -55, 60, 0);
+place(A.createWindmill, 55, -55, 2.4);
+place(A.createRuinedArch, -60, -15, 0.7);
+place(A.createStoneBridge, BRIDGE.x, BRIDGE.z, BRIDGE.rot, BRIDGE.y);
+
+// GLB drop-in (pipeline test): placeGLB('assets/tree_pine_01.glb', 0, -20) from the console.
+window.placeGLB = async function (url, x, z, scale = 1) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const obj = gltf.scene;
+  obj.scale.setScalar(scale);
+  obj.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  console.log(`[placeGLB] ${url} — size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} u`);
+  obj.position.set(x, terrainHeight(x, z) - box.min.y, z);
+  scene.add(obj);
+  return obj;
+};
+
+// ================= scattering (Arc 1 trees + Arc 2 ground pass) =================
+const R = A.rng(1234);
+const AVOID = [
+  { x: -9, z: -45, r: 15 }, { x: -55, z: 60, r: 8 }, { x: 55, z: -55, r: 8 },
+  { x: -60, z: -15, r: 7 }, { x: BRIDGE.x, z: BRIDGE.z, r: 9 },
+];
+function blockedBy(x, z, extra = 0) {
+  for (const a of AVOID) if (Math.hypot(x - a.x, z - a.z) < a.r + extra) return true;
+  return false;
+}
+function samplePoint(opts = {}) {
+  for (let tries = 0; tries < 40; tries++) {
+    const x = (R() - 0.5) * 188, z = (R() - 0.5) * 188;
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + (opts.minShore ?? 0.45)) continue;
+    if (opts.maxShore !== undefined && h > WATER_Y + opts.maxShore) continue;
+    const dP = distPoly(x, z, PATH);
+    if (dP < (opts.pathClear ?? 3)) continue;
+    if (opts.pathFade && dP < opts.pathFade && R() < 1 - (dP - (opts.pathClear ?? 3)) / (opts.pathFade - (opts.pathClear ?? 3))) continue;
+    if (blockedBy(x, z, opts.avoidExtra ?? 0)) continue;
+    return { x, z, h };
+  }
+  return null;
+}
+const mtx = (x, y, z, rotY, s, sy = s) =>
+  new THREE.Matrix4().compose(
+    new THREE.Vector3(x, y, z),
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+    new THREE.Vector3(s, sy, s));
+
+// --- trees: 2 seeded template variants per species, instanced ---
+const treePts = [];
+{
+  const buckets = []; // per template: matrix list
+  const templates = [];
+  for (const f of A.TREE_FACTORIES) for (let v = 0; v < 2; v++) { templates.push(f(f.name.length * 7 + v * 13 + 3)); buckets.push([]); }
+  const cum = []; let acc = 0;
+  for (const w of TREE_MIX) { acc += w; cum.push(acc); }
+  const speciesFor = (h) => {
+    // willows hug the shore
+    if (h < WATER_Y + 1.6 && R() < 0.55) return 6 + Math.round(R()); // willow templates
+    const w = R() * acc;
+    for (let sp = 0; sp < 5; sp++) if (w < cum[sp]) return sp * 2 + Math.round(R());
+    return 8;
+  };
+  let placed = 0, guard = 0;
+  while (placed < 115 && guard++ < 3000) {
+    const p = samplePoint({ pathClear: 5, avoidExtra: 2 });
+    if (!p) continue;
+    let ok = true;
+    for (const t of treePts) if (Math.hypot(p.x - t.x, p.z - t.z) < 4) { ok = false; break; }
+    if (!ok) continue;
+    const ti = speciesFor(p.h);
+    buckets[ti].push(mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, 0.8 + R() * 0.5, 0.8 + R() * 0.6));
+    treePts.push(p);
+    placed++;
+  }
+  for (let i = 0; i < templates.length; i++)
+    if (buckets[i].length) scene.add(A.makeInstanced(templates[i], buckets[i]));
+}
+
+// --- rocks: 3 variants ---
+for (let v = 0; v < 3; v++) {
+  const ms = [];
+  for (let i = 0; i < 55; i++) {
+    const p = samplePoint({ minShore: -0.2, pathClear: 2.5 });
+    if (p) ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, 0.5 + R() * 1.2, 0.5 + R() * 0.8));
+  }
+  scene.add(A.makeInstanced(A.createRock(v), ms));
+}
+
+// --- bushes ---
+{
+  const ms = [];
+  for (let i = 0; i < 70; i++) {
+    const p = samplePoint({ pathClear: 3.5, pathFade: 8 });
+    if (p) ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, 0.7 + R() * 0.8));
+  }
+  scene.add(A.makeInstanced(A.createBush(5), ms));
+}
+
+// --- mushrooms (cluster near trees) ---
+{
+  const ms = [];
+  for (let i = 0; i < 90; i++) {
+    const t = treePts[Math.floor(R() * treePts.length)];
+    if (!t) break;
+    const x = t.x + (R() - 0.5) * 4, z = t.z + (R() - 0.5) * 4;
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 0.4) continue;
+    ms.push(mtx(x, h, z, R() * Math.PI * 2, 0.7 + R() * 1.1));
+  }
+  scene.add(A.makeInstanced(A.createMushroom(), ms, { shadow: false }));
+}
+
+// --- flowers: clumps, instanced stems + colored heads ---
+{
+  const stems = [], heads = [], headColors = [];
+  for (let cnum = 0; cnum < 65; cnum++) {
+    const cpt = samplePoint({ pathClear: 3, pathFade: 6, avoidExtra: -6 });
+    if (!cpt) continue;
+    const col = new THREE.Color(A.FLOWER_COLORS[Math.floor(R() * A.FLOWER_COLORS.length)]);
+    const n = 5 + Math.floor(R() * 5);
+    for (let i = 0; i < n; i++) {
+      const x = cpt.x + (R() - 0.5) * 3.2, z = cpt.z + (R() - 0.5) * 3.2;
+      const h = terrainHeight(x, z);
+      if (h < WATER_Y + 0.4 || distPoly(x, z, PATH) < 2.2) continue;
+      const M = mtx(x, h, z, R() * Math.PI * 2, 0.8 + R() * 0.5);
+      stems.push(M); heads.push(M);
+      headColors.push(col.clone().offsetHSL((R() - 0.5) * 0.03, 0, (R() - 0.5) * 0.08));
+    }
+  }
+  const stemGeo = new THREE.CylinderGeometry(0.02, 0.03, 0.36, 4); stemGeo.translate(0, 0.18, 0);
+  const headGeo = new THREE.IcosahedronGeometry(0.09, 0); headGeo.translate(0, 0.4, 0);
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0x6a9a4e, flatShading: true, roughness: 1 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8, emissive: 0xfff2d8, emissiveIntensity: BIOME.flowerGlow * 0.5 });
+  A.addWind(stemMat, 0.05); A.addWind(headMat, 0.05);
+  const stemIM = new THREE.InstancedMesh(stemGeo, stemMat, stems.length);
+  const headIM = new THREE.InstancedMesh(headGeo, headMat, heads.length);
+  for (let i = 0; i < stems.length; i++) {
+    stemIM.setMatrixAt(i, stems[i]);
+    headIM.setMatrixAt(i, heads[i]);
+    headIM.setColorAt(i, headColors[i]);
+  }
+  headIM.instanceColor.needsUpdate = true;
+  stemIM.receiveShadow = headIM.receiveShadow = true;
+  scene.add(stemIM, headIM);
+  animated.push((dt, t) => {
+    for (const mm of [stemMat, headMat]) if (mm.userData.shader) mm.userData.shader.uniforms.uTime.value = t;
+  });
+}
+
+// --- grass: thousands, one InstancedMesh, wind in vertex shader ---
+{
+  const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, side: THREE.DoubleSide });
+  A.addWind(grassMat, 0.11);
+  const N = 5500;
+  const geo = A.grassTuftGeometry();
+  const im = new THREE.InstancedMesh(geo, grassMat, N);
+  const gA = new THREE.Color(BIOME.g1), gB = new THREE.Color(BIOME.g2), gC = new THREE.Color(BIOME.grassAccent);
+  const col = new THREE.Color();
+  let i = 0, guard = 0;
+  while (i < N && guard++ < N * 12) {
+    const p = samplePoint({ pathClear: 1.6, pathFade: 5, minShore: 0.25, avoidExtra: -10 });
+    if (!p) continue;
+    if (Math.hypot(p.x + 9, p.z + 45) < 8 && R() < 0.75) continue; // thin inside hamlet
+    im.setMatrixAt(i, mtx(p.x, p.h - 0.02, p.z, R() * Math.PI * 2, 0.75 + R() * 0.7, 0.7 + R() * 0.9));
+    col.lerpColors(gA, gB, R()); if (R() < 0.15) col.lerp(gC, 0.5);
+    im.setColorAt(i, col);
+    i++;
+  }
+  im.count = i;
+  im.instanceColor.needsUpdate = true;
+  im.receiveShadow = true;
+  scene.add(im);
+  animated.push((dt, t) => { if (grassMat.userData.shader) grassMat.userData.shader.uniforms.uTime.value = t; });
+}
+animated.push((dt, t) => { if (waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = t; });
+
+// ================= character + controller =================
+const char = new THREE.Group();
+char.position.set(-6, terrainHeight(-6, -40), -40);
+const placeholder = A.createCharacter();
+char.add(placeholder);
+scene.add(char);
+
+// Real model (assets/natural_girl_02.glb) — skinned, no clips, so we drive
+// bones procedurally: idle breath + walk/run swing. Falls back to placeholder.
+const rig = { ready: false, bones: {}, model: null };
+new GLTFLoader().loadAsync('assets/natural_girl_02.glb').then(gltf => {
+  const model = gltf.scene;
+  // (model authored facing +Z — no flip needed)
+  model.traverse(o => {
+    if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; }
+    if (o.isBone) {
+      const n = o.name;
+      if (/collider/i.test(n)) return; // VRoid collider helpers shadow real bones
+      if (/L_UpperLeg/i.test(n)) rig.bones.lUpLeg = o;
+      else if (/R_UpperLeg/i.test(n)) rig.bones.rUpLeg = o;
+      else if (/L_LowerLeg/i.test(n)) rig.bones.lLoLeg = o;
+      else if (/R_LowerLeg/i.test(n)) rig.bones.rLoLeg = o;
+      else if (/L_UpperArm/i.test(n)) rig.bones.lUpArm = o;
+      else if (/R_UpperArm/i.test(n)) rig.bones.rUpArm = o;
+      else if (/L_LowerArm/i.test(n)) rig.bones.lLoArm = o;
+      else if (/R_LowerArm/i.test(n)) rig.bones.rLoArm = o;
+      else if (/C_Spine/i.test(n) && !rig.bones.spine) rig.bones.spine = o;
+      else if (/C_Chest|C_UpperChest/i.test(n)) rig.bones.chest = rig.bones.chest || o;
+      else if (/C_Neck/i.test(n)) rig.bones.neck = o;
+      else if (/C_Hips/i.test(n)) rig.bones.hips = o;
+    }
+  });
+  char.remove(placeholder);
+  char.add(model);
+  // Arms down: VRoid bone local axes aren't uniform, so rotate in WORLD space —
+  // measure the actual shoulder→elbow direction and swing it to hang downward.
+  char.updateMatrixWorld(true);
+  const armDown = (up, lo) => {
+    if (!up || !lo) return;
+    const a = up.getWorldPosition(new THREE.Vector3());
+    const b = lo.getWorldPosition(new THREE.Vector3());
+    const dir = b.sub(a).normalize();
+    const target = new THREE.Vector3(Math.sign(dir.x) * 0.22, -1, 0).normalize();
+    const qDelta = new THREE.Quaternion().setFromUnitVectors(dir, target);
+    const pq = up.parent.getWorldQuaternion(new THREE.Quaternion());
+    up.quaternion.premultiply(pq.clone().invert().multiply(qDelta).multiply(pq));
+    up.updateWorldMatrix(false, true);
+  };
+  armDown(rig.bones.lUpArm, rig.bones.lLoArm);
+  armDown(rig.bones.rUpArm, rig.bones.rLoArm);
+  // relaxed rest pose: slight permanent elbow bend (forward) + soft knees (backward),
+  // bent in world space about the lateral axis, then baked into the rest pose
+  const bendWorld = (bone, ang) => {
+    if (!bone) return;
+    const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+    const qd = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading)), ang);
+    bone.quaternion.premultiply(pq.clone().invert().multiply(qd).multiply(pq));
+    bone.updateWorldMatrix(false, true);
+  };
+  bendWorld(rig.bones.lLoArm, -0.35);
+  bendWorld(rig.bones.rLoArm, -0.35);
+  bendWorld(rig.bones.lLoLeg, 0.06);
+  bendWorld(rig.bones.rLoLeg, 0.06);
+  bendWorld(rig.bones.lUpLeg, -0.06); // keep feet under hips despite soft knees
+  bendWorld(rig.bones.rUpLeg, -0.06);
+  for (const k in rig.bones) {
+    rig.bones[k].userData.rest = rig.bones[k].rotation.clone();
+    rig.bones[k].userData.restQ = rig.bones[k].quaternion.clone();
+  }
+  rig.model = model; rig.ready = true;
+  window.rig = rig;
+  console.log('[character] loaded, bones:', Object.keys(rig.bones).join(', '));
+}).catch(e => console.warn('[character] GLB failed, using placeholder:', e.message));
+
+let walkPhase = 0, moveBlend = 0, runBlend = 0;
+function animateRig(dt, moving, run) {
+  if (!rig.ready) {
+    char.children[0].children[0].position.y = 0.72 + (moving ? Math.abs(Math.sin(performance.now() * 0.009)) * 0.06 : 0);
+    return;
+  }
+  const b = rig.bones, t = performance.now() * 0.001;
+  moveBlend += ((moving ? 1 : 0) - moveBlend) * Math.min(1, dt * 8);
+  runBlend += ((moving && run ? 1 : 0) - runBlend) * Math.min(1, dt * 6);
+  walkPhase += dt * (7 + runBlend * 4) * moveBlend;
+  const s = Math.sin(walkPhase), c = Math.cos(walkPhase);
+  const amp = (0.5 + runBlend * 0.15) * moveBlend;
+  const set = (bone, ax, val) => { if (bone) bone.rotation[ax] = bone.userData.rest[ax] + val; };
+  // world-space swing about the character's lateral axis → true front/back arm motion,
+  // regardless of what the bone's local axes ended up as after the arms-down retarget
+  const _pq = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _ax = new THREE.Vector3();
+  const swing = (bone, ang) => {
+    if (!bone) return;
+    bone.parent.getWorldQuaternion(_pq);
+    _ax.set(Math.cos(heading), 0, -Math.sin(heading)); // character's right vector
+    _qd.setFromAxisAngle(_ax, ang);
+    bone.quaternion.copy(bone.userData.restQ)
+      .premultiply(_pq.clone().invert().multiply(_qd).multiply(_pq));
+  };
+  // legs: thigh swing + knee that bends most mid back-swing (double-frequency lift)
+  const kneeL = Math.max(0, Math.sin(walkPhase - 0.9)) ;
+  const kneeR = Math.max(0, Math.sin(walkPhase + Math.PI - 0.9));
+  set(b.lUpLeg, 'x', s * amp);
+  set(b.rUpLeg, 'x', -s * amp);
+  set(b.lLoLeg, 'x', kneeL * amp * 1.15);
+  set(b.rLoLeg, 'x', kneeR * amp * 1.15);
+  // arms: opposite swing (front–back in world space); idle breath sway
+  const armAmp = amp * 0.55;
+  swing(b.lUpArm, s * armAmp + Math.sin(t * 1.6) * 0.02);
+  swing(b.rUpArm, -s * armAmp + Math.sin(t * 1.6 + 1) * 0.02);
+  swing(b.lLoArm, Math.max(0, s) * -0.45 * amp);
+  swing(b.rLoArm, Math.max(0, -s) * -0.45 * amp);
+  // torso: slight lean, counter-rotation vs hips
+  set(b.spine, 'x', Math.sin(t * 1.6) * 0.015 * (1 - moveBlend) + moveBlend * 0.05);
+  set(b.spine, 'y', -s * 0.06 * moveBlend);
+  set(b.chest, 'y', -s * 0.05 * moveBlend);
+  set(b.neck, 'x', -moveBlend * 0.03);
+  if (b.hips) {
+    b.hips.userData.restY ?? (b.hips.userData.restY = b.hips.position.y);
+    b.hips.position.y = b.hips.userData.restY - (0.5 - 0.5 * Math.cos(walkPhase * 2)) * 0.035 * moveBlend;
+    set(b.hips, 'y', s * 0.07 * moveBlend);   // pelvis yaw with stride
+    set(b.hips, 'z', c * 0.045 * moveBlend);  // lateral hip roll
+  }
+}
+if (BIOME.lantern) {
+  const lamp = new THREE.PointLight(0xffc37a, 30, 22, 1.8);
+  lamp.position.y = 2.2;
+  char.add(lamp);
+}
+scene.add(char);
+
+const keys = {};
+const clearInput = () => { for (const k in keys) keys[k] = false; endPan(); };
+addEventListener('keydown', e => {
+  if (!e.isTrusted) return;
+  keys[e.code] = true;
+  if (e.code === 'KeyG') toggleGallery();
+  if (e.code === 'KeyN') location.search = '?mode=' + (modeKey === 'night' ? 'day' : 'night');
+});
+addEventListener('keyup', e => { if (e.isTrusted) keys[e.code] = false; });
+// focus loss (new tab, fullscreen toggle, context switch) can eat keyup events — reset everything
+addEventListener('blur', clearInput);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearInput(); });
+
+let heading = 0, camPos = null;
+let camYaw = 0, camPitch = 0.36; // orbit state — mouse/arrows drive this
+const alwaysRunEl = document.getElementById('alwaysRun');
+addEventListener('contextmenu', e => e.preventDefault());
+// Pan hardening: only trusted mouse pointer events, right button, canvas-captured,
+// per-event delta clamped, watchdog-cancelled. Synthetic/re-dispatched events
+// (editor overlays, etc.) are ignored entirely — they caused runaway spin.
+let panX = null, panId = -1, panT = 0;
+const cv = renderer.domElement;
+function endPan() {
+  if (panId !== -1) { try { cv.releasePointerCapture(panId); } catch {} }
+  panX = null; panId = -1;
+}
+cv.addEventListener('pointerdown', e => {
+  if (!e.isTrusted || e.pointerType !== 'mouse') return;
+  if (e.button === 2) { panX = e.clientX; panId = e.pointerId; panT = performance.now(); cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointerup', e => { if (e.button === 2 || e.pointerId === panId) endPan(); });
+cv.addEventListener('pointercancel', endPan);
+cv.addEventListener('pointermove', e => {
+  if (inGallery || panX === null) return;
+  if (!e.isTrusted || e.pointerId !== panId) return;
+  if (!(e.buttons & 2)) { endPan(); return; }
+  const dx = Math.max(-60, Math.min(60, e.clientX - panX));
+  camYaw -= dx * 0.0032;
+  panX = e.clientX; panT = performance.now();
+});
+function updateCharacter(dt) {
+  // arrows = camera
+  if (keys.ArrowLeft) camYaw += dt * 2.0;
+  if (keys.ArrowRight) camYaw -= dt * 2.0;
+  if (keys.ArrowUp) camPitch += dt * 1.4;
+  if (keys.ArrowDown) camPitch -= dt * 1.4;
+  camPitch = Math.max(0.06, Math.min(1.35, camPitch));
+  let ix = 0, iz = 0;
+  if (keys.KeyW) iz -= 1;
+  if (keys.KeyS) iz += 1;
+  if (keys.KeyA) ix -= 1;
+  if (keys.KeyD) ix += 1;
+  const moving = ix !== 0 || iz !== 0;
+  let running = false;
+  if (moving) {
+    // view-relative: W runs away from camera, S runs toward it (camera backs off, face to screen)
+    const target = Math.atan2(ix, iz) + camYaw;
+    let d = target - heading;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    heading += d * Math.min(1, dt * 10);
+    const shift = keys.ShiftLeft || keys.ShiftRight;
+    const run = alwaysRunEl.checked ? !shift : shift;
+    running = run;
+    const speed = run ? 8 : 4;
+    const nx = char.position.x + Math.sin(heading) * speed * dt;
+    const nz = char.position.z + Math.cos(heading) * speed * dt;
+    if (Math.abs(nx) < 95 && Math.abs(nz) < 95 && groundHeight(nx, nz) > WATER_Y + 0.12) {
+      char.position.x = nx; char.position.z = nz;
+    }
+  }
+  char.rotation.y = heading;
+  const gy = groundHeight(char.position.x, char.position.z);
+  char.position.y += (gy - char.position.y) * Math.min(1, dt * 14);
+  animateRig(dt, moving, running);
+}
+let camDist = 7.5;
+addEventListener('wheel', e => {
+  if (inGallery) return;
+  camDist = Math.max(1.6, Math.min(16, camDist + e.deltaY * 0.008));
+}, { passive: true });
+function updateCamera(dt) {
+  const dist = camDist;
+  const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
+  const tx = char.position.x + Math.sin(camYaw) * cp * dist;
+  const tz = char.position.z + Math.cos(camYaw) * cp * dist;
+  let ty = char.position.y + 1.6 + sp * dist;
+  ty = Math.max(ty, terrainHeight(tx, tz) + 1.0);
+  if (!camPos) camPos = new THREE.Vector3(tx, ty, tz);
+  camPos.lerp(new THREE.Vector3(tx, ty, tz), 1 - Math.exp(-dt * 10));
+  camera.position.copy(camPos);
+  camera.lookAt(char.position.x, char.position.y + 1.6, char.position.z);
+}
+
+// ================= asset gallery (press G) =================
+// Every factory on a pedestal, slowly rotating — the inspect/iterate view.
+const gallery = new THREE.Group();
+gallery.position.set(0, 0, -400);
+gallery.visible = false;
+{
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(45, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: A.C.green2, flatShading: true, roughness: 1 }));
+  ground.receiveShadow = true;
+  gallery.add(ground);
+  const items = [
+    A.createPineTree(3), A.createOakTree(4), A.createBirchTree(5), A.createWillowTree(6), A.createDeadTree(7),
+    A.createHouseA(), A.createHouseB(), A.createHouseC(),
+    A.createWatchtower(), A.createWindmill(), A.createStoneBridge(), A.createRuinedArch(),
+    A.createWell(), A.createCart(), A.createSignpost(),
+    A.createRock(0), A.createRock(1), A.createRock(2), A.createBush(3), A.createMushroom(), A.createFlower(), A.createCharacter(),
+  ];
+  const cols = 6;
+  items.forEach((it, i) => {
+    const gx = ((i % cols) - (cols - 1) / 2) * 11;
+    const gz = Math.floor(i / cols) * 12 - 16;
+    it.position.set(gx, 0, gz);
+    gallery.add(it);
+    if (it.userData.blades) animated.push(dt => { if (gallery.visible) it.userData.blades.rotation.z += dt * 0.7; });
+    // label
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#2e4632'; cx.font = '600 44px system-ui, sans-serif'; cx.textAlign = 'center';
+    cx.fillText(it.userData.name || 'Asset', 256, 62);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+    sp.scale.set(5.5, 1.03, 1);
+    sp.position.set(gx, 0.6, gz + 3.6);
+    gallery.add(sp);
+  });
+  animated.push(dt => {
+    if (!gallery.visible) return;
+    for (const it of gallery.children) if (it.isGroup) it.rotation.y += dt * 0.35;
+  });
+}
+scene.add(gallery);
+
+let inGallery = false;
+const hudText = document.getElementById('hudText');
+const WORLD_HUD = '<b>' + BIOME.name + ' — Arc 1+2</b> <small style="opacity:.55">v10</small><br>WASD move · hold right-click / ←→ pan · ↑↓ overhead · scroll zoom · Shift walk/run · <b>G</b> gallery · <b>N</b> day/night';
+hudText.innerHTML = WORLD_HUD;
+const coordsEl = document.getElementById('coords');
+function toggleGallery() {
+  inGallery = !inGallery;
+  gallery.visible = inGallery;
+  coordsEl.style.display = inGallery ? 'none' : '';
+  scene.fog.far = inGallery ? 5000 : BIOME.fogFar;
+  scene.fog.near = inGallery ? 3000 : BIOME.fogNear;
+  hudText.innerHTML = inGallery
+    ? '<b>Asset gallery</b> — every factory in assets.js<br><b>G</b> back to the world'
+    : WORLD_HUD;
+}
+
+// ================= loop =================
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+  // per-frame guards: no input while unfocused; stale pan self-cancels
+  if (!document.hasFocus()) clearInput();
+  if (panX !== null && performance.now() - panT > 400) endPan();
+  for (const fn of animated) fn(dt, t);
+  if (inGallery) {
+    const a = t * 0.06;
+    camera.position.set(Math.sin(a) * 40, 12, -400 + Math.cos(a) * 40 + 6);
+    camera.lookAt(0, 3, -400);
+    sun.position.set(30, 50, -370); sun.target.position.set(0, 0, -400);
+  } else {
+    updateCharacter(dt);
+    updateCamera(dt);
+    coordsEl.textContent = `x ${char.position.x.toFixed(1)} · z ${char.position.z.toFixed(1)} · y ${char.position.y.toFixed(1)}`;
+    sun.position.set(char.position.x + 35, 55, char.position.z + 20);
+    sun.target.position.copy(char.position);
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
