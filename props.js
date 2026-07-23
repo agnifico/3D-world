@@ -110,7 +110,7 @@ const KENNEY_PACK = {};
  ['watercraft-pack', ['boat-row-small', 'boat-fishing-small']]
 ].forEach(([pack, names]) => names.forEach(n => (KENNEY_PACK[n] = pack)));
 export { KENNEY_PACK };
-const KENNEY_SCALE = { 'survival-kit': 3.2, 'fantasy-town-kit': 1.7, 'castle-kit': 2.2, 'watercraft-pack': 1.7 };
+export const KENNEY_SCALE = { 'survival-kit': 3.2, 'fantasy-town-kit': 1.7, 'castle-kit': 2.2, 'watercraft-pack': 1.7 };
 const KENNEY_DRESS_OVERRIDES = {
   bedroll: { remap: { '#4aa8b8': 0xe8dfc8 } },
   'bedroll-packed': { remap: { '#4aa8b8': 0xe8dfc8 } },

@@ -6,8 +6,8 @@
 // click-to-select doesn't collide with anything.
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { groundHeight } from './world.js';
-import { registry, removePlacement, spawnNative, spawnKenney } from './props.js';
+import { groundHeight, WATER_Y } from './world.js';
+import { registry, removePlacement, spawnNative, spawnKenney, KENNEY_PACK, KENNEY_SCALE } from './props.js';
 
 let scene, camera, domElement, animated, getChar;
 let raycaster, transform;
@@ -112,3 +112,29 @@ export async function spawnFromCatalog(kind, name) {
 
 export function deleteSelected() { removeSelected(); }
 export function deselectAll() { deselect(); }
+
+// Serializes the live registry back into the two array-literal shapes
+// props.js already reads at startup (NATIVE_PLACEMENTS / KENNEY_PLACEMENTS),
+// ready to paste over those consts. `onWater` is inferred (a static boat sits
+// at exactly WATER_Y - 0.15 until ridden) since it isn't tracked separately —
+// approximate for anything hand-moved to that exact height by coincidence.
+export function exportSnippet() {
+  const native = [], kenney = [];
+  for (const rec of registry) {
+    const o = rec.obj;
+    const x = +o.position.x.toFixed(2), z = +o.position.z.toFixed(2), rot = +o.rotation.y.toFixed(3);
+    if (rec.kind === 'native') {
+      native.push(`  ['${rec.name}', ${x}, ${z}, ${rot}, ${+o.position.y.toFixed(3)}],`);
+    } else {
+      const pack = KENNEY_PACK[rec.name];
+      const base = KENNEY_SCALE[pack] || 2;
+      const sMul = +(o.scale.x / base).toFixed(3);
+      const onWater = Math.abs(o.position.y - (WATER_Y - 0.15)) < 0.05;
+      const fields = [`'${rec.name}'`, x, z, rot, sMul, onWater];
+      while (fields.length > 3 && fields[fields.length - 1] === false) fields.pop(); // trailing false is the default
+      if (fields.length === 5 && fields[4] === 1) fields.pop(); // trailing 1x scale is also the default
+      kenney.push(`  [${fields.join(', ')}],`);
+    }
+  }
+  return `// NATIVE_PLACEMENTS\n[\n${native.join('\n')}\n]\n\n// KENNEY_PLACEMENTS\n[\n${kenney.join('\n')}\n]\n`;
+}

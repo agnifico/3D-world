@@ -16,6 +16,7 @@ import { initController } from './controller.js';
 import { boats } from './boats.js';
 import * as Gallery from './gallery.js';
 import { initEditor } from './editor.js';
+import { initEditorPanel } from './editor-panel.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -82,9 +83,9 @@ const controllerApi = initController(scene, animated, {
 });
 const { char, updateCharacter, updateCamera, frameGuards } = controllerApi;
 
-// Area Designer — L toggles it; no panel yet (step 2 of the staged rollout),
-// drive it from the console: (await import('./editor.js')).spawnFromCatalog(...)
+// Area Designer — press L to open/close
 initEditor({ scene, camera, domElement: renderer.domElement, animated, getChar: () => char });
+initEditorPanel();
 
 window.__scene = scene; window.__gallery = gallery;
 window.__toggleGallery = handleToggleGallery; // console/debug hook (G key requires trusted events)
