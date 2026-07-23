@@ -50,3 +50,18 @@ export function terrainHeight(x, z) {
   }
   return h;
 }
+
+// ---- height-contributor registry ----
+// groundHeight = max over every registered contributor. Terrain registers
+// itself below; the bridge (props.js) and boats (boats.js) register theirs
+// from their own modules at import time, so world.js never has to import
+// them back — that would-be circular dependency (props.js/boats.js need
+// terrainHeight too) is exactly what this registry breaks.
+const _contributors = [];
+export function registerHeightContributor(fn) { _contributors.push(fn); }
+export function groundHeight(x, z) {
+  let h = -Infinity;
+  for (const fn of _contributors) { const v = fn(x, z); if (v > h) h = v; }
+  return h;
+}
+registerHeightContributor(terrainHeight);

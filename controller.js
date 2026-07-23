@@ -1,17 +1,12 @@
 // Grassland World — input, character control, camera. Owns the `char` group,
 // all movement/physics flags, boarding, and the orbit camera.
 import * as THREE from 'three';
-import { terrainHeight } from './world.js';
-import { bridgeHeight } from './props.js';
-import { boats, interactables, boatHeight, updateBoat, setBoardHandler } from './boats.js';
+import { terrainHeight, groundHeight } from './world.js';
+import { boats, interactables, updateBoat, setBoardHandler } from './boats.js';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
 import { BIOME, modeKey } from './lighting.js';
 import { isGalleryOpen } from './gallery.js';
 import * as A from './assets.js';
-
-// terrain + bridge + (non-ridden) boat decks, folded together — the single
-// source of "what's underfoot" everywhere movement/placement needs it.
-function groundHeight(x, z) { return Math.max(terrainHeight(x, z), bridgeHeight(x, z), boatHeight(x, z)); }
 
 export function initController(scene, animated, opts) {
   const { canvas, spawnRipple, spawnSplash, sfxSplash, sfxStep, sfxJump, sfxBoard, onToggleGallery } = opts;

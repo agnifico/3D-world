@@ -4,7 +4,7 @@
 // it registers a board handler here so this module never reaches into the
 // character controller's internals.
 import * as THREE from 'three';
-import { terrainHeight, WATER_Y } from './world.js';
+import { terrainHeight, WATER_Y, registerHeightContributor } from './world.js';
 
 // disembark: 'step' = climb down onto the surface with the step-out clip (no
 // jump); 'leap' = a single ballistic hop using the running-jump clip.
@@ -60,6 +60,7 @@ export function boatHeight(x, z) {
   }
   return best;
 }
+registerHeightContributor(boatHeight);
 
 let bobT = 0;
 export function updateBoat(dt, b, keys, char) {

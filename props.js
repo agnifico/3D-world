@@ -3,8 +3,8 @@
 // also walk on, so its height math lives here next to its placement).
 import * as THREE from 'three';
 import * as A from './assets.js';
-import { terrainHeight, WATER_Y } from './world.js';
-import { BOAT_DEFS, registerBoat, boatHeight } from './boats.js';
+import { terrainHeight, WATER_Y, groundHeight, registerHeightContributor } from './world.js';
+import { BOAT_DEFS, registerBoat } from './boats.js';
 
 function place(scene, animated, make, x, z, rot = 0, y) {
   const obj = make();
@@ -34,6 +34,7 @@ export function bridgeHeight(x, z) {
   const t = Math.min(1, Math.abs(lz) / 6.5);
   return BRIDGE.y + 0.8 * (1 - t * t) + 0.25; // same gentle profile as the mesh deck
 }
+registerHeightContributor(bridgeHeight);
 
 // ================= Kenney set dressing =================
 // Curated shortlist placed into the world in themed vignettes, all through the
@@ -57,7 +58,7 @@ export async function placeKenney(scene, name, x, z, rot = 0, sMul = 1, onWater 
     const obj = await A.loadKenneyModel(`assets/kenney/${pack}/${name}.glb`, KENNEY_DRESS_OVERRIDES[name]);
     obj.scale.setScalar((KENNEY_SCALE[pack] || 2) * sMul);
     obj.rotation.y = rot;
-    obj.position.set(x, onWater ? WATER_Y - 0.15 : Math.max(terrainHeight(x, z), bridgeHeight(x, z), boatHeight(x, z)), z);
+    obj.position.set(x, onWater ? WATER_Y - 0.15 : groundHeight(x, z), z);
     obj.userData.name = name;
     scene.add(obj);
     return obj;
