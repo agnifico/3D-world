@@ -212,8 +212,13 @@ export function createWindmill() {
   g.userData.name = 'Windmill'; g.userData.blades = hub;
   return g;
 }
-// Arched bridge, length along local Z. Deck height above group origin:
-export function bridgeDeckHeight(lz) { const t = Math.min(1, Math.abs(lz) / 6.5); return 1.5 * (1 - t * t) + 0.25; }
+// Arched bridge, length along local Z. Deck height above group origin. `peak`
+// is the arch height at the center (lz=0) — the visual deck (this file) and
+// the walkable height contributor (props.js) intentionally use different
+// peaks today (1.5 vs 0.8, i.e. the walkable surface arcs less than the
+// visual deck); this parameter exists so both share one formula without
+// changing either's number.
+export function bridgeDeckHeight(lz, peak = 1.5) { const t = Math.min(1, Math.abs(lz) / 6.5); return peak * (1 - t * t) + 0.25; }
 export function createStoneBridge() {
   const g = new THREE.Group();
   const segs = 5, half = 6.5;

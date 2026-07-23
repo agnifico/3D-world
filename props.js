@@ -31,8 +31,7 @@ export function bridgeHeight(x, z) {
   const lx = dx * c - dz * s; // width axis (across the deck)
   const lz = dx * s + dz * c; // length axis (along the deck) — matches the visual
   if (Math.abs(lx) > 1.7 || Math.abs(lz) > 6.6) return -Infinity;
-  const t = Math.min(1, Math.abs(lz) / 6.5);
-  return BRIDGE.y + 0.8 * (1 - t * t) + 0.25; // same gentle profile as the mesh deck
+  return BRIDGE.y + A.bridgeDeckHeight(lz, 0.8); // same formula as the visual deck, walkable-surface peak
 }
 registerHeightContributor(bridgeHeight);
 

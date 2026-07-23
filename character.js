@@ -72,21 +72,6 @@ export function createLocomotion(mixer, clips) {
   // (controller.js owns the state that decides whether a return is allowed
   // right now) — `resume` is the hook it calls back into.
   return { setState: play, update: dt => mixer.update(dt), resume: () => play(returnToName, { fade: 0.2 }) };
-
-  window.__model.traverse(o => {
-  if (!o.isMesh) return;
-  const mats = Array.isArray(o.material) ? o.material : [o.material];
-  mats.forEach(m => console.log(o.name, {
-    metalness: m.metalness,
-    roughness: m.roughness,
-    metalnessMap: !!m.metalnessMap,
-    normalMap: !!m.normalMap,
-    aoMap: !!m.aoMap,
-    vertexColors: m.vertexColors,
-    hasColorAttr: !!o.geometry.attributes.color,
-    hasUV2: !!o.geometry.attributes.uv2 || !!o.geometry.attributes.uv1,
-  }));
-});
 }
 
 // A clip's tracks target bones by name; if a name matches no node the track
