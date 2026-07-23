@@ -495,12 +495,51 @@ async function _loadKenneyTemplate(url) {
   if (md > 12 || md < 0.05) console.warn(`[kenney] ${url}: unusual size — check export scale`);
   return g;
 }
+const _toHex = v => (typeof v === 'string' ? C[v] : v);
+// Recolors a Kenney mesh's baked vertex colors in place, remapping one or more
+// swatches. `remap`: { '#hexOfBakedColor': paletteColorOrKey, ... } — same
+// shape as loadKenneyModel's `overrides.remap`. Kenney clones share their
+// template's geometry by reference (Mesh.clone() doesn't deep-clone geometry),
+// so this ALWAYS clones before mutating — recoloring one placed barrel must
+// never recolor every other barrel sharing that geometry. Safe to call both
+// at load time (below) and later, live, on an already-placed mesh (the area
+// designer's recolor tool). Returns true if any vertex actually changed.
+export function recolorKenneyMesh(mesh, remap) {
+  if (!mesh.isMesh || !mesh.geometry.attributes.color) return false;
+  // baked vertex colors are exactly THREE.Color(paletteHex) in linear —
+  // match the source swatch in linear space (tiny epsilon), no hex round-trip
+  const rules = Object.keys(remap).map(k => {
+    const src = new THREE.Color(parseInt(k.replace('#', ''), 16));
+    const dst = new THREE.Color(_toHex(remap[k]));
+    return { sr: src.r, sg: src.g, sb: src.b, dst };
+  });
+  const geo = mesh.geometry.clone();
+  const col = geo.attributes.color;
+  let changed = false;
+  for (let i = 0; i < col.count; i++) {
+    const r = col.getX(i), g = col.getY(i), b = col.getZ(i);
+    for (const rl of rules) {
+      if (Math.abs(r - rl.sr) < 0.004 && Math.abs(g - rl.sg) < 0.004 && Math.abs(b - rl.sb) < 0.004) {
+        col.setXYZ(i, rl.dst.r, rl.dst.g, rl.dst.b); changed = true; break;
+      }
+    }
+  }
+  if (changed) { col.needsUpdate = true; mesh.geometry = geo; }
+  return changed;
+}
+// Native props share one cached material per color (see mat() above) — clone
+// before mutating, for the same reason as recolorKenneyMesh.
+export function recolorNativeMesh(mesh, hexColor) {
+  if (!mesh.isMesh) return false;
+  mesh.material = mesh.material.clone();
+  mesh.material.color.set(hexColor);
+  return true;
+}
 export function loadKenneyModel(url, overrides) {
   if (!_kenneyCache.has(url)) _kenneyCache.set(url, _loadKenneyTemplate(url));
   return _kenneyCache.get(url).then(tpl => {
     const g = tpl.clone();
     if (overrides) {
-      const toHex = v => (typeof v === 'string' ? C[v] : v);
       // Two override forms, both keyed for single-material Kenney atlas meshes:
       //  • remap: { '#hexOfBakedColor': paletteColorOrKey, ... } — recolors ONLY
       //    the vertices baked to that color (fixes one wrong swatch, keeps the
@@ -512,27 +551,8 @@ export function loadKenneyModel(url, overrides) {
         if (!o.isMesh) return;
         const srcs = o.userData.srcMaterials || [];
         const solidKey = overrides[o.name] !== undefined ? o.name : (overrides[srcs[0]] !== undefined ? srcs[0] : null);
-        if (solidKey !== null) { o.material = mat(toHex(overrides[solidKey])); return; }
-        if (remap && o.geometry.attributes.color) {
-          o.geometry = o.geometry.clone(); // don't mutate shared template geometry
-          const col = o.geometry.attributes.color;
-          // baked vertex colors are exactly THREE.Color(paletteHex) in linear —
-          // match the source swatch in linear space (tiny epsilon), no hex round-trip
-          const rules = Object.keys(remap).map(k => {
-            const src = new THREE.Color(parseInt(k.replace('#', ''), 16));
-            const dst = new THREE.Color(toHex(remap[k]));
-            return { sr: src.r, sg: src.g, sb: src.b, dst };
-          });
-          for (let i = 0; i < col.count; i++) {
-            const r = col.getX(i), gg = col.getY(i), b = col.getZ(i);
-            for (const rl of rules) {
-              if (Math.abs(r - rl.sr) < 0.004 && Math.abs(gg - rl.sg) < 0.004 && Math.abs(b - rl.sb) < 0.004) {
-                col.setXYZ(i, rl.dst.r, rl.dst.g, rl.dst.b); break;
-              }
-            }
-          }
-          col.needsUpdate = true;
-        }
+        if (solidKey !== null) { o.material = mat(_toHex(overrides[solidKey])); return; }
+        if (remap) recolorKenneyMesh(o, remap);
       });
     }
     return g;
