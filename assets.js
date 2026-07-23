@@ -2,6 +2,7 @@
 // Every factory returns a THREE.Group, pivot at base-center, 1u = 1m.
 // Reusable: pure functions of (seed, scale); no scene references.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ---------- utils ----------
 export function rng(seed = 1) {
@@ -124,16 +125,16 @@ export function createBirchTree(seed = 3, s = 1) {
 }
 export function createWillowTree(seed = 4, s = 1) {
   const r = rng(seed), g = new THREE.Group();
-  g.add(m(new THREE.CylinderGeometry(0.28 * s, 0.5 * s, 1.9 * s, 6), mat(C.brownDark), 0, 0.95 * s, 0));
+  g.add(m(new THREE.CylinderGeometry(0.28 * s, 0.5 * s, 1.9 * s, 6), mat(C.brownDark), 0, 1.15 * s, 0));
   const n = 5;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + r() * 0.6;
-    const lobe = m(new THREE.IcosahedronGeometry(0.9 * s, 0), mat(C.green2),
+    const lobe = m(new THREE.IcosahedronGeometry(0.7 * s, 0), mat(C.green2),
       Math.cos(a) * 1.15 * s, (2.1 + r() * 0.3) * s, Math.sin(a) * 1.15 * s);
-    lobe.scale.set(0.65, 1.7 + r() * 0.4, 0.65);
+    lobe.scale.set(0.35, 1.7 + r() * 0.4, 0.35);
     g.add(lobe);
   }
-  g.add(m(new THREE.IcosahedronGeometry(1.0 * s, 0), mat(C.green2), 0, 3.0 * s, 0));
+  g.add(m(new THREE.IcosahedronGeometry(1.2 * s, 0), mat(C.green2), 0, 3.0 * s, 0));
   g.userData.name = 'Willow'; return g;
 }
 export function createDeadTree(seed = 5, s = 1) {
@@ -175,10 +176,10 @@ export function createHouseB() { // two-story timber
 }
 export function createHouseC() { // long barn
   const g = new THREE.Group();
-  g.add(m(new THREE.BoxGeometry(6, 1.1, 3.8), mat(C.stoneDark), 0, 0.55, 0));
-  g.add(m(new THREE.BoxGeometry(5.8, 1.9, 3.6), mat(C.brown), 0, 2.0, 0));
-  g.add(m(prismGeometry(6.5, 1.9, 4.2), mat(C.brownDark), 0, 2.95, 0));
-  g.add(m(new THREE.BoxGeometry(1.5, 1.9, 0.14), mat(C.brownDark), 0, 0.95, 1.92));
+  g.add(m(new THREE.BoxGeometry(6, .5, 3.8), mat(C.stoneDark), 0, 0, 0));
+  g.add(m(new THREE.BoxGeometry(5.8, 2.5, 3.6), mat(C.brown), 0, 1.4, 0));
+  g.add(m(prismGeometry(6.5, 1.9, 4.2), mat(C.brownDark), 0, 2.45, 0));
+  g.add(m(new THREE.BoxGeometry(1.5, 1.9, 0.14), mat(C.brownDark), 0, 0.95, 1.86));
   g.userData.name = 'House C — barn'; return g;
 }
 
@@ -278,8 +279,9 @@ export function createCart() {
     g.add(w);
   }
   for (const sz of [-0.4, 0.4]) {
-    const h = m(new THREE.CylinderGeometry(0.045, 0.045, 1.5, 5), mat(C.brownDark), 1.6, 0.55, sz);
-    h.rotation.z = -1.15;
+    const h = m(new THREE.CylinderGeometry(0.045, 0.045, 1.5, 5), mat(C.brownDark), 1.75, 0.55, sz);
+    h.rotation.z = 1.2;
+    h.rotation.x = 0;
     g.add(h);
   }
   g.userData.name = 'Cart'; return g;
@@ -364,6 +366,172 @@ export function createCrystal(seed = 12) {
   }
   g.add(m(new THREE.IcosahedronGeometry(0.5, 0), mat(C.stoneDark), 0, 0.12, 0));
   g.userData.name = 'Crystal'; return g;
+}
+
+// ---------- Kenney model pipeline ----------
+// loadKenneyModel(url, overrides?) → Promise<THREE.Group>. Each GLB is fetched
+// and processed once (registry), cloned per call. All image textures are
+// stripped; every mesh gets a flat-shaded mat() material whose color is the
+// mesh's representative colormap color snapped to the brief's palette — so
+// Kenney pieces read as native assets. overrides: {meshOrMaterialName: color}
+// with color a hex number or a C palette key ('brown', 'stoneDark', ...).
+export const KENNEY_PALETTE = [
+  C.green1, C.green2, C.pine, C.leafLight, C.brown, C.brownDark, C.stone,
+  C.stoneDark, C.plaster, C.birch, C.accent, C.water,
+  0xe8dfc8, /* desaturated warm cream — cloth/canvas */
+  0x7a6a58, /* grey-brown — metal tool heads, never shiny */
+];
+const _kenneyCache = new Map();
+let _gltfLoader = null;
+const _texCanvas = new Map();
+function _sampler(tex) {
+  if (!_texCanvas.has(tex.uuid)) {
+    const img = tex.image;
+    const cv = document.createElement('canvas');
+    cv.width = img.width; cv.height = img.height;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    _texCanvas.set(tex.uuid, { data: ctx.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height, flipY: tex.flipY });
+  }
+  return _texCanvas.get(tex.uuid);
+}
+// Palette prepared for matching: sRGB components (0..1, straight from the hex
+// bytes) for distance, plus the THREE.Color (linear internally) to write into
+// the vertex-color attribute. Sampled pixels are sRGB, so distance MUST be in
+// sRGB space — comparing against THREE.Color's linear components (ColorManagement
+// is on by default) is what made warm wood snap to gold.
+function _snapPre() {
+  return KENNEY_PALETTE.map(hex => ({
+    sr: ((hex >> 16) & 255) / 255, sg: ((hex >> 8) & 255) / 255, sb: (hex & 255) / 255,
+    col: new THREE.Color(hex),
+  }));
+}
+const _PAL = _snapPre();
+// r,g,b are sRGB 0..1 → nearest palette entry (weighted for perceptual warmth)
+function _snapEntry(r, g, b) {
+  let best = _PAL[0], bd = Infinity;
+  for (const e of _PAL) {
+    const d = 2 * (r - e.sr) ** 2 + 4 * (g - e.sg) ** 2 + 3 * (b - e.sb) ** 2;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function _snap(c) { // c: THREE.Color (linear, e.g. GLTF material.color) → palette hex
+  const s = c.clone().convertLinearToSRGB();
+  return _snapEntry(s.r, s.g, s.b).col.getHex();
+}
+// Kenney models are single-material and get ALL their color from a shared
+// swatch-atlas texture via per-face UVs — so one “representative color” per
+// mesh is meaningless (it averages fabric+poles+pegs into mud). Instead we
+// sample the atlas per VERTEX, snap each sample to the brief's palette, and
+// bake the result as vertex colors on a texture-free flat material. This keeps
+// the multi-color read (canvas vs frame vs rope) while dropping every image.
+const _vcMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0 });
+function _bakeVertexColors(mesh, mtl, oldTextures) {
+  oldTextures.add(mtl.map);
+  const s = _sampler(mtl.map);
+  let geo = mesh.geometry;
+  if (geo.index) { geo = geo.toNonIndexed(); mesh.geometry = geo; } // one swatch per face, no bleed
+  const uv = geo.attributes.uv, n = geo.attributes.position.count;
+  const col = new Float32Array(n * 3), used = new Set(), rawUsed = new Set();
+  // Sample the atlas at each TRIANGLE's UV centroid (Kenney swatches are packed
+  // in a grid; a face's corners sit on the grid lines between swatches, so
+  // per-vertex sampling picks up neighbours/black borders — the centroid lands
+  // safely in the middle of the intended swatch). Assign to all 3 verts.
+  for (let f = 0; f < n; f += 3) {
+    const cu = (uv.getX(f) + uv.getX(f + 1) + uv.getX(f + 2)) / 3;
+    const cvv = (uv.getY(f) + uv.getY(f + 1) + uv.getY(f + 2)) / 3;
+    const uu = ((cu % 1) + 1) % 1, vv = ((cvv % 1) + 1) % 1;
+    const x = Math.min(s.w - 1, Math.floor(uu * s.w));
+    const y = Math.min(s.h - 1, Math.floor((s.flipY ? 1 - vv : vv) * s.h));
+    const p = (y * s.w + x) * 4;
+    rawUsed.add('#' + [s.data[p], s.data[p + 1], s.data[p + 2]].map(v => v.toString(16).padStart(2, '0')).join(''));
+    const e = _snapEntry(s.data[p] / 255, s.data[p + 1] / 255, s.data[p + 2] / 255);
+    used.add('#' + e.col.getHexString());
+    // e.col is already linear (what a vertex-color attribute must hold)
+    for (let k = 0; k < 3; k++) { const vi = (f + k) * 3; col[vi] = e.col.r; col[vi + 1] = e.col.g; col[vi + 2] = e.col.b; }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  mesh.userData.palette = [...used];
+  mesh.userData.raw = [...rawUsed];
+  return _vcMat;
+}
+async function _loadKenneyTemplate(url) {
+  _gltfLoader = _gltfLoader || new GLTFLoader();
+  const gltf = await _gltfLoader.loadAsync(url);
+  const src = gltf.scene;
+  src.updateMatrixWorld(true);
+  const oldTextures = new Set();
+  src.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    o.userData.srcMaterials = mats.map(mm => mm.name);
+    o.userData.kenney = true;
+    // Multi-material meshes are rare here; bake each group would need splitting.
+    // In practice these GLBs are single-material — handle that path cleanly and
+    // fall back to a snapped solid color for any extra material slots.
+    const first = mats[0];
+    if (first.map && first.map.image) {
+      o.material = _bakeVertexColors(o, first, oldTextures);
+    } else {
+      o.material = mat(_snap(first.color ? first.color.clone() : new THREE.Color(C.brown)));
+    }
+    o.castShadow = o.receiveShadow = true;
+  });
+  for (const t of oldTextures) if (t) t.dispose();
+  // normalize: pivot at base-center
+  const box = new THREE.Box3().setFromObject(src);
+  const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const g = new THREE.Group();
+  src.position.set(-ctr.x, -box.min.y, -ctr.z);
+  g.add(src);
+  console.log(`[kenney] ${url} — size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} u`);
+  const md = Math.max(size.x, size.y, size.z);
+  if (md > 12 || md < 0.05) console.warn(`[kenney] ${url}: unusual size — check export scale`);
+  return g;
+}
+export function loadKenneyModel(url, overrides) {
+  if (!_kenneyCache.has(url)) _kenneyCache.set(url, _loadKenneyTemplate(url));
+  return _kenneyCache.get(url).then(tpl => {
+    const g = tpl.clone();
+    if (overrides) {
+      const toHex = v => (typeof v === 'string' ? C[v] : v);
+      // Two override forms, both keyed for single-material Kenney atlas meshes:
+      //  • remap: { '#hexOfBakedColor': paletteColorOrKey, ... } — recolors ONLY
+      //    the vertices baked to that color (fixes one wrong swatch, keeps the
+      //    rest of the model's colors). This is the right tool here.
+      //  • solid: { meshOrMaterialName: paletteColorOrKey } — whole mesh one flat
+      //    color (drops vertex colors); use when a mesh is truly one material.
+      const remap = overrides.remap || null;
+      g.traverse(o => {
+        if (!o.isMesh) return;
+        const srcs = o.userData.srcMaterials || [];
+        const solidKey = overrides[o.name] !== undefined ? o.name : (overrides[srcs[0]] !== undefined ? srcs[0] : null);
+        if (solidKey !== null) { o.material = mat(toHex(overrides[solidKey])); return; }
+        if (remap && o.geometry.attributes.color) {
+          o.geometry = o.geometry.clone(); // don't mutate shared template geometry
+          const col = o.geometry.attributes.color;
+          // baked vertex colors are exactly THREE.Color(paletteHex) in linear —
+          // match the source swatch in linear space (tiny epsilon), no hex round-trip
+          const rules = Object.keys(remap).map(k => {
+            const src = new THREE.Color(parseInt(k.replace('#', ''), 16));
+            const dst = new THREE.Color(toHex(remap[k]));
+            return { sr: src.r, sg: src.g, sb: src.b, dst };
+          });
+          for (let i = 0; i < col.count; i++) {
+            const r = col.getX(i), gg = col.getY(i), b = col.getZ(i);
+            for (const rl of rules) {
+              if (Math.abs(r - rl.sr) < 0.004 && Math.abs(gg - rl.sg) < 0.004 && Math.abs(b - rl.sb) < 0.004) {
+                col.setXYZ(i, rl.dst.r, rl.dst.g, rl.dst.b); break;
+              }
+            }
+          }
+          col.needsUpdate = true;
+        }
+      });
+    }
+    return g;
+  });
 }
 
 // ---------- character (Arc 0 placeholder — replaced in Arc 3) ----------

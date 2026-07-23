@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<style data-omelette-injected>html,body{background:transparent}</style><script data-omelette-injected>(()=>{{const W=new URLSearchParams(location.search).get("theme");if(W==="light"||W==="dark"){document.documentElement.dataset.theme=W}}{if(new URLSearchParams(location.search).get("_omthumb")==="1"){const W=(q)=>{const X=q.focus;if(!X)return;q.focus=function(H){X.call(this,{...H,preventScroll:true})}};W(HTMLElement.prototype);W(SVGElement.prototype);if(typeof MathMLElement!=="undefined"){W(MathMLElement.prototype)}const $=(q)=>{q.removeAttribute("autofocus");q.inert=true;if(!(q instanceof HTMLElement))q.removeAttribute("tabindex")};const z=(q)=>{if(q.hasAttribute("autofocus"))$(q);for(const X of q.querySelectorAll("[autofocus]")){$(X)}};z(document.documentElement);new MutationObserver((q)=>{for(const X of q){for(const H of X.addedNodes){if(H.nodeType===1)z(H)}}}).observe(document,{childList:true,subtree:true})}}{const W=()=>{try{if(document.querySelector('meta[name="color-scheme"]'))return;const $=getComputedStyle(document.documentElement).getPropertyValue("color-scheme").trim();if($&&$!=="normal")return;const z=(j)=>{if(!j)return null;const F=getComputedStyle(j).backgroundColor.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/);if(!F)return null;const G=F[4]==null?1:parseFloat(F[4])/(F[4].endsWith("%")?100:1);if(G<0.99)return null;return[+F[1],+F[2],+F[3]]};const q=z(document.body)||z(document.documentElement);if(!q)return;const X=(j)=>{const F=j/255;return F<=0.04045?F/12.92:((F+0.055)/1.055)**2.4};const H=0.2126*X(q[0])+0.7152*X(q[1])+0.0722*X(q[2]);document.documentElement.style.setProperty("color-scheme",H<0.4?"dark":"light")}catch{}};if(document.readyState==="complete")W();else window.addEventListener("load",W)}var b=["https://claude.ai","https://preview.claude.ai","https://c115d7a7-6c9b-4755-801e-ab8c30c5d756.claudeusercontent.com"];var p=true;var u=30000;var d=3000;document.addEventListener("DOMContentLoaded",()=>{const W=window.Babel;const $="om-src-id";if(W&&W.registerPlugin&&!(W.availablePlugins&&W.availablePlugins[$])){W.registerPlugin($,({types:H})=>({visitor:{JSXOpeningElement(j,F){const G=j.node;if(G.name&&G.name.type==="JSXMemberExpression")return;for(let Q=0;Q<G.attributes.length;Q++){const V=G.attributes[Q];if(V.type==="JSXAttribute"&&V.name&&V.name.name==="data-om-id")return}const P=F.file&&F.file.opts&&F.file.opts.filename||"?";const R=G.loc&&G.loc.start;const J=`jsx:${P}:${G.start??0}:${R?R.line:0}:${R?R.column+1:0}`;G.attributes.push(H.jsxAttribute(H.jsxIdentifier("data-om-id"),H.stringLiteral(J)))}}}))}const z="om-text-extract";let q=false;if(p&&W&&W.registerPlugin&&!(W.availablePlugins&&W.availablePlugins[z])){const H=window.React;if(H&&H.useSyncExternalStore&&H.createElement){q=true;const j={};const F=new Set;let G=0;window.__omTextO=j;window.__omTextSet=(J)=>{for(const Q in J){const V=J[Q];if(V==null)delete j[Q];else j[Q]=V}G++;F.forEach((Q)=>Q())};const P=(J)=>{F.add(J);return()=>F.delete(J)};const R=()=>G;window.__OmT=function J(Q){H.useSyncExternalStore(P,R,R);return H.createElement("span",{"data-om-text":Q.i,className:"__om-t"},Q.i in j?j[Q.i]:Q.children)};W.registerPlugin(z,({types:J})=>{const Q={style:1,script:1,noscript:1,textarea:1,title:1,option:1,text:1,tspan:1,textPath:1};const V={placeholder:1,alt:1,title:1,label:1,"aria-label":1,"aria-description":1,"aria-placeholder":1};const Y=(K,M)=>J.logicalExpression("??",J.memberExpression(J.logicalExpression("||",J.memberExpression(J.identifier("window"),J.identifier("__omTextO")),J.objectExpression([])),J.stringLiteral(K),true),M);const Z=(K)=>K.file&&K.file.opts&&K.file.opts.filename||"?";const B=(K)=>K.file&&K.file.code||"";const U=(K,M)=>{const L=(D)=>D&&D.start!=null&&D.end!=null&&(D.type==="StringLiteral"||D.type==="TemplateLiteral"&&D.expressions.length===0)?[D.start,D.end]:null;const N=L(M);if(N)return N;if(M&&M.type==="Identifier"){const D=K.scope.getBinding(M.name);if(D&&D.constant&&D.path.node.type==="VariableDeclarator"){return L(D.path.node.init)}}return null};const x=(K,M,L)=>{const N=K.node;let D=false;const f=(w,A)=>{D=true;return J.jsxElement(J.jsxOpeningElement(J.jsxIdentifier("__OmT"),[J.jsxAttribute(J.jsxIdentifier("i"),J.stringLiteral(w))],false),J.jsxClosingElement(J.jsxIdentifier("__OmT")),[A],false)};const C=N.children.map((w)=>{if(w.type==="JSXText"){if(w.start==null||w.end==null)return w;const A=L.slice(w.start,w.end);const S=A.length-A.trimStart().length;const O=A.length-A.trimEnd().length;if(S+O>=A.length)return w;return f(`txt:${M}:${w.start+S}:${w.end-O}`,w)}if(w.type==="JSXExpressionContainer"){const A=U(K,w.expression);if(A)return f(`str:${M}:${A[0]}:${A[1]}`,w)}return w});if(D)N.children=C};return{visitor:{JSXOpeningElement(K,M){const L=K.node;const N=Z(M);const D={};for(let f=0;f<L.attributes.length;f++){const C=L.attributes[f];if(C.type!=="JSXAttribute"||!C.name)continue;const w=C.name.name;if(!V[w])continue;if(!C.value||C.value.type!=="StringLiteral")continue;if(C.value.start==null||C.value.end==null)continue;const A=`txt:${N}:${C.value.start}:${C.value.end}`;D[w]=A;C.value=J.jsxExpressionContainer(Y(A,J.stringLiteral(C.value.value)))}if(Object.keys(D).length){L.attributes.push(J.jsxAttribute(J.jsxIdentifier("data-om-text-attrs"),J.stringLiteral(JSON.stringify(D))))}},JSXElement(K,M){const L=K.node.openingElement;const N=L&&L.name&&L.name.name;if(N==="__OmT")return;if(typeof N==="string"&&Q[N])return;x(K,Z(M),B(M))},JSXFragment(K,M){x(K,Z(M),B(M))}}}})}}const X=q?["transform-react-jsx-source",$,z]:["transform-react-jsx-source",$];document.querySelectorAll('script[type="text/babel"],script[type="text/jsx"]').forEach((H,j)=>{const F=H.getAttribute("data-plugins")||"";const G=X.filter((P)=>F.indexOf(P)<0);if(G.length){H.setAttribute("data-plugins",F?`${F},${G.join(",")}`:G.join(","))}if(!H.hasAttribute("data-filename")){H.setAttribute("data-filename",H.getAttribute("src")||`inline-${j}`)}})});var I=window.parent;var g="not editable here — open the project in the Claude Design editor to save";var n=()=>Promise.resolve({persisted:false,noHost:true,reason:g});var k=n;var v="data/storage.json";var l=()=>{try{const W=new URL(document.baseURI);const $=W.pathname.match(/\/projects\/([^/]+)\/serve\//);if($)return $[1];return W.hostname.split(".")[0]||""}catch{return location.hostname.split(".")[0]||""}};var o=()=>{try{const W=new URL(document.baseURI);const $=W.pathname.indexOf("/serve/");if($>=0)return W.origin+W.pathname.slice(0,$+"/serve/".length)+v}catch{}return"./"+v};var E=null;var _=()=>{if(!E){E=fetch(o(),{cache:"no-store"}).then((W)=>{if(W.ok)return W.text();return W.status===404?"":null}).catch(()=>null).then((W)=>{if(W===null){E=null;return null}const $=new Map;if(!W)return $;let z;try{z=JSON.parse(W)}catch{console.warn("[omelette.storage] "+v+" is not valid JSON; treating the store as unreadable so a save cannot overwrite the "+"hand-edited bytes. Fix the JSON (or delete the file) to re-enable persistence.");E=null;return null}if(z===null||typeof z!=="object"||Array.isArray(z)){console.warn("[omelette.storage] "+v+" doesn't hold a JSON object; treating the store as unreadable so a save cannot "+"overwrite the hand-edited bytes. Make the top level a JSON object to re-enable persistence.");E=null;return null}const q=z;if("data"in q){const X=q.data;if(X===null||typeof X!=="object"||Array.isArray(X)){console.warn("[omelette.storage] "+v+' has a "data" field that is not a JSON object; treating the store as unreadable so a '+'save cannot overwrite the hand-edited bytes. Make "data" a JSON object to re-enable persistence.');E=null;return null}const H=q._meta;const j=H!==null&&typeof H==="object"?H.project:undefined;if(typeof j==="string"&&j!==""&&j!==l())return $;for(const F of Object.keys(X))$.set(F,X[F]);return $}for(const X of Object.keys(q)){if(X!=="_meta")$.set(X,q[X])}return $})}return E};var y=(W)=>k(v,JSON.stringify({_meta:{project:l(),version:1},data:Object.fromEntries(W)},null,2));var m=Promise.resolve();var T=(W)=>{const $=m.then(W);m=$.then(()=>{return},()=>{return});return $};var s=/sk-(?:ant-)?[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[a-z]-[A-Za-z0-9][A-Za-z0-9-]{9,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/;var a=/password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|credential/i;var r=(W,$,z)=>{if(s.test($)||a.test(W)&&typeof z==="string"&&z.length>=8){console.warn('[omelette.storage] the value for "'+W+'" looks like a credential. The storage file is a plaintext project file — visible to '+"everyone with project access and copied when the project is duplicated. Do not store secrets here.")}};var c={persisted:false,reason:"could not load the existing store — not overwriting it"};var i={persisted:false,reason:"stored value changed since a failed read — re-read this key before saving"};var h=new Set;var t={get:(W)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.get: key must be a string"))}return T(_).then(($)=>{if($===null){h.add(W);return null}h.delete(W);if(!$.has(W))return null;const z=$.get(W);return z==null?null:JSON.parse(JSON.stringify(z))})},set:(W,$)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.set: key must be a string"))}let z;try{z=JSON.stringify($)}catch(X){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable ("+String(X)+")"))}if(z===undefined){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable"))}r(W,z,$);const q=JSON.parse(z);return T(()=>_().then((X)=>{if(X===null)return c;if(h.has(W)){if(X.has(W))return i;h.delete(W)}X.set(W,q);return y(X)}))},delete:(W)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.delete: key must be a string"))}return T(()=>_().then(($)=>{if($===null)return c;if(h.has(W)){if($.has(W))return i;h.delete(W)}$.delete(W);return y($)}))},keys:()=>T(_).then((W)=>W===null?[]:Array.from(W.keys()))};window.omelette={writeFile:(W,$)=>k(W,$).then((z)=>{if(!z.persisted&&!z.noHost){throw new Error(z.reason||"write failed")}}),storage:t};if(I&&I!==window){const W=(J,Q)=>{try{I.postMessage({__omelette_log:true,type:J,data:Q},"*")}catch{}};["log","warn","error"].forEach((J)=>{const Q=console[J];console[J]=(...V)=>{const Y=V.map((Z)=>{try{return typeof Z==="object"?JSON.stringify(Z):String(Z)}catch{try{return String(Z)}catch{return"[unstringifiable]"}}}).join(" ");W(J,Y);Q.apply(console,V)}});window.addEventListener("error",(J)=>{const Q=J.target;if(Q&&Q!==window&&Q.tagName){const V=Q.src||Q.href||"";W("resource_error",`${Q.tagName} failed to load: ${V}`)}else{W("error",`${J.message||"Unknown error"} at ${J.filename||"?"}:${J.lineno||0}:${J.colno||0}`)}},true);window.addEventListener("unhandledrejection",(J)=>{const Q=J.reason;const V=Q instanceof Error?`${Q.message} ${Q.stack}`:String(Q);W("error",`Unhandled rejection: ${V}`)});window.addEventListener("click",(J)=>{if(J.defaultPrevented||J.button!==0)return;if(J.metaKey||J.ctrlKey||J.shiftKey||J.altKey)return;const Q=J.composedPath?J.composedPath():[];const V=["button","input","select","textarea","summary","label"];let Y=null;for(const x of Q){if(!(x instanceof Element))continue;if(x.localName==="a"){if(!(x instanceof HTMLAnchorElement))return;Y=x;break}if(V.indexOf(x.localName)!==-1)return}if(!Y)return;if(Y.isContentEditable)return;const Z=Y.closest("[contenteditable]");if(Z&&Z.getAttribute("contenteditable")!=="false")return;const B=(Y.getAttribute("target")||"_self").toLowerCase();if(B!=="_self"&&B!=="_top"&&B!=="_parent")return;let U;try{U=new URL(Y.href)}catch{return}if(U.protocol!=="http:"&&U.protocol!=="https:")return;if(location.origin==="null")return;if(U.origin===location.origin)return;J.preventDefault();window.open(U.href,"_blank","noopener,noreferrer")});const $=()=>{try{I.postMessage({type:"omelette:height",height:document.documentElement.scrollHeight},"*")}catch{}};if(window.ResizeObserver)new ResizeObserver($).observe(document.documentElement);const z=()=>{$();if(!document.querySelector('script[type="text/babel"],script[type="text/jsx"]'))return;const J=()=>document.getElementById("root")||document.querySelector("body > div[id]");const Q=J()?.firstElementChild??null;let V=0;const Y=()=>{const Z=J();if(Z&&Z.firstElementChild!==Q||++V>30){$();return}setTimeout(Y,100)};setTimeout(Y,100)};if(document.readyState==="complete")z();else window.addEventListener("load",z);const q={};let X=0;const H=(J)=>new Promise((Q,V)=>{if(!b.length){V(new Error("claude.complete: no parent origin"));return}const Y=`c${++X}`;const Z=()=>setTimeout(()=>{delete q[Y];V(new Error(`claude.complete: no data for ${u/1000}s`))},u);const B=Z();q[Y]={resolve:Q,reject:V,text:"",t:B,arm:Z};try{for(const U of b){I.postMessage({__om_api:true,id:Y,body:J},U)}}catch(U){clearTimeout(B);delete q[Y];V(U)}});const j=8;const F=async(J,Q)=>{if(!Array.isArray(J.messages)){throw new Error("claude.complete: tools require a messages array")}const V=J.messages.slice();const Y={...J,tools:J.tools.map((U)=>{if(U===null||typeof U!=="object")return U;const x={};for(const K of Object.keys(U)){if(typeof U[K]!=="function")x[K]=U[K]}return x})};const Z=Y.tool_choice;const B=Z!=null&&(Z.type==="any"||Z.type==="tool")?{...Y,tool_choice:Z.disable_parallel_tool_use!==undefined?{type:"auto",disable_parallel_tool_use:Z.disable_parallel_tool_use}:{type:"auto"}}:Y;for(let U=0;U<j;U++){const x=await H({...U===0?Y:B,messages:V});const K=x.message;const M=K&&Array.isArray(K.content)?K.content:null;const L=M?M.filter((D)=>D?.type==="tool_use"):[];if(K?.stop_reason!=="tool_use"||L.length===0){return x.text}const N=[];for(const D of L){const f=Q.get(D.name);if(!f){N.push({type:"tool_result",tool_use_id:D.id,content:`no handler for tool "${D.name}"`,is_error:true});continue}try{const C=await f(D.input);const w=typeof C==="string"?C:R(C)??"";N.push({type:"tool_result",tool_use_id:D.id,content:w})}catch(C){N.push({type:"tool_result",tool_use_id:D.id,content:String(C?.message??C??"tool handler failed"),is_error:true})}}V.push({role:"assistant",content:M},{role:"user",content:N})}throw new Error(`claude.complete: exceeded ${j} tool turns`)};window.claude={complete(J){const Q=J;if(Q!==null&&typeof Q==="object"&&Array.isArray(Q.tools)&&Q.tools.some((V)=>V!==null&&typeof V==="object"&&typeof V.run==="function")){const V=new Map;for(const Y of Q.tools){if(Y!==null&&typeof Y==="object"&&typeof Y.run==="function"){V.set(String(Y.name),Y.run)}}return F(Q,V)}return H(J).then((V)=>V.text)}};const G={};let P=0;k=(J,Q)=>new Promise((V)=>{if(!b.length){V({persisted:false,noHost:true,reason:g});return}const Y=`f${++P}`;const Z=setTimeout(()=>{delete G[Y];V({persisted:false,noHost:true,reason:g})},d);G[Y]={settle:V,t:Z};try{for(const B of b){I.postMessage({__om_file:true,id:Y,op:"write",path:J,content:Q},B)}}catch{clearTimeout(Z);delete G[Y];V({persisted:false,noHost:true,reason:g})}});const R=(J)=>{try{return JSON.stringify(J)}catch{return JSON.stringify(String(J))}};window.addEventListener("message",(J)=>{if(b.indexOf(J.origin)<0)return;if(J.source!==I)return;const Q=J.data;if(!Q)return;if(Q.type==="omelette-preview-refresh"){if(typeof Q.token!=="string"||!/^[0-9a-f.-]+(\.(rc|pr-[0-9]+))?(\.[0-9]+\.[0-9a-f]{16})?$/.test(Q.token))return;const Z=Math.max(1,Math.floor((Q.expiresAt||0)-Date.now()/1000));document.cookie="__Host-omelette-preview="+Q.token+"; Path=/; Secure; SameSite=None; Partitioned; Max-Age="+Z;return}if(Q.__om_file_r){const Z=G[Q.id];if(!Z)return;clearTimeout(Z.t);delete G[Q.id];Z.settle(Q.ok?{persisted:true}:{persisted:false,reason:Q.error||"write failed"});return}if(Q.__om_api_r){const Z=q[Q.id];if(!Z)return;if(Q.error!=null){clearTimeout(Z.t);delete q[Q.id];Z.reject(new Error(Q.error));return}if(Q.chunk!=null){clearTimeout(Z.t);Z.t=Z.arm();Z.text+=Q.chunk;return}if(Q.done){clearTimeout(Z.t);delete q[Q.id];Z.resolve({text:Q.text!=null?Q.text:Z.text,message:Q.message});return}return}if(!Q.__om_eval)return;const V=Q;const Y=(Z)=>{J.source.postMessage({...Z,__om_eval_r:1,id:V.id},J.origin)};try{const Z=(0,eval)(V.code);if(Z&&typeof Z.then==="function"){Z.then((B)=>Y({ok:1,v:R(B)}),(B)=>Y({ok:0,e:String(B)}))}else{Y({ok:1,v:R(Z)})}}catch(Z){Y({ok:0,e:String(Z)})}})}})();
+</script>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grassland World — Arc 1+2</title>
@@ -16,6 +19,23 @@
   #hud label { cursor: pointer; user-select: none; color: #6b4f35; }
   #hud b { color: #6b4f35; }
   a { color: #4aa8b8; } a:hover { color: #6b4f35; }
+  #prompt {
+    position: fixed; left: 50%; bottom: 40px; transform: translate(-50%, 12px);
+    z-index: 3; display: flex; align-items: center; gap: 10px;
+    background: rgba(250,248,240,.82); backdrop-filter: blur(6px);
+    border: 1px solid rgba(107,79,53,.25); border-radius: 12px;
+    padding: 9px 16px 9px 11px; color: #4a3826;
+    font: 500 15px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .2px;
+    box-shadow: 0 6px 22px rgba(46,70,50,.18);
+    opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+  }
+  #prompt.on { opacity: 1; transform: translate(-50%, 0); }
+  #prompt .key {
+    display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px;
+    border-radius: 7px; background: #6b4f35; color: #fdf6e8; font-weight: 700; font-size: 14px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18);
+  }
+  #prompt .act { opacity: .92; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -26,6 +46,7 @@
 </head>
 <body>
 <div id="hud"><span id="hudText"><b>Grassland World — Arc 1+2</b><br>WASD move · mouse / ←→ pan · ↑↓ overhead · Shift walk/run · <b>G</b> gallery</span><br><label><input type="checkbox" id="alwaysRun"> Always run</label> <span id="coords"></span></div>
+<div id="prompt"><span class="key">E</span><span class="act" id="promptLabel"></span></div>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -44,10 +65,10 @@ const LIGHTING = {
     water: 0x4aa8b8, waterOpacity: 0.82, flowerGlow: 0, lantern: false,
   },
   night: {
-    name: 'Grassland — Night', sky: 0x241f38, fogNear: 26, fogFar: 150,
-    hemiSky: 0x4a4270, hemiGround: 0x27403a, hemiI: 0.75, sunColor: 0xa8b4ff, sunI: 0.75,
-    g1: 0x3f5a55, g2: 0x577263, grassAccent: 0x6fae9c, sand: 0x565368, bed: 0x16333a,
-    water: 0x1e4d5c, waterOpacity: 0.88, flowerGlow: 0.45, lantern: true,
+    name: 'Grassland — Night', sky: 0x0f1226, fogNear: 32, fogFar: 175,
+    hemiSky: 0x3a4076, hemiGround: 0x1b2a2e, hemiI: 0.62, sunColor: 0x9fb6ff, sunI: 0.95,
+    g1: 0x33504f, g2: 0x466055, grassAccent: 0x66b0a2, sand: 0x474a63, bed: 0x0f2a34,
+    water: 0x1f4a66, waterOpacity: 0.9, flowerGlow: 0.7, lantern: true,
   },
 };
 const modeKey = new URLSearchParams(location.search).get('mode') === 'night' ? 'night' : 'day';
@@ -56,7 +77,11 @@ const BIOME = LIGHTING[modeKey];
 // ================= terrain definition =================
 const WATER_Y = -0.9;
 const PATH = [[-10,-45],[5,-28],[11,-11],[15,8],[24,32],[30,40]];
-const STREAM = [[42,18],[24,2],[11,-12],[-8,-30],[-30,-45],[-58,-58]];
+// Channel: starts INSIDE the lake (connects lagoon → main body), flows down
+// through the bridge crossing at (11,-12), then swings west/north AROUND the
+// hamlet (was cutting straight through it and flooding the houses) before
+// exiting the south-west corner.
+const STREAM = [[58,50],[48,32],[40,16],[26,2],[11,-12],[-6,-20],[-24,-26],[-44,-38],[-62,-54]];
 const LAKE = { x: 60, z: 55 };
 
 function distSeg(px, pz, ax, az, bx, bz) {
@@ -101,17 +126,20 @@ function terrainHeight(x, z) {
   return h;
 }
 
-// bridge (crosses the stream on the path)
-const BRIDGE = { x: 11, z: -11.5, rot: Math.atan2(10, 36), y: -0.35 };
+// bridge (crosses the stream on the path) — rot puts the deck's long axis
+// perpendicular to the local stream flow so it spans bank-to-bank
+const BRIDGE = { x: 11, z: -11.5, rot: Math.atan2(-11, 16), y: -0.35 };
 function bridgeHeight(x, z) {
   const dx = x - BRIDGE.x, dz = z - BRIDGE.z;
-  const c = Math.cos(-BRIDGE.rot), s = Math.sin(-BRIDGE.rot);
-  const lx = dx * c - dz * s, lz = dx * s + dz * c;
-  if (Math.abs(lx) > 1.55 || Math.abs(lz) > 6.5) return -Infinity;
-  const t = Math.abs(lz) / 6.5;
-  return BRIDGE.y + 1.5 * (1 - t * t) + 0.25;
+  // world→local using the inverse of the mesh's rotation.y (must match place())
+  const c = Math.cos(BRIDGE.rot), s = Math.sin(BRIDGE.rot);
+  const lx = dx * c - dz * s; // width axis (across the deck)
+  const lz = dx * s + dz * c; // length axis (along the deck) — matches the visual
+  if (Math.abs(lx) > 1.7 || Math.abs(lz) > 6.6) return -Infinity;
+  const t = Math.min(1, Math.abs(lz) / 6.5);
+  return BRIDGE.y + 0.8 * (1 - t * t) + 0.25; // same gentle profile as the mesh deck
 }
-function groundHeight(x, z) { return Math.max(terrainHeight(x, z), bridgeHeight(x, z)); }
+function groundHeight(x, z) { return Math.max(terrainHeight(x, z), bridgeHeight(x, z), boatHeight(x, z)); }
 
 // ================= renderer / scene / lights =================
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -177,19 +205,19 @@ scene.add(sun, sun.target);
 
 // ================= water =================
 const waterMat = new THREE.MeshStandardMaterial({
-  color: BIOME.water, transparent: true, opacity: BIOME.waterOpacity, flatShading: true, roughness: 0.35, metalness: 0.05,
+  color: BIOME.water, transparent: true, opacity: BIOME.waterOpacity, flatShading: false, roughness: 0.35, metalness: 0.05,
 });
 waterMat.onBeforeCompile = shader => {
   shader.uniforms.uTime = { value: 0 };
   shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace(
     '#include <begin_vertex>',
     `#include <begin_vertex>
-     transformed.y += (sin(position.x*0.25+uTime*1.3) + sin(position.z*0.31+uTime*1.7)*0.7 + sin((position.x+position.z)*0.12+uTime*0.9)*0.5) * 0.1;`
+     transformed.y += (sin(position.x*0.55+uTime*1.3) + sin(position.z*0.62+uTime*1.7)*0.7 + sin((position.x+position.z)*0.3+uTime*0.9)*0.5) * 0.045;`
   );
   waterMat.userData.shader = shader;
 };
 {
-  const geo = new THREE.PlaneGeometry(200, 200, 64, 64);
+  const geo = new THREE.PlaneGeometry(200, 200, 200, 200);
   geo.rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(geo, waterMat);
   water.position.y = WATER_Y;
@@ -200,6 +228,126 @@ waterMat.onBeforeCompile = shader => {
 // ================= placement system (Arc 1) =================
 // Reusable: array of {make, x, z, rot, y?} snapped to terrain height.
 const animated = [];
+
+// ================= juice: water FX + synth SFX + minimap =================
+// Self-contained: ripples (swim/boat), dive/leap splash, asset-free Web-Audio
+// SFX, and a corner minimap. Updaters run through the `animated` list.
+const fx = [];
+animated.push(dt => { for (let i = fx.length - 1; i >= 0; i--) if (fx[i](dt)) fx.splice(i, 1); });
+const _rippleGeo = new THREE.RingGeometry(0.55, 0.7, 24).rotateX(-Math.PI / 2);
+function spawnRipple(x, z, s = 1) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+  const m = new THREE.Mesh(_rippleGeo, mat);
+  m.position.set(x, WATER_Y + 0.04, z);
+  scene.add(m);
+  let t = 0; const life = 1.3;
+  fx.push(dt => { t += dt; const k = t / life; m.scale.setScalar(s * (0.3 + 2.6 * k)); mat.opacity = 0.45 * (1 - k); if (k >= 1) { scene.remove(m); mat.dispose(); return true; } });
+}
+const _dropGeo = new THREE.IcosahedronGeometry(0.08, 0);
+function spawnSplash(x, z, n = 14) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.95, depthWrite: false });
+  const drops = [];
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(_dropGeo, mat);
+    const a = Math.random() * Math.PI * 2, sp = 1.4 + Math.random() * 2.8;
+    m.position.set(x, WATER_Y + 0.1, z); m.scale.setScalar(0.5 + Math.random());
+    drops.push({ m, vx: Math.cos(a) * sp, vy: 3 + Math.random() * 3.5, vz: Math.sin(a) * sp });
+    scene.add(m);
+  }
+  spawnRipple(x, z, 1.6);
+  let t = 0; const life = 0.85;
+  fx.push(dt => { t += dt; for (const d of drops) { d.vy -= 20 * dt; d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt; } mat.opacity = 0.95 * Math.max(0, 1 - t / life); if (t >= life) { for (const d of drops) scene.remove(d.m); mat.dispose(); return true; } });
+}
+// synth SFX — AudioContext starts on the first user gesture (browser policy)
+let _actx = null;
+function _audio() { if (!_actx) { try { _actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (_actx && _actx.state === 'suspended') _actx.resume(); return _actx; }
+addEventListener('pointerdown', _audio); addEventListener('keydown', _audio);
+function _noise(dur, freq, q, gain, type = 'bandpass') {
+  const c = _audio(); if (!c) return;
+  const n = (c.sampleRate * dur) | 0, buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = c.createBufferSource(); s.buffer = buf;
+  const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = c.createGain(); g.gain.value = gain; s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+}
+function _tone(freq, dur, gain, type, slideTo) {
+  const c = _audio(); if (!c) return;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq;
+  if (slideTo) o.frequency.linearRampToValueAtTime(slideTo, c.currentTime + dur);
+  g.gain.value = gain; g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+}
+const sfxSplash = () => { _noise(0.55, 950, 0.6, 0.55, 'lowpass'); _tone(300, 0.28, 0.09, 'sine', 130); };
+const sfxStep   = () => _noise(0.07, 480, 1.4, 0.10, 'bandpass');
+const sfxJump   = () => _tone(300, 0.18, 0.12, 'triangle', 540);
+const sfxBoard  = () => { _tone(170, 0.16, 0.11, 'sine', 120); _noise(0.13, 280, 0.7, 0.14, 'lowpass'); };
+// --- minimap: a baked aerial (water · channel · shore · greenery · path) with
+// live overlays (bridge, buildings, boats, player). The base is rendered ONCE
+// by sampling terrainHeight across the world, so it reads like a zoomed-out
+// satellite teaser rather than a schematic. ---
+const _M = 172, _MC = _M / 2, _MR = 80, _MW = 100; // px size · centre · radius · world half-extent shown
+const _toMap = (x, z) => [_MC + (x / _MW) * _MR, _MC + (z / _MW) * _MR];
+const _srgb = hex => new THREE.Color(hex).convertLinearToSRGB();
+const _base = document.createElement('canvas'); _base.width = _base.height = _M;
+(function bakeAerial() {
+  const c = _base.getContext('2d'), img = c.createImageData(_M, _M), d = img.data;
+  const water = _srgb(BIOME.water), deep = _srgb(BIOME.bed);
+  const gA = _srgb(BIOME.g1), gB = _srgb(BIOME.g2), sand = _srgb(BIOME.sand), dirt = _srgb(0x8b6f47);
+  const col = new THREE.Color();
+  for (let py = 0; py < _M; py++) for (let px = 0; px < _M; px++) {
+    const wx = ((px - _MC) / _MR) * _MW, wz = ((py - _MC) / _MR) * _MW; // pixel → world
+    const h = terrainHeight(wx, wz);
+    if (h < WATER_Y - 0.02) col.copy(water).lerp(deep, clamp01((WATER_Y - h) / 3.4));   // lake + channel, deeper = darker
+    else if (h < WATER_Y + 0.55) col.copy(sand);                                        // shoreline
+    else {
+      const n = Math.sin(wx * 0.31 + wz * 0.17) * 0.5 + Math.sin(wx * 0.07 - wz * 0.11) * 0.5;
+      col.copy(gA).lerp(gB, clamp01(0.5 + n * 0.45));
+      const dP = distPoly(wx, wz, PATH);
+      if (dP < 3.6) col.lerp(dirt, fall(dP, 1.8, 3.6) * 0.85);                           // dirt path
+    }
+    const i = (py * _M + px) * 4;
+    d[i] = col.r * 255; d[i + 1] = col.g * 255; d[i + 2] = col.b * 255; d[i + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+})();
+const _mm = document.createElement('canvas'); _mm.width = _mm.height = _M;
+_mm.style.cssText = 'position:fixed;right:14px;top:14px;z-index:2;border-radius:50%;border:2px solid rgba(107,79,53,.6);box-shadow:0 6px 18px rgba(0,0,0,.4)';
+document.body.appendChild(_mm);
+const _mc = _mm.getContext('2d');
+_mc.drawImage(_base, 0, 0); // paint the aerial immediately (overlays follow each frame)
+const MAP_POI = [
+  { x: -14, z: -48, k: 'house' }, { x: -4, z: -52, k: 'house' }, { x: -16, z: -38, k: 'house' },
+  { x: -55, z: 60, k: 'mark' }, { x: 55, z: -55, k: 'mark' }, { x: -60, z: -15, k: 'mark' },
+];
+let _mmT = 1; // primed so the first frame draws overlays without waiting on the throttle
+animated.push(dt => {
+  _mmT += dt; if (_mmT < 0.09) return; _mmT = 0;
+  if (inGallery || window.__aerial) { _mm.style.display = 'none'; return; }
+  _mm.style.display = ''; const c = _mc; c.clearRect(0, 0, _M, _M);
+  c.drawImage(_base, 0, 0);
+  // bridge — short deck line across the channel
+  const [bx, bz] = _toMap(BRIDGE.x, BRIDGE.z), bc = Math.sin(BRIDGE.rot), bs = Math.cos(BRIDGE.rot);
+  c.strokeStyle = '#d7c199'; c.lineWidth = 2.5; c.lineCap = 'round'; c.beginPath();
+  c.moveTo(bx - bc * 5, bz - bs * 5); c.lineTo(bx + bc * 5, bz + bs * 5); c.stroke();
+  // buildings + landmarks
+  for (const p of MAP_POI) {
+    const [a, b] = _toMap(p.x, p.z);
+    if (p.k === 'house') { c.fillStyle = '#caa46b'; c.fillRect(a - 2.5, b - 2.5, 5, 5); c.fillStyle = '#6b4f35'; c.fillRect(a - 2.5, b - 2.5, 5, 2); }
+    else { c.fillStyle = '#efe7d8'; c.strokeStyle = '#6b4f35'; c.lineWidth = 1; c.beginPath(); c.arc(a, b, 3, 0, 7); c.fill(); c.stroke(); }
+  }
+  // boats
+  c.fillStyle = '#f2d488'; c.strokeStyle = '#5b4a2a'; c.lineWidth = 1;
+  for (const bo of boats) { const [a, b] = _toMap(bo.obj.position.x, bo.obj.position.z); c.beginPath(); c.arc(a, b, 2.6, 0, 7); c.fill(); c.stroke(); }
+  // player heading arrow
+  const [px, pz] = _toMap(char.position.x, char.position.z), fv = Math.sin(heading), fzv = Math.cos(heading);
+  c.fillStyle = '#fff'; c.strokeStyle = '#10131a'; c.lineWidth = 1.2; c.beginPath();
+  c.moveTo(px + fv * 7.5, pz + fzv * 7.5);
+  c.lineTo(px - fv * 5 - fzv * 4, pz - fzv * 5 + fv * 4);
+  c.lineTo(px - fv * 5 + fzv * 4, pz - fzv * 5 - fv * 4);
+  c.closePath(); c.fill(); c.stroke();
+});
+
 function place(make, x, z, rot = 0, y) {
   const obj = make();
   obj.position.set(x, y !== undefined ? y : terrainHeight(x, z), z);
@@ -214,8 +362,7 @@ place(A.createHouseB, -4, -52, -0.3);
 place(A.createHouseC, -16, -38, 1.9);
 place(A.createWell, -8, -44, 0.4);
 place(A.createCart, -2, -46, -1.2);
-place(A.createSignpost, 3, -31, 0.9);
-place(A.createSignpost, 22, 28, -2.2);
+// (native signposts replaced by Kenney signpost — see set-dressing pass below)
 // landmarks
 place(A.createWatchtower, -55, 60, 0);
 place(A.createWindmill, 55, -55, 2.4);
@@ -235,6 +382,118 @@ window.placeGLB = async function (url, x, z, scale = 1) {
   scene.add(obj);
   return obj;
 };
+
+// ================= Kenney set dressing =================
+// Curated shortlist placed into the world in themed vignettes, all through the
+// recolor pipeline. Kenney survival-kit is authored ~half native scale, so it
+// gets a big multiplier to read at world scale next to the 1.7u character.
+const KENNEY_PACK = {};
+[['survival-kit', ['tent', 'tent-canvas', 'campfire-pit', 'campfire-stand', 'campfire-fishing-stand', 'bedroll', 'bedroll-packed', 'bucket', 'bottle', 'fence', 'fence-doorway', 'fence-fortified', 'barrel', 'box', 'box-open', 'workbench', 'workbench-anvil', 'workbench-grind', 'signpost', 'signpost-single', 'tree-log', 'tree-trunk', 'resource-wood', 'resource-planks', 'resource-stone', 'resource-stone-large', 'tool-axe', 'fish']],
+ ['fantasy-town-kit', ['lantern', 'stall-green', 'stall-bench', 'banner-green', 'hedge', 'hedge-gate', 'wheel']],
+ ['castle-kit', ['flag']],
+ ['watercraft-pack', ['boat-row-small', 'boat-fishing-small']]
+].forEach(([pack, names]) => names.forEach(n => (KENNEY_PACK[n] = pack)));
+const KENNEY_SCALE = { 'survival-kit': 3.2, 'fantasy-town-kit': 1.7, 'castle-kit': 2.2, 'watercraft-pack': 1.7 };
+const KENNEY_DRESS_OVERRIDES = {
+  bedroll: { remap: { '#4aa8b8': 0xe8dfc8 } },
+  'bedroll-packed': { remap: { '#4aa8b8': 0xe8dfc8 } },
+};
+async function placeKenney(name, x, z, rot = 0, sMul = 1, onWater = false) {
+  const pack = KENNEY_PACK[name];
+  if (!pack) { console.warn('[kenney] unknown model', name); return; }
+  try {
+    const obj = await A.loadKenneyModel(`assets/kenney/${pack}/${name}.glb`, KENNEY_DRESS_OVERRIDES[name]);
+    obj.scale.setScalar((KENNEY_SCALE[pack] || 2) * sMul);
+    obj.rotation.y = rot;
+    obj.position.set(x, onWater ? WATER_Y - 0.15 : groundHeight(x, z), z);
+    obj.userData.name = name;
+    scene.add(obj);
+    return obj;
+  } catch (e) { console.warn(`[kenney] place ${name} failed:`, e.message); }
+}
+// [name, x, z, rot, scaleMul?, onWater?]
+const KENNEY_PLACEMENTS = [
+  // camp clearing, east of the hamlet
+  ['tent', 21, -25, 0.6], ['campfire-pit', 16.5, -28, 0], ['campfire-stand', 15.4, -29.4, 0.3],
+  ['bedroll', 23, -23, -0.8], ['bedroll-packed', 24, -24.6, 0.4], ['bucket', 18, -30, 0], ['bottle', 15.4, -29.4, 0, 0.8],
+  // hamlet yard — barrels, crates, a smith corner
+  ['barrel', -12.5, -50.5, 0.2], ['barrel', -10.9, -50.9, 1.1], ['box', -1.6, -43, 0.3],
+  ['box-open', 0.3, -42.2, -0.4], ['workbench', -19, -42.5, 1.6], ['workbench-anvil', -20.2, -44.4, 1.2],
+  ['workbench-grind', -18.4, -46, 0.4], ['wheel', -17.3, -47.4, 0.5],
+  // yard fence line + gate
+  ['fence-doorway', -22.5, -40, 0.0], ['fence', -25, -41.4, 0.0], ['fence', -27.2, -42.8, 0.0],
+  ['fence-fortified', -20, -38.4, 0.0],
+  // garden hedges + market by the well
+  ['hedge', -9, -34, 0], ['hedge', -6, -34, 0], ['hedge-gate', -3, -34, 0],
+  ['stall-green', -12.5, -39, 1.2], ['stall-bench', -10.8, -37.4, 0.4], ['banner-green', -3, -32.5, 0.2],
+  // wayfinding (replaces the two native signposts) + path lanterns
+  ['signpost', 3, -31, 0.9], ['signpost-single', 22, 28, -2.2], ['lantern', 6.5, -27, 0], ['lantern', 25, 33, 0],
+  // woodcutting site, NE grassland
+  ['tree-trunk', 35, -30, 0], ['tree-log', 37, -31.2, 1.2], ['tool-axe', 35, -29.3, 0.6],
+  ['resource-wood', 33, -32, 0], ['resource-planks', 32, -30.6, 0.5], ['resource-stone', 34.6, -33, 0],
+  ['resource-stone-large', 36, -33.6, 0.3],
+  // lakeside — fishing stand + catch on the dry shore (pulled back from the
+  // lake carve so groundHeight clears the water), boats on the water
+  ['campfire-fishing-stand', 24, 30, 2.4], ['fish', 25.6, 31, 0.5], ['fish', 26.2, 30, -0.4, 0.8],
+  ['boat-row-small', 42, 47, 1.2, 1, true], ['boat-fishing-small', 46, 51, 2.0, 1, true],
+  // castle flag at the watchtower
+  ['flag', -52, 58, 0.5],
+];
+// ===== interaction registry — boating now; fishing / gathering plug in here later =====
+const interactables = [];
+const boats = [];
+// disembark: 'step' = climb down onto the surface with the step-out clip (no
+// jump); 'leap' = a single ballistic hop using the running-jump clip.
+// deckOffset/deckInset define the WALKABLE deck surface (see boatHeight) — tune
+// deckOffset up/down so feet sit on the visible floor for each boat.
+const BOAT_DEFS = {
+  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.85,  seatUp: .64, faceOffset: 0,        turn: 2, accel: 2.6, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 12, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
+};
+const FISH_SMOKE = { along: 1.1, side: 0.45, up: 1.95 };
+(async () => {
+  for (const [n, x, z, rot, sm, w] of KENNEY_PLACEMENTS) {
+    const obj = await placeKenney(n, x, z, rot || 0, sm || 1, !!w);
+    if (obj && BOAT_DEFS[n]) registerBoat(obj, n);
+  }
+})();
+function registerBoat(obj, name) {
+  const def = BOAT_DEFS[name];
+  const b = { obj, name, def, rowPhase: 0 };
+  if (def.paddles) b.paddles = obj.getObjectByName('paddles');
+  boats.push(b);
+  const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  // Walkable deck: a flat surface inset from the hull, a little above the base,
+  // folded into groundHeight so you can board on foot and stand like on the bridge.
+  b.deckY = obj.position.y + (def.deckOffset ?? 0.4);
+  b.deckHalf = { x: size.x * 0.5 * (def.deckInset ?? 0.6), z: size.z * 0.5 * (def.deckInset ?? 0.6) };
+  interactables.push({
+    pos: () => obj.position,
+    radius: Math.max(size.x, size.z) * 0.5 + 1.8,
+    enabled: () => !riding,
+    label: () => def.label,
+    run: () => board(b),
+  });
+  if (def.smoke) {
+    const smoke = makeChimneySmoke();
+    scene.add(smoke);
+    b.smoke = smoke;
+    animated.push(dt => updateSmoke(smoke, b, dt));
+  }
+}
+// A non-ridden boat's deck reads as ground (like the bridge) so you can climb
+// aboard on foot and walk around; the ridden boat is driven by the seat logic.
+function boatHeight(x, z) {
+  let best = -Infinity;
+  for (const b of boats) {
+    if (b === riding || b.deckY === undefined) continue;
+    const dx = x - b.obj.position.x, dz = z - b.obj.position.z;
+    const c = Math.cos(-b.obj.rotation.y), s = Math.sin(-b.obj.rotation.y);
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (Math.abs(lx) < b.deckHalf.x && Math.abs(lz) < b.deckHalf.z) best = Math.max(best, b.deckY);
+  }
+  return best;
+}
 
 // ================= scattering (Arc 1 trees + Arc 2 ground pass) =================
 const R = A.rng(1234);
@@ -397,28 +656,57 @@ animated.push((dt, t) => { if (waterMat.userData.shader) waterMat.userData.shade
 
 // ================= character + controller =================
 const char = new THREE.Group();
-char.position.set(-6, terrainHeight(-6, -40), -40);
+char.position.set(25, terrainHeight(25, 37), 37);
 const placeholder = A.createCharacter();
 char.add(placeholder);
 scene.add(char);
 
-// Real model: Mixamo-rigged FBX. Idle_with_skin.fbx carries the mesh + skeleton
-// + an Idle clip; the rest are animation-only FBXs sharing that skeleton.
-// Only idle/walk/run are wired this session — the rest load into the clip
-// registry unused, ready for future states (jump, punch, swim, fight-idle).
-const CHAR_HEIGHT = 1.7;
-const CLIP_MANIFEST = [
-  { name: 'walk', file: 'Walking.fbx' },
-  { name: 'run', file: 'Fast Run.fbx' },
-  { name: 'idleAlt', file: 'idle_with_skin.fbx' },
-  { name: 'jump', file: 'Jump.fbx' },
-  { name: 'joyfulJump', file: 'Joyful Jump.fbx' },
-  { name: 'quadPunch', file: 'Quad Punch.fbx' },
-  { name: 'idleToFight', file: 'Standing Idle To Fight Idle.fbx' },
-  { name: 'fightToIdle', file: 'Fight Idle To Standing Idle.fbx' },
-  { name: 'swim', file: 'Swimming.fbx' },
-  { name: 'treadWater', file: 'Treading Water.fbx' },
-];
+// ============ character registry ============
+// One folder per character under assets/, each holding a .glb mesh (which
+// carries NO baked animation) plus its animation FBX clips. Switch characters
+// with ?char=<name> in the URL, by pressing C in-world, or by changing
+// DEFAULT_CHARACTER below. Adding a character = a new folder + an entry here;
+// no other code changes.
+//
+// Every clip is retargeted onto the character's own skeleton at load. Both
+// rigs here are VRoid exports whose GLB bones carry a node-index suffix
+// (Mia "Hips_01", Vic "J_Bip_C_Hips_025") that the FBX tracks omit ("Hips",
+// "J_Bip_C_Hips"); retargetClip bridges that automatically.
+//
+// `clips` maps the game's logical states to each character's filenames. A clip
+// that's absent or fails to load is simply skipped: the state machine falls
+// back to the nearest available pose (missing jump → hold locomotion; missing
+// boat-sit → idle) and movement/physics keep working.
+const CHARACTERS = {
+  mia: {
+    dir: 'assets/mia/', model: 'Mia.glb', height: 1.7,
+    clips: {
+      idle: 'Idle with Skin.fbx', walk: 'Walking.fbx', run: 'Fast Run.fbx',
+      jump: 'Running Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Walking Jump.fbx',
+      dive: 'Run To Dive.fbx', swim: 'Swimming.fbx',
+      sitRow: 'Sitting Cross Legged.fbx', sitFish: 'Laying on Side.fbx',
+      hopOut: 'Jumping Out Of A Plane.fbx',
+      emote1: 'Static Emote 1.fbx', emote2: 'Laying on Side.fbx', emote3: 'Sexy Dance.fbx',
+      // no tread-water clip supplied → treading falls back to idle
+    },
+  },
+  vic: {
+    dir: 'assets/vic/', model: 'vic.glb', height: 1.7,
+    clips: {
+      idle: 'idle_with_skin.fbx', walk: 'Walking.fbx', run: 'Fast Run.fbx',
+      jump: 'Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Walking Jump.fbx',
+      dive: 'Run To Dive.fbx', swim: 'Swimming.fbx', tread: 'Treading Water.fbx',
+      sitRow: 'Sitting Cross Legged.fbx', sitFish: 'Boat Sitting.fbx',
+      hopOut: 'Jumping Out Of A Plane.fbx',
+      emote1: 'Boat Sitting.fbx', emote2: 'Static Pose.fbx', emote3: 'Booty Hip Hop Dance.fbx'
+    },
+  },
+};
+const DEFAULT_CHARACTER = 'mia';
+const _charParam = new URLSearchParams(location.search).get('char');
+const CHARACTER = CHARACTERS[_charParam] ? _charParam : DEFAULT_CHARACTER;
+const CHAR_DEF = CHARACTERS[CHARACTER];
+const CHAR_HEIGHT = CHAR_DEF.height;
 
 function createLocomotion(mixer, clips) {
   const actions = {};
@@ -439,36 +727,53 @@ function createLocomotion(mixer, clips) {
     currentName = name;
   }
   // one-shot clips (jump, punch, ...) hand control back to whatever was playing before them
-  mixer.addEventListener('finished', () => play(returnToName, { fade: 0.2 }));
+  mixer.addEventListener('finished', () => { const wasStep = stepping; stepping = false; if (wasStep) autoStepT = 0.4; if (swimming || isJumping || riding) return; play(returnToName, { fade: 0.2 }); });
   return { setState: play, update: dt => mixer.update(dt) };
+
+  window.__model.traverse(o => {
+  if (!o.isMesh) return;
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  mats.forEach(m => console.log(o.name, {
+    metalness: m.metalness,
+    roughness: m.roughness,
+    metalnessMap: !!m.metalnessMap,
+    normalMap: !!m.normalMap,
+    aoMap: !!m.aoMap,
+    vertexColors: m.vertexColors,
+    hasColorAttr: !!o.geometry.attributes.color,
+    hasUV2: !!o.geometry.attributes.uv2 || !!o.geometry.attributes.uv1,
+  }));
+});
 }
 
-const fbxLoader = new FBXLoader().setPath('assets/mixamo_raw/');
+// Mesh from the active character's GLB; animation clips from FBX in the same folder.
+const gltfCharLoader = new GLTFLoader();
+const fbxLoader = new FBXLoader().setPath(CHAR_DEF.dir);
 const clips = {};
 let locomotion = null;
 
-// Animation-only FBX downloads can name bones with a different namespace than
-// the skinned download ("mixamorig:Hips" vs "mixamorig1:Hips" vs "Hips").
-// A clip whose track names don't match any bone drives nothing — the rig just
-// freezes in T-pose. Rename every track to this model's actual bone names and
-// drop tracks with no match.
-function retargetClip(clip, boneNames, byStripped) {
-  const strip = n => n.slice(n.lastIndexOf(':') + 1);
-  const tracks = [];
+// A clip's tracks target bones by name; if a name matches no node the track
+// drives nothing and the rig freezes in T-pose. FBX exports vary the naming
+// two ways vs the loaded model: a namespace prefix ("mixamorig:Hips") and/or a
+// missing node-index suffix ("Hips" where the GLB bone is "Hips_01"). nameMap
+// holds every model node keyed by BOTH its full name and its suffix-stripped
+// base, so each track resolves by full → namespace-stripped → suffix-stripped.
+// Unmatched tracks are dropped.
+function retargetClip(clip, nameMap) {
+  const tracks = [], miss = new Set();
   for (const t of clip.tracks) {
     const dot = t.name.lastIndexOf('.');
     const node = t.name.slice(0, dot), prop = t.name.slice(dot);
-    const target = boneNames.has(node) ? node : byStripped[strip(node)];
-    if (!target) continue;
+    const stripped = node.slice(node.lastIndexOf(':') + 1);
+    const target = nameMap[node] || nameMap[stripped] || nameMap[stripped.replace(/_\d+$/, '')];
+    if (!target) { miss.add(node); continue; }
     const nt = t.clone();
     nt.name = target + prop;
     tracks.push(nt);
   }
-  const out = new THREE.AnimationClip(clip.name, clip.duration, tracks);
   if (!tracks.length) console.warn(`[character] clip "${clip.name}" matched 0 bones — check skeleton names`);
-  const dropped = clip.tracks.length - tracks.length;
-  if (dropped) console.log(`[character] retarget dropped ${dropped} track(s):`, clip.tracks.filter(t => !tracks.find(n => n.name === t.name)).map(t => t.name).join(', '));
-  return out;
+  else if (miss.size) console.log(`[character] clip "${clip.name}" dropped ${miss.size} unmapped node(s):`, [...miss].slice(0, 6).join(', '));
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 // Movement is controller-driven — remove the clip's net travel (start→end
 // drift) from a node's position track, keeping in-cycle bob and weight-shift.
@@ -487,67 +792,44 @@ function removeTravel(clip, nodeNames) {
   return clip;
 }
 
-fbxLoader.loadAsync('idle_with_skin.fbx').then(async model => {
-  // Rebind: FBXLoader can parse each SkinnedMesh with duplicate bone instances
-  // distinct from the scene-graph bones the AnimationMixer finds by name.
+gltfCharLoader.loadAsync(CHAR_DEF.dir + CHAR_DEF.model).then(async gltf => {
+  const model = gltf.scene;
+  // Build the retarget name map from the model's own nodes. Two passes so a
+  // real full name always wins its slot before any suffix-stripped base fills
+  // a gap: e.g. FBX "Hips" resolves to the GLB bone "Hips_01".
+  const nameMap = {};
+  model.traverse(o => { if (o.name && !o.isMesh) nameMap[o.name] = o.name; });
   model.traverse(o => {
-    if (o.isSkinnedMesh) {
-      const bones = o.skeleton.bones.map(b => model.getObjectByName(b.name) || b);
-      o.skeleton = new THREE.Skeleton(bones, o.skeleton.boneInverses);
-      o.bind(o.skeleton, o.bindMatrix);
-    }
+    if (!o.name || o.isMesh) return;
+    const base = o.name.replace(/_\d+$/, '');
+    if (base !== o.name && !(base in nameMap)) nameMap[base] = o.name;
   });
-  const boneNames = new Set();
-  model.traverse(o => { if (o.isBone) boneNames.add(o.name); });
-  // Whole-body translation/rotation lives on the Armature node (not a bone) —
-  // it must survive retargeting or the pelvis gets pinned and every clip's
-  // weight-shift turns into exaggerated upper-body sway.
-  const nodeNames = new Set(boneNames);
-  model.traverse(o => { if (o.name && (o.isBone || o.isGroup || o.isObject3D) && !o.isMesh) nodeNames.add(o.name); });
-  const rootBone = [...boneNames].find(n => /hips/i.test(n)) || [...boneNames][0];
-  const rootNodes = [rootBone, ...[...nodeNames].filter(n => /armature/i.test(n))];
+  // Nodes that carry whole-body travel (hips / armature / root). removeTravel
+  // strips only their net start→end drift so the controller owns position.
+  const rootNodes = [...new Set(Object.values(nameMap))].filter(n => /hips|armature|rootjoint/i.test(n));
   console.log('[character] root nodes:', rootNodes.join(', '));
-  const byStripped = {};
-  for (const b of nodeNames) byStripped[b.slice(b.lastIndexOf(':') + 1)] = b;
 
-  clips.idle = retargetClip(model.animations[0], nodeNames, byStripped);
-  await Promise.all(CLIP_MANIFEST.map(c =>
-    fbxLoader.loadAsync(c.file)
-      .then(fbx => { clips[c.name] = removeTravel(retargetClip(fbx.animations[0], nodeNames, byStripped), rootNodes); })
-      .catch(e => console.warn(`[character] clip "${c.name}" (${c.file}) failed:`, e.message))
+  await Promise.all(Object.entries(CHAR_DEF.clips).map(([name, file]) =>
+    fbxLoader.loadAsync(file)
+      .then(fbx => { clips[name] = removeTravel(retargetClip(fbx.animations[0], nameMap), rootNodes); })
+      .catch(e => console.warn(`[character] clip "${name}" (${file}) failed:`, e.message))
   ));
+
+  // Skinned meshes animate outside their bind-pose bounds — never frustum-cull.
   model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-  // Mixamo FBX ships its own lights — strip them or they blow out the scene.
-  const embeddedLights = [];
-  model.traverse(o => { if (o.isLight) embeddedLights.push(o); });
-  for (const l of embeddedLights) l.removeFromParent();
-  // FBX materials often come in with transparent=true + low opacity, and
-  // single-sided faces make thin parts vanish at glancing angles — force solid.
-  model.traverse(o => {
-    if (!o.isMesh) return;
-    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-      m.transparent = false;
-      m.opacity = 1;
-      m.alphaMap = null;
-      m.side = THREE.DoubleSide;
-    }
-  });
-  // Mixamo FBX exports ~100× scale; apply the nominal factor, measure, then
-  // fine-normalize to the brief's character height.
-  model.scale.setScalar(0.01);
+
+  // Normalize height. GLB is authored ~human scale (Y-up); only stand it up if
+  // it reads as authored Z-up (deeper than tall).
   model.updateMatrixWorld(true);
   let box = new THREE.Box3().setFromObject(model);
   let size = box.getSize(new THREE.Vector3());
-  // Orientation guard: only stand the model up if it's actually authored Z-up
-  // (deeper than tall). Mixamo FBX is normally already Y-up — a blanket -90°
-  // X rotation is what laid her flat on the ground.
   if (size.z > size.y * 1.4) {
     model.rotation.x = -Math.PI / 2;
     model.updateMatrixWorld(true);
     box = new THREE.Box3().setFromObject(model);
     size = box.getSize(new THREE.Vector3());
   }
-  console.log(`[character] idle_with_skin.fbx — size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} u`);
+  console.log(`[character] ${CHAR_DEF.model} — size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} u`);
   model.scale.multiplyScalar(CHAR_HEIGHT / size.y);
   model.updateMatrixWorld(true);
   model.position.y -= new THREE.Box3().setFromObject(model).min.y; // feet at group origin
@@ -557,11 +839,11 @@ fbxLoader.loadAsync('idle_with_skin.fbx').then(async model => {
 
   const mixer = new THREE.AnimationMixer(model);
   locomotion = createLocomotion(mixer, clips);
-  locomotion.setState('idle');
+  if (clips.idle) locomotion.setState('idle');
   window.__setState = n => locomotion.setState(n); // console/debug hook
-  window.__clips = clips; window.__model = model; // console/debug hooks
-  console.log('[character] loaded, clips:', Object.keys(clips).join(', '));
-}).catch(e => console.warn('[character] FBX failed, using placeholder:', e.message));
+  window.__clips = clips; window.__model = model; window.__mixer = mixer; // console/debug hooks
+  console.log(`[character] "${CHARACTER}" loaded, clips:`, Object.keys(clips).join(', '));
+}).catch(e => console.warn(`[character] ${CHARACTER} model failed, using placeholder:`, e.message));
 
 function updateLocomotion(dt, moving, running) {
   if (!locomotion) {
@@ -569,7 +851,12 @@ function updateLocomotion(dt, moving, running) {
     char.children[0].children[0].position.y = 0.72 + (moving ? Math.abs(Math.sin(performance.now() * 0.009)) * 0.06 : 0);
     return;
   }
-  locomotion.setState(window.__forceState || (!moving ? 'idle' : running ? 'run' : 'walk'));
+  // a one-shot clip (jump/dive airborne, the boat step-out) or an emote owns the pose
+  if (!isJumping && !stepping && !emoting) {
+    if (swimming) locomotion.setState(moving ? 'swim' : 'tread');
+    else if (waterDepth > WADE_START) locomotion.setState(moving ? 'walk' : 'idle'); // wading: walk pace, no run/jump pop
+    else locomotion.setState(window.__forceState || (!moving ? 'idle' : running ? 'run' : 'walk'));
+  }
   locomotion.update(dt);
 }
 if (BIOME.lantern) {
@@ -580,12 +867,51 @@ if (BIOME.lantern) {
 scene.add(char);
 
 const keys = {};
+let jumpVel = 0, isJumping = false, diving = false, swimming = false, groundY = 0, waterDepth = 0, curRunning = false, curMoving = false;
+let riding = null, boatHeading = 0, boatSpeed = 0, activeInteract = null;
+// swim tuning: depth = water surface (WATER_Y) minus the ground/bed under the character
+const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 6.0;
+let stepping = false; // a grounded one-shot (boat step-out) owns the pose until it finishes
+let autoStepT = 0, stepOutQueued = false; // after a dive/leap lands, force a short walk/swim step so the pose doesn't freeze on the clip's last frame
+let airFwd = 0; // horizontal speed applied while airborne on a disembark leap → a forward arc
+let emoting = false; // an emote pose owns the locomotion state until you move
+let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
 const clearInput = () => { for (const k in keys) keys[k] = false; endPan(); };
 addEventListener('keydown', e => {
   if (!e.isTrusted) return;
   keys[e.code] = true;
   if (e.code === 'KeyG') toggleGallery();
-  if (e.code === 'KeyN') location.search = '?mode=' + (modeKey === 'night' ? 'day' : 'night');
+  if (e.code === 'KeyN') { const p = new URLSearchParams(location.search); p.set('mode', modeKey === 'night' ? 'day' : 'night'); location.search = p.toString(); }
+  if (e.code === 'KeyC') { const ks = Object.keys(CHARACTERS); const p = new URLSearchParams(location.search); p.set('char', ks[(ks.indexOf(CHARACTER) + 1) % ks.length]); location.search = p.toString(); }
+  if (locomotion && !riding && !isJumping && !swimming && !stepping) {
+    const em = { Digit1: 'emote1', Digit2: 'emote2', Digit3: 'emote3' }[e.code];
+    if (em && clips[em]) { emoting = true; locomotion.setState(em, { fade: 0.25 }); }
+  }
+  if (e.code === 'KeyE') {
+    if (riding) disembark();
+    else if (activeInteract) activeInteract.run();
+  }
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!isJumping && !swimming && !inGallery && !riding) {
+      sfxJump();
+      // jumping toward (or standing over) deep water dives; otherwise a gait-matched jump
+      // Sample several steps ahead so gently-sloping shores still read as "into
+      // the water" — a shallow gradient no longer devolves the dive into a jump.
+      let aheadDepth = waterDepth;
+      for (const d of [2.2, 3.6, 5.0])
+        aheadDepth = Math.max(aheadDepth, WATER_Y - groundHeight(char.position.x + Math.sin(heading) * d, char.position.z + Math.cos(heading) * d));
+      const dive = aheadDepth > DIVE_TRIGGER;
+      if (dive) {
+        isJumping = true; diving = true; jumpVel = 6.0; stepOutQueued = true;
+        if (locomotion) locomotion.setState(clips.dive ? 'dive' : 'jump', { oneShot: true, fade: 0.1 });
+      } else {
+        isJumping = true; jumpVel = 7.8;
+        const want = !curMoving ? 'jumpIdle' : curRunning ? 'jump' : 'jumpWalk';
+        if (locomotion) locomotion.setState(clips[want] ? want : 'jump', { oneShot: true, fade: 0.12 });
+      }
+    }
+  }
 });
 addEventListener('keyup', e => { if (e.isTrusted) keys[e.code] = false; });
 // focus loss (new tab, fullscreen toggle, context switch) can eat keyup events — reset everything
@@ -599,15 +925,15 @@ addEventListener('contextmenu', e => e.preventDefault());
 // Pan hardening: only trusted mouse pointer events, right button, canvas-captured,
 // per-event delta clamped, watchdog-cancelled. Synthetic/re-dispatched events
 // (editor overlays, etc.) are ignored entirely — they caused runaway spin.
-let panX = null, panId = -1, panT = 0;
+let panX = null, panY = null, panId = -1, panT = 0;
 const cv = renderer.domElement;
 function endPan() {
   if (panId !== -1) { try { cv.releasePointerCapture(panId); } catch {} }
-  panX = null; panId = -1;
+  panX = null; panY = null; panId = -1;
 }
 cv.addEventListener('pointerdown', e => {
   if (!e.isTrusted || e.pointerType !== 'mouse') return;
-  if (e.button === 2) { panX = e.clientX; panId = e.pointerId; panT = performance.now(); cv.setPointerCapture(e.pointerId); }
+  if (e.button === 2) { panX = e.clientX; panY = e.clientY; panId = e.pointerId; panT = performance.now(); cv.setPointerCapture(e.pointerId); }
 });
 cv.addEventListener('pointerup', e => { if (e.button === 2 || e.pointerId === panId) endPan(); });
 cv.addEventListener('pointercancel', endPan);
@@ -616,22 +942,145 @@ cv.addEventListener('pointermove', e => {
   if (!e.isTrusted || e.pointerId !== panId) return;
   if (!(e.buttons & 2)) { endPan(); return; }
   const dx = Math.max(-60, Math.min(60, e.clientX - panX));
+  const dy = Math.max(-60, Math.min(60, e.clientY - panY));
   camYaw -= dx * 0.0032;
-  panX = e.clientX; panT = performance.now();
+  camPitch += dy * 0.0034; // drag matches horizontal orbit feel
+  camPitch = Math.max(0.02, Math.min(1.45, camPitch));
+  panX = e.clientX; panY = e.clientY; panT = performance.now();
 });
+// ================= boating & interactions =================
+const promptEl = document.getElementById('prompt');
+const promptLabelEl = document.getElementById('promptLabel');
+let lastPrompt = '';
+function refreshPrompt() {
+  const text = riding ? 'Hop out' : (activeInteract ? activeInteract.label() : '');
+  if (text === lastPrompt) return;
+  lastPrompt = text;
+  promptLabelEl.textContent = text;
+  promptEl.classList.toggle('on', !!text);
+}
+function updateInteract() {
+  let best = null, bestD = Infinity;
+  for (const it of interactables) {
+    if (it.enabled && !it.enabled()) continue;
+    const p = it.pos();
+    const d = Math.hypot(char.position.x - p.x, char.position.z - p.z);
+    if (d < it.radius && d < bestD) { best = it; bestD = d; }
+  }
+  activeInteract = best;
+}
+function board(b) {
+  riding = b;
+  activeInteract = null;
+  swimming = false; isJumping = false; diving = false; jumpVel = 0;
+  curMoving = curRunning = false;
+  boatHeading = b.obj.rotation.y;
+  boatSpeed = 0;
+  sfxBoard();
+  if (locomotion) locomotion.setState(clips[b.def.sitClip] ? b.def.sitClip : 'idle', { fade: 0.3 });
+}
+function disembark() {
+  const b = riding;
+  riding = null;
+  heading = boatHeading + b.def.faceOffset;               // face the way the rider sat
+  if ((b.def.disembark || 'leap') === 'step') {
+    // Climb down onto the surface beside the boat — NO ballistic jump. Like
+    // hopping from a tall cab to the road; the step-out clip plays as we settle.
+    const off = b.def.stepOff ?? 1.8;
+    char.position.x += Math.sin(heading) * off;
+    char.position.z += Math.cos(heading) * off;
+    isJumping = diving = false; jumpVel = 0;
+    const depth = WATER_Y - groundHeight(char.position.x, char.position.z);
+    swimming = depth > SWIM_DEPTH;
+    groundY = swimming ? (WATER_Y - SWIM_SINK) : groundHeight(char.position.x, char.position.z);
+    char.position.y = groundY;
+    if (locomotion && clips.hopOut) { stepping = true; locomotion.setState('hopOut', { oneShot: true, fade: 0.15 }); }
+  } else {
+    // Leap off in an arc — up (jumpVel) + forward (airFwd) with the running-jump
+    // clip, heading already pointing off the boat via faceOffset, then a forced step.
+    isJumping = true; diving = false; jumpVel = 5.6; airFwd = 4.5; stepOutQueued = true; sfxJump();
+    if (locomotion) locomotion.setState(clips.jump ? 'jump' : 'jumpIdle', { oneShot: true, fade: 0.12 });
+  }
+}
+let bobT = 0;
+function updateBoat(dt) {
+  const b = riding, d = b.def, o = b.obj;
+  bobT += dt;
+  const fwd = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
+  const turn = (keys.KeyA ? 1 : 0) - (keys.KeyD ? 1 : 0);
+  const speedFrac = Math.min(1, Math.abs(boatSpeed) / d.maxSpeed);
+  boatHeading += turn * d.turn * dt * (0.45 + 0.55 * speedFrac);
+  const target = fwd * d.maxSpeed * d.fwdSign;
+  boatSpeed += (target - boatSpeed) * Math.min(1, dt * d.accel);
+  boatSpeed *= (1 - dt * 0.5);                     // water drag
+  const nx = o.position.x + Math.sin(boatHeading) * boatSpeed * dt;
+  const nz = o.position.z + Math.cos(boatHeading) * boatSpeed * dt;
+  const afloat = (WATER_Y - terrainHeight(nx, nz)) > 0.45;
+  if (Math.abs(nx) < 94 && Math.abs(nz) < 94 && afloat) { o.position.x = nx; o.position.z = nz; }
+  else boatSpeed *= 0.25;                          // stall against the shallows
+  o.rotation.y = boatHeading;
+  o.position.y = (WATER_Y - 0.15) + Math.sin(bobT * 1.2) * 0.05;
+  o.rotation.z = Math.sin(bobT * 0.9) * 0.02;      // gentle roll
+  char.position.set(
+    o.position.x + Math.sin(boatHeading) * d.seatAlong,
+    o.position.y + d.seatUp,
+    o.position.z + Math.cos(boatHeading) * d.seatAlong
+  );
+  char.rotation.y = boatHeading + d.faceOffset;
+  if (b.paddles) {                                  // both oars sweep together, paced by speed
+    const active = Math.abs(boatSpeed) > 0.12;
+    b.rowPhase += dt * (2.5 + 6 * speedFrac);
+    b.paddles.rotation.x = Math.sin(b.rowPhase) * (active ? d.rowAmp : d.rowAmp * 0.24);
+  }
+  if (locomotion) locomotion.update(dt);
+}
+function makeChimneySmoke() {
+  const g = new THREE.Group();
+  g.userData.puffs = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.16, 0),
+      new THREE.MeshLambertMaterial({ color: 0xdedcd2, transparent: true, flatShading: true })
+    );
+    g.add(m);
+    g.userData.puffs.push({ m, life: i / 6, spin: Math.random() * 6, dx: (Math.random() - .5) * .3, dz: (Math.random() - .5) * .3 });
+  }
+  return g;
+}
+function updateSmoke(g, b, dt) {
+  const o = b.obj, h = o.rotation.y;
+  const cx = o.position.x + Math.sin(h) * FISH_SMOKE.along + Math.cos(h) * FISH_SMOKE.side;
+  const cz = o.position.z + Math.cos(h) * FISH_SMOKE.along - Math.sin(h) * FISH_SMOKE.side;
+  const cy = o.position.y + FISH_SMOKE.up;
+  for (const p of g.userData.puffs) {
+    p.life += dt * 0.32;
+    if (p.life > 1) p.life -= 1;
+    const e = p.life;
+    p.m.position.set(cx + p.dx * e * 3, cy + e * 1.7, cz + p.dz * e * 3);
+    p.m.scale.setScalar(0.4 + e * 1.5);
+    p.m.rotation.y = p.spin + e * 2;
+    p.m.material.opacity = Math.max(0, 0.7 * (1 - e));
+  }
+}
 function updateCharacter(dt) {
   // arrows = camera
-  if (keys.KeyA) camYaw += dt * 2.0;
-  if (keys.KeyD) camYaw -= dt * 2.0;
-  if (keys.KeyW) camPitch += dt * 1.4;
-  if (keys.KeyS) camPitch -= dt * 1.4;
-  camPitch = Math.max(0.06, Math.min(1.35, camPitch));
+  if (keys.ArrowLeft) camYaw += dt * 2.0;
+  if (keys.ArrowRight) camYaw -= dt * 2.0;
+  if (keys.ArrowUp) camPitch += dt * 1.4;
+  if (keys.ArrowDown) camPitch -= dt * 1.4;
+  camPitch = Math.max(0.02, Math.min(1.45, camPitch));
+  if (emoting && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD)) emoting = false;
+  if (riding) { updateBoat(dt); refreshPrompt(); return; }
+  updateInteract();
+  refreshPrompt();
+  // water depth under the character (surface minus supporting ground/deck): drives wade drag, swim, dive
+  waterDepth = WATER_Y - groundHeight(char.position.x, char.position.z);
   let ix = 0, iz = 0;
-  if (keys.ArrowUp) iz -= 1;
-  if (keys.ArrowDown) iz += 1;
-  if (keys.ArrowLeft) ix -= 1;
-  if (keys.ArrowRight) ix += 1;
-  const moving = ix !== 0 || iz !== 0;
+  if (keys.KeyW) iz -= 1;
+  if (keys.KeyS) iz += 1;
+  if (keys.KeyA) ix -= 1;
+  if (keys.KeyD) ix += 1;
+  let moving = ix !== 0 || iz !== 0;
   let running = false;
   if (moving) {
     // view-relative: W runs away from camera, S runs toward it (camera backs off, face to screen)
@@ -643,34 +1092,95 @@ function updateCharacter(dt) {
     const shift = keys.ShiftLeft || keys.ShiftRight;
     const run = alwaysRunEl.checked ? !shift : shift;
     running = run;
-    const speed = run ? 8 : 4;
+    let speed = run ? 8 : 4;
+    if (swimming) speed = shift ? 5 : 3.6;            // swim pace
+    else if (waterDepth > WADE_START) speed *= 0.5;   // wading drag through shallow water
     const nx = char.position.x + Math.sin(heading) * speed * dt;
     const nz = char.position.z + Math.cos(heading) * speed * dt;
-    if (Math.abs(nx) < 95 && Math.abs(nz) < 95 && groundHeight(nx, nz) > WATER_Y + 0.12) {
+    if (Math.abs(nx) < 95 && Math.abs(nz) < 95) {     // water is walkable now — depth drives wade/swim
       char.position.x = nx; char.position.z = nz;
     }
+  } else if (autoStepT > 0) {
+    // forced forward step out of a just-landed dive/leap — moves + plays walk/swim
+    // so the character breaks out of the clip's clamped final frame.
+    const speed = swimming ? 3.6 : 4;
+    const nx = char.position.x + Math.sin(heading) * speed * dt;
+    const nz = char.position.z + Math.cos(heading) * speed * dt;
+    if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+    moving = true;
   }
+  if (autoStepT > 0) autoStepT -= dt;
   char.rotation.y = heading;
-  const gy = groundHeight(char.position.x, char.position.z);
-  char.position.y += (gy - char.position.y) * Math.min(1, dt * 14);
+  curRunning = moving && running;
+  curMoving = moving;
+  // footsteps on land, ripples in water (moving, not airborne)
+  if (moving && !isJumping) {
+    if (swimming || waterDepth > WADE_START) {
+      rippleT += dt; if (rippleT > 0.34) { rippleT = 0; spawnRipple(char.position.x, char.position.z, swimming ? 1 : 0.7); }
+    } else {
+      stepSfxT += dt; if (stepSfxT > (curRunning ? 0.28 : 0.4)) { stepSfxT = 0; sfxStep(); }
+    }
+  }
+  // ---- vertical: terrain-follow · swim float · jump/dive arc ----
+  const support = groundHeight(char.position.x, char.position.z); // deck or bed the body rests on
+  if (isJumping) {
+    jumpVel -= GRAV * dt;
+    char.position.y += jumpVel * dt;
+    if (diving) { // lunge forward so the dive carries into the water even from a standstill
+      const nx = char.position.x + Math.sin(heading) * DIVE_FWD * dt;
+      const nz = char.position.z + Math.cos(heading) * DIVE_FWD * dt;
+      if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+    }
+    if (airFwd) { // horizontal travel during a leap → parabolic arc off the boat, not a vertical pop
+      const nx = char.position.x + Math.sin(heading) * airFwd * dt;
+      const nz = char.position.z + Math.cos(heading) * airFwd * dt;
+      if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+    }
+    const swimY = WATER_Y - SWIM_SINK;
+    const depthHere = WATER_Y - groundHeight(char.position.x, char.position.z);
+    // A dive settles into a swim at the surface line over ANY real water and is
+    // clamped at swimY, so it never plunges to the bed ("davy jones"). A plain
+    // jump only starts swimming once the water is properly deep.
+    const toSwim = diving ? depthHere > DIVE_TRIGGER : depthHere > SWIM_DEPTH;
+    if (toSwim && char.position.y <= swimY) {              // splashdown → swim at surface
+      char.position.y = groundY = swimY; isJumping = diving = false; swimming = true; jumpVel = 0; airFwd = 0;
+      spawnSplash(char.position.x, char.position.z); sfxSplash();
+      if (stepOutQueued) { autoStepT = 0.5; stepOutQueued = false; }
+    } else if (!toSwim && char.position.y <= support) {    // touch dry ground / shallow bed
+      char.position.y = groundY = support; isJumping = diving = false; jumpVel = 0; airFwd = 0;
+      if (stepOutQueued) { autoStepT = 0.5; stepOutQueued = false; }
+    }
+  } else {
+    if (!swimming && waterDepth > SWIM_DEPTH) swimming = true;         // waded past waist → float
+    if (swimming && waterDepth < SWIM_DEPTH - 0.3) swimming = false;   // reached the shallows → stand
+    const restY = swimming ? (WATER_Y - SWIM_SINK) : support;
+    groundY += (restY - groundY) * Math.min(1, dt * 14);
+    char.position.y = groundY;
+  }
   updateLocomotion(dt, moving, running);
 }
-let camDist = 7.5;
+let camDist = 7.5, camDistDyn = 7.5;
 addEventListener('wheel', e => {
   if (inGallery) return;
   camDist = Math.max(1.6, Math.min(16, camDist + e.deltaY * 0.008));
 }, { passive: true });
 function updateCamera(dt) {
-  const dist = camDist;
+  // Genshin/WuWa feel: pull back a little while running, ease back in when stopping
+  const targetDist = camDist + (curRunning ? 2.4 : 0);
+  const k = curRunning ? 3.5 : 1.6; // out fast, in slow
+  camDistDyn += (targetDist - camDistDyn) * (1 - Math.exp(-dt * k));
+  const dist = camDistDyn;
   const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
   const tx = char.position.x + Math.sin(camYaw) * cp * dist;
   const tz = char.position.z + Math.cos(camYaw) * cp * dist;
   let ty = char.position.y + 1.6 + sp * dist;
-  ty = Math.max(ty, terrainHeight(tx, tz) + 1.0);
+  ty = Math.max(ty, terrainHeight(tx, tz) + 0.6);
   if (!camPos) camPos = new THREE.Vector3(tx, ty, tz);
   camPos.lerp(new THREE.Vector3(tx, ty, tz), 1 - Math.exp(-dt * 10));
   camera.position.copy(camPos);
-  camera.lookAt(char.position.x, char.position.y + 1.6, char.position.z);
+  // as the camera tilts overhead, aim lower so the ground/feet stay in frame
+  const lookH = 1.6 - Math.max(0, camPitch - 0.55) * 1.5;
+  camera.lookAt(char.position.x, char.position.y + Math.max(0.35, lookH), char.position.z);
 }
 
 // ================= asset gallery (press G) =================
@@ -679,7 +1189,7 @@ const gallery = new THREE.Group();
 gallery.position.set(0, 0, -400);
 gallery.visible = false;
 {
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(45, 40).rotateX(-Math.PI / 2),
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(68, 48).rotateX(-Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: A.C.green2, flatShading: true, roughness: 1 }));
   ground.receiveShadow = true;
   gallery.add(ground);
@@ -690,14 +1200,13 @@ gallery.visible = false;
     A.createWell(), A.createCart(), A.createSignpost(),
     A.createRock(0), A.createRock(1), A.createRock(2), A.createBush(3), A.createMushroom(), A.createFlower(), A.createCharacter(),
   ];
-  const cols = 6;
-  items.forEach((it, i) => {
+  const cols = 8;
+  function galleryPlace(it, i) {
     const gx = ((i % cols) - (cols - 1) / 2) * 11;
-    const gz = Math.floor(i / cols) * 12 - 16;
+    const gz = Math.floor(i / cols) * 12 - 42;
     it.position.set(gx, 0, gz);
     gallery.add(it);
     if (it.userData.blades) animated.push(dt => { if (gallery.visible) it.userData.blades.rotation.z += dt * 0.7; });
-    // label
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96;
     const cx = cv.getContext('2d');
     cx.fillStyle = '#2e4632'; cx.font = '600 44px system-ui, sans-serif'; cx.textAlign = 'center';
@@ -706,7 +1215,49 @@ gallery.visible = false;
     sp.scale.set(5.5, 1.03, 1);
     sp.position.set(gx, 0.6, gz + 3.6);
     gallery.add(sp);
-  });
+  }
+  items.forEach((it, i) => galleryPlace(it, i));
+  // --- Kenney shortlist — curated set, loaded through the recolor pipeline ---
+  const KENNEY_SHORTLIST = [
+    // [pack, scale, models] — survival-kit is authored ~half-scale (fence 0.52u vs ~1u)
+    ['survival-kit', 2.0, ['tent', 'tent-canvas', 'campfire-pit', 'campfire-stand', 'campfire-fishing-stand', 'bedroll', 'bedroll-packed', 'bucket', 'bottle', 'fence', 'fence-doorway', 'fence-fortified', 'barrel', 'box', 'box-open', 'workbench', 'workbench-anvil', 'workbench-grind', 'signpost', 'signpost-single', 'tree-log', 'tree-trunk', 'resource-wood', 'resource-planks', 'resource-stone', 'resource-stone-large', 'tool-axe', 'fish']],
+    ['fantasy-town-kit', 1.0, ['lantern', 'stall-green', 'stall-bench', 'banner-green', 'hedge', 'hedge-gate', 'wheel']],
+    ['castle-kit', 1.0, ['flag']],
+    ['watercraft-pack', 1.0, ['boat-row-small', 'boat-fishing-small']],
+  ];
+  // per-model override map. Two forms (see loadKenneyModel):
+  //   { remap: { '#bakedHex': 'paletteKeyOrColor' } }  — recolor one swatch only
+  //   { meshOrMaterialName: 'paletteKeyOrColor' }        — whole-mesh solid
+  // #4aa8b8 (water teal) lands on the bedroll/sleep-fabric swatch — snap it to
+  // desaturated warm cream so bedrolls read as cloth, not water.
+  const KENNEY_OVERRIDES = {
+    bedroll: { remap: { '#4aa8b8': 0xe8dfc8 } },
+    'bedroll-packed': { remap: { '#4aa8b8': 0xe8dfc8 } },
+  };
+  let gi = items.length;
+  (async () => {
+    for (const [pack, scale, names] of KENNEY_SHORTLIST) {
+      for (const name of names) {
+        try {
+          const obj = await A.loadKenneyModel(`assets/kenney/${pack}/${name}.glb`, KENNEY_OVERRIDES[name]);
+          obj.scale.setScalar(scale);
+          obj.userData.name = name;
+          galleryPlace(obj, gi++);
+        } catch (e) { console.warn(`[kenney] ${name} failed:`, e.message); }
+      }
+    }
+    // hard assert: no image texture may remain on any Kenney mesh after recolor
+    let kTex = 0, kMesh = 0, charTex = 0;
+    scene.traverse(o => {
+      if (!o.isMesh) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      if (o.userData && o.userData.kenney) { kMesh++; for (const mm of mats) if (mm && mm.map) kTex++; }
+      else for (const mm of mats) if (mm && mm.map) charTex++;
+    });
+    console.log(kTex === 0
+      ? `[kenney] texture check: PASS — 0 image textures across ${kMesh} Kenney meshes (character retains its own ${charTex} skin texture(s), expected)`
+      : `[kenney] texture check: FAIL — ${kTex} textured Kenney material(s) remain`);
+  })();
   animated.push(dt => {
     if (!gallery.visible) return;
     for (const it of gallery.children) if (it.isGroup) it.rotation.y += dt * 0.35;
@@ -715,8 +1266,25 @@ gallery.visible = false;
 scene.add(gallery);
 
 let inGallery = false;
+window.__toggleGallery = () => toggleGallery(); // console/debug hook (G key requires trusted events)
+window.__tp = (x, z) => { char.position.set(x, groundHeight(x, z), z); }; // debug teleport
+window.__scene = scene; window.__gallery = gallery;
+window.__boats = boats; window.__board = i => board(boats[i]); window.__off = () => disembark();
+window.__view = (yaw, pitch, dist) => { camYaw = yaw; camPitch = pitch; camDist = dist; camDistDyn = dist; };
+window.__ci = () => ({ camYaw, camPitch, camDist, camDistDyn, aerial: window.__aerial, inGallery });
+window.__keys = keys; window.__step = dt => { if (riding) updateBoat(dt || 0.1); };
+window.__seat = () => riding ? { boat: riding.name, char: char.position.toArray().map(v=>+v.toFixed(2)), boatPos: riding.obj.position.toArray().map(v=>+v.toFixed(2)), heading:+boatHeading.toFixed(2), spd:+boatSpeed.toFixed(2), paddleX: riding.paddles ? +riding.paddles.rotation.x.toFixed(3) : null } : 'not riding';
+window.__focus = name => { // frame one gallery model + return its material colors
+  let hit = null; gallery.traverse(o => { if (o.userData && o.userData.name === name && o.children.length) hit = o; });
+  if (!hit) return 'not found';
+  const b = new THREE.Box3().setFromObject(hit), c = b.getCenter(new THREE.Vector3());
+  window.__focusPos = { x: hit.position.x, y: c.y, z: hit.position.z };
+  window.__focusR = Math.max(1.5, b.getSize(new THREE.Vector3()).length() * 1.1);
+  const cols = []; hit.traverse(o => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m && m.color && cols.push('#' + m.color.getHexString())); });
+  return { name, colors: cols };
+};
 const hudText = document.getElementById('hudText');
-const WORLD_HUD = '<b>' + BIOME.name + ' — Arc 1+2</b> <small style="opacity:.55">v10</small><br>WASD move · hold right-click / ←→ pan · ↑↓ overhead · scroll zoom · Shift walk/run · <b>G</b> gallery · <b>N</b> day/night';
+const WORLD_HUD = '<b>' + BIOME.name + ' — Arc 1+2</b> <small style="opacity:.55">v13</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (' + CHARACTER + ') · <b>1-3</b> emote';
 hudText.innerHTML = WORLD_HUD;
 const coordsEl = document.getElementById('coords');
 function toggleGallery() {
@@ -740,10 +1308,22 @@ renderer.setAnimationLoop(() => {
   if (panX !== null && performance.now() - panT > 400) endPan();
   for (const fn of animated) fn(dt, t);
   if (inGallery) {
-    const a = t * 0.06;
-    camera.position.set(Math.sin(a) * 40, 12, -400 + Math.cos(a) * 40 + 6);
-    camera.lookAt(0, 3, -400);
-    sun.position.set(30, 50, -370); sun.target.position.set(0, 0, -400);
+    if (window.__focusPos) {
+      const f = window.__focusPos, r = window.__focusR || 3.5;
+      camera.position.set(f.x + Math.sin(t * 0.25) * r, f.y + r * 0.55, f.z - 400 + Math.cos(t * 0.25) * r);
+      camera.lookAt(f.x, f.y, f.z - 400);
+      sun.position.set(f.x + 8, 40, f.z - 400 + 8); sun.target.position.set(f.x, f.y, f.z - 400);
+    } else {
+      const a = t * 0.06;
+      camera.position.set(Math.sin(a) * 58, 24, -400 + Math.cos(a) * 58);
+      camera.lookAt(0, 1, -400);
+      sun.position.set(30, 50, -370); sun.target.position.set(0, 0, -400);
+    }
+  } else if (window.__aerial) {
+    scene.fog.far = 5000; scene.fog.near = 3000;
+    camera.position.set(0, 175, 30);
+    camera.lookAt(0, 0, -2);
+    sun.position.set(40, 120, 30); sun.target.position.set(0, 0, 0);
   } else {
     updateCharacter(dt);
     updateCamera(dt);
