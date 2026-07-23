@@ -37,7 +37,7 @@ export const CHARACTERS = {
     dir: 'assets/vic/', model: 'vic.glb', height: 1.7,
     clips: {
       idle: 'idle_with_skin.fbx', walk: 'Walking.fbx', run: 'Fast Run.fbx',
-      jump: 'Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Walking Jump.fbx',
+      jump: 'Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Jump(2).fbx',
       dive: 'Run To Dive.fbx', swim: 'Swimming.fbx', tread: 'Treading Water.fbx',
       sitRow: 'Sitting Cross Legged.fbx', sitFish: 'Boat Sitting.fbx',
       hopOut: 'Jumping Out Of A Plane.fbx',
