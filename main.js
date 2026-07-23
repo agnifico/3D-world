@@ -3,8 +3,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { terrainHeight } from './world.js';
-import { BIOME } from './lighting.js';
 import * as Lighting from './lighting.js';
+import { PALETTES } from './lighting.js';
 import { createTerrainMesh, createWater } from './terrain-mesh.js';
 import { initFx } from './fx.js';
 import * as Audio from './audio.js';
@@ -34,13 +34,20 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-const { sun } = Lighting.createLights(scene);
-createTerrainMesh(scene, BIOME);
-const { waterMat } = createWater(scene, BIOME);
+// Light objects + dual-baked (day/night) content are all built before
+// Lighting.initLightingBlend runs, since it needs every one of their blend
+// functions/materials up front — see lighting.js's applyLighting(t).
+const { hemi, sun } = Lighting.initLighting(scene);
+const { applyBlend: applyTerrainBlend } = createTerrainMesh(scene, PALETTES);
+const { waterMat } = createWater(scene, PALETTES);
 
 const animated = [];
 const { spawnRipple, spawnSplash } = initFx(scene, animated);
-initMinimap(animated, BIOME, boats, () => controllerApi.char, () => controllerApi.getHeading(), Gallery.isGalleryOpen);
+// minimap's own day/night follow-cam upgrade is a separate brief part — for
+// now it still takes one static palette (in its old flat shape), matching
+// its pre-existing behavior; this shim goes away once minimap.js is rewritten
+const minimapBiomeShim = p => ({ water: p.water.color, bed: p.terrain.bed, g1: p.terrain.g1, g2: p.terrain.g2, sand: p.terrain.sand });
+initMinimap(animated, minimapBiomeShim(PALETTES[Lighting.modeKey]), boats, () => controllerApi.char, () => controllerApi.getHeading(), Gallery.isGalleryOpen);
 
 placeNativeProps(scene, animated);
 
@@ -60,7 +67,7 @@ window.placeGLB = async function (url, x, z, scale = 1) {
 
 placeKenneyProps(scene, animated); // fire-and-forget — awaits internally per placement
 
-scatterWorld(scene, animated, BIOME);
+const { applyGrassBlend, flowerMat } = scatterWorld(scene, animated, PALETTES);
 animated.push((dt, t) => { if (waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = t; });
 
 const gallery = Gallery.buildGallery(scene, animated);
@@ -68,8 +75,8 @@ const gallery = Gallery.buildGallery(scene, animated);
 function handleToggleGallery() {
   const open = Gallery.toggleGallery();
   coordsEl.style.display = open ? 'none' : '';
-  scene.fog.far = open ? 5000 : BIOME.fogFar;
-  scene.fog.near = open ? 3000 : BIOME.fogNear;
+  if (open) { scene.fog.far = 5000; scene.fog.near = 3000; }
+  else Lighting.applyLighting(Lighting.getT()); // restores fog (and everything else, harmlessly) to the current blend
   hudText.innerHTML = open
     ? '<b>Asset gallery</b> — every factory in assets.js<br><b>G</b> back to the world'
     : WORLD_HUD;
@@ -82,6 +89,14 @@ const controllerApi = initController(scene, animated, {
   onToggleGallery: handleToggleGallery,
 });
 const { char, updateCharacter, updateCamera, frameGuards } = controllerApi;
+
+const lantern = Lighting.createLantern(char);
+Lighting.initLightingBlend({
+  scene, hemi, sun, waterMat,
+  terrain: { applyBlend: applyTerrainBlend },
+  grass: { applyBlend: applyGrassBlend },
+  flowerMat, lantern,
+});
 
 // Area Designer — press L to open/close
 initEditor({ scene, camera, domElement: renderer.domElement, animated, getChar: () => char });
@@ -100,7 +115,7 @@ window.__focus = name => { // frame one gallery model + return its material colo
 };
 
 const hudText = document.getElementById('hudText');
-const WORLD_HUD = '<b>' + BIOME.name + ' — Arc 1+2</b> <small style="opacity:.55">v13</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (' + CHARACTER + ') · <b>1-3</b> emote';
+const WORLD_HUD = '<b>' + PALETTES[Lighting.modeKey].name + ' — Arc 1+2</b> <small style="opacity:.55">v13</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (' + CHARACTER + ') · <b>1-3</b> emote';
 hudText.innerHTML = WORLD_HUD;
 const coordsEl = document.getElementById('coords');
 
@@ -110,6 +125,7 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
   frameGuards();
+  Lighting.tick(dt);
   for (const fn of animated) fn(dt, t);
   if (Gallery.isGalleryOpen()) {
     if (window.__focusPos) {
@@ -132,7 +148,8 @@ renderer.setAnimationLoop(() => {
     updateCharacter(dt);
     updateCamera(dt, camera);
     coordsEl.textContent = `x ${char.position.x.toFixed(1)} · z ${char.position.z.toFixed(1)} · y ${char.position.y.toFixed(1)}`;
-    sun.position.set(char.position.x + 35, 55, char.position.z + 20);
+    const off = Lighting.getSunOffset();
+    sun.position.set(char.position.x + off.x, off.y, char.position.z + off.z);
     sun.target.position.copy(char.position);
   }
   renderer.render(scene, camera);

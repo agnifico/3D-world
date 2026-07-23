@@ -40,7 +40,14 @@ export const treePts = [];
 // future collision pass. Grass is excluded (decorative, no collision value).
 export const scatterFootprints = [];
 
-export function scatterWorld(scene, animated, BIOME) {
+// Returns { applyGrassBlend(t) } — grass has genuine per-instance colors that
+// vary with the palette (g1/g2/grass.accent), so it needs the same
+// bake-two-arrays-and-lerp treatment as the terrain. Flowers don't: their
+// per-instance jitter is on a fixed palette (assets.js's FLOWER_COLORS, not
+// day/night-dependent) — only the head material's emissiveIntensity
+// (flowerGlow) is palette-reactive, and that's a single material property
+// the caller can lerp directly (see the returned `flowerMat`).
+export function scatterWorld(scene, animated, PALETTES) {
   const R = A.rng(1234);
 
   {
@@ -110,6 +117,7 @@ export function scatterWorld(scene, animated, BIOME) {
   }
 
   // --- flowers: clumps, instanced stems + colored heads ---
+  let flowerMat;
   {
     const stems = [], heads = [], headColors = [];
     for (let cnum = 0; cnum < 65; cnum++) {
@@ -132,7 +140,7 @@ export function scatterWorld(scene, animated, BIOME) {
     const stemGeo = new THREE.CylinderGeometry(0.02, 0.03, 0.36, 4); stemGeo.translate(0, 0.18, 0);
     const headGeo = new THREE.IcosahedronGeometry(0.09, 0); headGeo.translate(0, 0.4, 0);
     const stemMat = new THREE.MeshStandardMaterial({ color: 0x6a9a4e, flatShading: true, roughness: 1 });
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8, emissive: 0xfff2d8, emissiveIntensity: BIOME.flowerGlow * 0.5 });
+    const headMat = flowerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8, emissive: 0xfff2d8, emissiveIntensity: PALETTES.day.flowerGlow * 0.5 });
     A.addWind(stemMat, 0.05); A.addWind(headMat, 0.05);
     const stemIM = new THREE.InstancedMesh(stemGeo, stemMat, stems.length);
     const headIM = new THREE.InstancedMesh(headGeo, headMat, heads.length);
@@ -150,28 +158,49 @@ export function scatterWorld(scene, animated, BIOME) {
   }
 
   // --- grass: thousands, one InstancedMesh, wind in vertex shader ---
+  let applyGrassBlend = () => {};
   {
     const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, side: THREE.DoubleSide });
     A.addWind(grassMat, 0.11);
     const N = 5500;
     const geo = A.grassTuftGeometry();
     const im = new THREE.InstancedMesh(geo, grassMat, N);
-    const gA = new THREE.Color(BIOME.g1), gB = new THREE.Color(BIOME.g2), gC = new THREE.Color(BIOME.grassAccent);
-    const col = new THREE.Color();
+    const dayA = new THREE.Color(PALETTES.day.terrain.g1), dayB = new THREE.Color(PALETTES.day.terrain.g2), dayAccent = new THREE.Color(PALETTES.day.grass.accent);
+    const nightA = new THREE.Color(PALETTES.night.terrain.g1), nightB = new THREE.Color(PALETTES.night.terrain.g2), nightAccent = new THREE.Color(PALETTES.night.grass.accent);
+    const dayCol = new Float32Array(N * 3), nightCol = new Float32Array(N * 3);
+    const tmp = new THREE.Color();
     let i = 0, guard = 0;
     while (i < N && guard++ < N * 12) {
       const p = samplePoint(R, { pathClear: 1.6, pathFade: 5, minShore: 0.25, avoidExtra: -10 });
       if (!p) continue;
       if (Math.hypot(p.x + 9, p.z + 45) < 8 && R() < 0.75) continue; // thin inside hamlet
       im.setMatrixAt(i, mtx(p.x, p.h - 0.02, p.z, R() * Math.PI * 2, 0.75 + R() * 0.7, 0.7 + R() * 0.9));
-      col.lerpColors(gA, gB, R()); if (R() < 0.15) col.lerp(gC, 0.5);
-      im.setColorAt(i, col);
+      // capture both random draws ONCE so day and night reuse the identical
+      // blend/accent decision per instance — only the resolved colors differ,
+      // positions/rotations/scales and every other scatter category's
+      // randomness are completely unaffected (grass is the last R() consumer)
+      const blendFrac = R(), accentRoll = R();
+      tmp.lerpColors(dayA, dayB, blendFrac); if (accentRoll < 0.15) tmp.lerp(dayAccent, 0.5);
+      dayCol[i * 3] = tmp.r; dayCol[i * 3 + 1] = tmp.g; dayCol[i * 3 + 2] = tmp.b;
+      tmp.lerpColors(nightA, nightB, blendFrac); if (accentRoll < 0.15) tmp.lerp(nightAccent, 0.5);
+      nightCol[i * 3] = tmp.r; nightCol[i * 3 + 1] = tmp.g; nightCol[i * 3 + 2] = tmp.b;
       i++;
     }
     im.count = i;
-    im.instanceColor.needsUpdate = true;
     im.receiveShadow = true;
     scene.add(im);
     animated.push((dt, t) => { if (grassMat.userData.shader) grassMat.userData.shader.uniforms.uTime.value = t; });
+    // bypassing setColorAt (which lazily creates this) since colors come from
+    // applyGrassBlend below, not a single static per-instance set
+    im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
+    const liveCol = im.instanceColor;
+    const n3 = i * 3;
+    applyGrassBlend = t => {
+      const arr = liveCol.array;
+      for (let k = 0; k < n3; k++) arr[k] = dayCol[k] + (nightCol[k] - dayCol[k]) * t;
+      liveCol.needsUpdate = true;
+    };
+    applyGrassBlend(0);
   }
+  return { applyGrassBlend, flowerMat };
 }

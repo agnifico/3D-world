@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { terrainHeight, groundHeight } from './world.js';
 import { boats, interactables, updateBoat, setBoardHandler } from './boats.js';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
-import { BIOME, modeKey } from './lighting.js';
+import { requestToggle } from './lighting.js';
 import { isGalleryOpen } from './gallery.js';
 import * as A from './assets.js';
 
@@ -35,12 +35,6 @@ export function initController(scene, animated, opts) {
     // define onClipFinished; every other state's finish is a no-op.
     result.mixer.addEventListener('finished', () => { STATES[state.name].onClipFinished?.(); });
   }).catch(e => console.warn(`[character] ${CHARACTER} model failed, using placeholder:`, e.message));
-
-  if (BIOME.lantern) {
-    const lamp = new THREE.PointLight(0xffc37a, 30, 22, 1.8);
-    lamp.position.y = 2.2;
-    char.add(lamp);
-  }
 
   const keys = {};
   let heading = 0, groundY = 0, waterDepth = 0, curRunning = false, curMoving = false;
@@ -191,7 +185,7 @@ export function initController(scene, animated, opts) {
     if (!e.isTrusted) return;
     keys[e.code] = true;
     if (e.code === 'KeyG') onToggleGallery();
-    if (e.code === 'KeyN') { const p = new URLSearchParams(location.search); p.set('mode', modeKey === 'night' ? 'day' : 'night'); location.search = p.toString(); }
+    if (e.code === 'KeyN') requestToggle(); // animates to the opposite pole over ~3s — see lighting.js
     if (e.code === 'KeyC') { const ks = Object.keys(CHARACTERS); const p = new URLSearchParams(location.search); p.set('char', ks[(ks.indexOf(CHARACTER) + 1) % ks.length]); location.search = p.toString(); }
     if (locomotion && (state.name === 'GROUND' || state.name === 'EMOTE')) {
       const em = { Digit1: 'emote1', Digit2: 'emote2', Digit3: 'emote3' }[e.code];
