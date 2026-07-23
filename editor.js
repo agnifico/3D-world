@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { groundHeight, WATER_Y } from './world.js';
 import { registry, removePlacement, spawnNative, spawnKenney, KENNEY_PACK, KENNEY_SCALE } from './props.js';
+import { KENNEY_PALETTE, recolorKenneyMesh, recolorNativeMesh } from './assets.js';
 
 let scene, camera, domElement, animated, getChar;
 let raycaster, transform;
@@ -113,6 +114,36 @@ export async function spawnFromCatalog(kind, name) {
 export function deleteSelected() { removeSelected(); }
 export function deselectAll() { deselect(); }
 
+// ---- recolor (nice-to-have, per the brief) ----
+// Kenney meshes carry the swatches actually baked onto them in
+// userData.palette (set once, at bake time, in assets.js); native meshes just
+// report their current material color. Both lists are for the "from" picker.
+export function getCurrentSwatches(rec) {
+  const set = new Set();
+  if (rec.kind === 'kenney') rec.obj.traverse(o => { if (o.isMesh && o.userData.palette) for (const c of o.userData.palette) set.add(c); });
+  else rec.obj.traverse(o => { if (o.isMesh && o.material && o.material.color) set.add('#' + o.material.color.getHexString()); });
+  return [...set];
+}
+// the fixed 14-color palette everything in the world snaps to — the "to" picker
+export function getTargetPalette() { return KENNEY_PALETTE.map(hex => '#' + new THREE.Color(hex).getHexString()); }
+
+export function recolor(rec, fromHex, toHex) {
+  let changed = false;
+  if (rec.kind === 'kenney') {
+    rec.obj.traverse(o => { if (o.isMesh && recolorKenneyMesh(o, { [fromHex]: toHex })) changed = true; });
+    // accumulate so a second recolor on the same instance doesn't lose the first
+    if (changed) rec.overrides = { remap: { ...(rec.overrides?.remap || {}), [fromHex]: toHex } };
+  } else {
+    rec.obj.traverse(o => {
+      if (o.isMesh && o.material && o.material.color && ('#' + o.material.color.getHexString()) === fromHex) {
+        recolorNativeMesh(o, toHex); changed = true;
+      }
+    });
+  }
+  if (changed) notify();
+  return changed;
+}
+
 // Serializes the live registry back into the two array-literal shapes
 // props.js already reads at startup (NATIVE_PLACEMENTS / KENNEY_PLACEMENTS),
 // ready to paste over those consts. `onWater` is inferred (a static boat sits
@@ -131,8 +162,14 @@ export function exportSnippet() {
       const sMul = +(o.scale.x / base).toFixed(3);
       const onWater = Math.abs(o.position.y - (WATER_Y - 0.15)) < 0.05;
       const fields = [`'${rec.name}'`, x, z, rot, sMul, onWater];
-      while (fields.length > 3 && fields[fields.length - 1] === false) fields.pop(); // trailing false is the default
-      if (fields.length === 5 && fields[4] === 1) fields.pop(); // trailing 1x scale is also the default
+      if (rec.overrides) {
+        // overrides is a 7th positional field — sMul/onWater must stay
+        // explicit, even at their defaults, or import would misparse them
+        fields.push(JSON.stringify(rec.overrides));
+      } else {
+        while (fields.length > 3 && fields[fields.length - 1] === false) fields.pop(); // trailing false is the default
+        if (fields.length === 5 && fields[4] === 1) fields.pop(); // trailing 1x scale is also the default
+      }
       kenney.push(`  [${fields.join(', ')}],`);
     }
   }

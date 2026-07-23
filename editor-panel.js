@@ -119,11 +119,58 @@ function buildPropertyPanel(sel) {
   }
   wrap.appendChild(modeRow);
 
+  wrap.appendChild(buildRecolorRow(sel));
+  if (sel.kind === 'native') {
+    const note = document.createElement('small');
+    note.style.cssText = 'display:block; opacity:.6; margin-top:2px;';
+    note.textContent = 'Native recolors are live-only — not in the export snippet yet.';
+    wrap.appendChild(note);
+  }
+
   const delBtn = mkButton('Delete');
   delBtn.style.cssText += 'margin-top:8px; width:100%; color:#a33; border-color:#a33;';
   delBtn.onclick = () => Editor.deleteSelected();
   wrap.appendChild(delBtn);
 
+  return wrap;
+}
+
+function swatch(hex) {
+  const s = document.createElement('div');
+  s.title = hex;
+  s.style.cssText = `width:18px; height:18px; flex:0 0 auto; border-radius:50%; background:${hex}; cursor:pointer; border:2px solid rgba(0,0,0,.25);`;
+  return s;
+}
+
+// Two-step picker: click a swatch actually present on the selection, then a
+// replacement from the fixed palette. The "from" highlight is plain DOM
+// mutation (no editor.js round-trip needed for that); an actual recolor()
+// call fires editor.js's own notify(), which rebuilds this whole panel.
+function buildRecolorRow(sel) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(107,79,53,.25); padding-top:8px;';
+  const label = document.createElement('small');
+  label.textContent = 'Recolor — click a current swatch, then a replacement';
+  wrap.appendChild(label);
+
+  let fromHex = null;
+  const curRow = mkRow(); curRow.style.cssText += 'flex-wrap:wrap;';
+  const curSwatches = [];
+  for (const hex of Editor.getCurrentSwatches(sel)) {
+    const s = swatch(hex);
+    s.onclick = () => { fromHex = hex; for (const cs of curSwatches) cs.style.borderColor = 'rgba(0,0,0,.25)'; s.style.borderColor = '#4a3826'; };
+    curSwatches.push(s);
+    curRow.appendChild(s);
+  }
+  wrap.appendChild(curRow);
+
+  const palRow = mkRow(); palRow.style.cssText += 'flex-wrap:wrap;';
+  for (const hex of Editor.getTargetPalette()) {
+    const s = swatch(hex);
+    s.onclick = () => { if (fromHex) Editor.recolor(sel, fromHex, hex); };
+    palRow.appendChild(s);
+  }
+  wrap.appendChild(palRow);
   return wrap;
 }
 
