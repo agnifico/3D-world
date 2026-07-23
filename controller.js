@@ -10,31 +10,68 @@ import { isGalleryOpen } from './gallery.js';
 import * as A from './assets.js';
 
 export function initController(scene, animated, opts) {
-  const { canvas, spawnRipple, spawnSplash, sfxSplash, sfxStep, sfxJump, sfxBoard, onToggleGallery } = opts;
+  const { canvas, spawnRipple, spawnSplash, sfxSplash, sfxStep, sfxJump, sfxBoard, onToggleGallery, onSwapStateChange, onCharacterChanged } = opts;
 
   const char = new THREE.Group();
   char.position.set(25, terrainHeight(25, 37), 37);
   const placeholder = A.createCharacter();
+  let currentModel = placeholder;
   char.add(placeholder);
   scene.add(char);
 
   const clips = {};
   let locomotion = null;
+  let currentCharName = CHARACTER;
+  const characterCache = {}; // loadCharacter() called at most once per name, ever
 
-  loadCharacter(CHARACTER).then(result => {
-    if (!result) return;
-    char.remove(placeholder);
-    char.add(result.model);
+  // Swaps in an already-resolved loadCharacter() result — used for both the
+  // initial load and every hot-swap. Position/heading/FSM state are
+  // untouched (this only ever runs while state.name is GROUND/SWIM — see
+  // swapCharacter below); the pose resets to idle immediately so there's no
+  // T-pose flash before the next updateLocomotion tick picks the right one.
+  function applyCharacterResult(result, name) {
+    char.remove(currentModel);
+    currentModel = result.model;
+    char.add(currentModel);
+    currentCharName = name;
+    for (const k in clips) delete clips[k];
     Object.assign(clips, result.clips);
     locomotion = result.locomotion;
     if (clips.idle) locomotion.setState('idle');
     window.__setState = n => locomotion.setState(n); // console/debug hook
-    window.__clips = clips; window.__model = result.model; window.__mixer = result.mixer; // console/debug hooks
+    window.__clips = clips; window.__model = currentModel; window.__mixer = result.mixer; // console/debug hooks
     // one-shot clips (jump, dive, hopOut) hand control back to whatever state
     // they belong to — only AIRBORNE and STEP_OUT ever play one, so only they
     // define onClipFinished; every other state's finish is a no-op.
     result.mixer.addEventListener('finished', () => { STATES[state.name].onClipFinished?.(); });
+    onCharacterChanged?.(name);
+  }
+
+  loadCharacter(CHARACTER).then(result => {
+    if (!result) return;
+    characterCache[CHARACTER] = result;
+    applyCharacterResult(result, CHARACTER);
   }).catch(e => console.warn(`[character] ${CHARACTER} model failed, using placeholder:`, e.message));
+
+  // Hot-swap (C key). AIRBORNE/RIDING/STEP_OUT own a one-shot pose or are
+  // mid-physics — queue the request and apply it once GROUND/SWIM is
+  // reached (checked at the top of updateCharacter) rather than risk a
+  // visual glitch or a stuck state. EMOTE just cancels back to GROUND first;
+  // preserving an arbitrary emote through a model swap isn't worth it.
+  let swapping = false, pendingSwapName = null;
+  async function swapCharacter(name) {
+    if (name === currentCharName || swapping) return;
+    if (state.name === 'AIRBORNE' || state.name === 'RIDING' || state.name === 'STEP_OUT') { pendingSwapName = name; return; }
+    if (state.name === 'EMOTE') transition('GROUND', { impulseT: 0 });
+    swapping = true;
+    onSwapStateChange?.(true);
+    if (!characterCache[name]) characterCache[name] = await loadCharacter(name);
+    swapping = false;
+    onSwapStateChange?.(false);
+    const result = characterCache[name];
+    if (!result) return; // load failed — loadCharacter already warned; keep current character
+    applyCharacterResult(result, name);
+  }
 
   const keys = {};
   let heading = 0, groundY = 0, waterDepth = 0, curRunning = false, curMoving = false;
@@ -186,7 +223,7 @@ export function initController(scene, animated, opts) {
     keys[e.code] = true;
     if (e.code === 'KeyG') onToggleGallery();
     if (e.code === 'KeyN') requestToggle(); // animates to the opposite pole over ~3s — see lighting.js
-    if (e.code === 'KeyC') { const ks = Object.keys(CHARACTERS); const p = new URLSearchParams(location.search); p.set('char', ks[(ks.indexOf(CHARACTER) + 1) % ks.length]); location.search = p.toString(); }
+    if (e.code === 'KeyC') { const ks = Object.keys(CHARACTERS); swapCharacter(ks[(ks.indexOf(currentCharName) + 1) % ks.length]); }
     if (locomotion && (state.name === 'GROUND' || state.name === 'EMOTE')) {
       const em = { Digit1: 'emote1', Digit2: 'emote2', Digit3: 'emote3' }[e.code];
       if (em && clips[em]) transition('EMOTE', { clipName: em });
@@ -307,6 +344,7 @@ export function initController(scene, animated, opts) {
     camPitch = Math.max(0.02, Math.min(1.45, camPitch));
     if (state.name === 'EMOTE' && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD)) transition('GROUND', { impulseT: 0 });
     if (state.name === 'RIDING') { updateBoat(dt, state.boat, keys, char); if (locomotion) locomotion.update(dt); refreshPrompt(); return; }
+    if (pendingSwapName && (state.name === 'GROUND' || state.name === 'SWIM')) { const n = pendingSwapName; pendingSwapName = null; swapCharacter(n); }
     updateInteract();
     refreshPrompt();
     // water depth under the character (surface minus supporting ground/deck): drives wade drag, swim, dive

@@ -78,11 +78,25 @@ function handleToggleGallery() {
     : WORLD_HUD;
 }
 
+// character hot-swap (C key) — a small loading hint + keeping the HUD's
+// character name current across swaps
+const charHint = document.createElement('div');
+charHint.style.cssText = 'position:fixed; left:50%; top:14px; transform:translateX(-50%); z-index:3; display:none; font:600 13px ui-sans-serif, system-ui, sans-serif; color:#4a3826; background:rgba(250,248,240,.88); border:1px solid rgba(107,79,53,.3); border-radius:8px; padding:5px 12px;';
+charHint.textContent = 'Loading character…';
+document.body.appendChild(charHint);
+function handleSwapStateChange(loading) { charHint.style.display = loading ? '' : 'none'; }
+function handleCharacterChanged(name) {
+  WORLD_HUD = buildWorldHud(name);
+  if (!Gallery.isGalleryOpen()) hudText.innerHTML = WORLD_HUD;
+}
+
 const controllerApi = initController(scene, animated, {
   canvas: renderer.domElement,
   spawnRipple, spawnSplash,
   sfxSplash: Audio.sfxSplash, sfxStep: Audio.sfxStep, sfxJump: Audio.sfxJump, sfxBoard: Audio.sfxBoard,
   onToggleGallery: handleToggleGallery,
+  onSwapStateChange: handleSwapStateChange,
+  onCharacterChanged: handleCharacterChanged,
 });
 const { char, updateCharacter, updateCamera, frameGuards } = controllerApi;
 
@@ -111,9 +125,12 @@ window.__focus = name => { // frame one gallery model + return its material colo
 };
 
 const hudText = document.getElementById('hudText');
-const WORLD_HUD = '<b>' + PALETTES[Lighting.modeKey].name + ' — Arc 1+2</b> <small style="opacity:.55">v13</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (' + CHARACTER + ') · <b>1-3</b> emote';
-hudText.innerHTML = WORLD_HUD;
 const coordsEl = document.getElementById('coords');
+function buildWorldHud(charName) {
+  return '<b>' + PALETTES[Lighting.modeKey].name + ' — Arc 1+2</b> <small style="opacity:.55">v13</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (' + charName + ') · <b>1-3</b> emote';
+}
+let WORLD_HUD = buildWorldHud(CHARACTER);
+hudText.innerHTML = WORLD_HUD;
 
 // ================= loop =================
 const clock = new THREE.Clock();
