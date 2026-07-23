@@ -11,7 +11,7 @@ import { terrainHeight, WATER_Y, registerHeightContributor } from './world.js';
 // deckOffset/deckInset define the WALKABLE deck surface (see boatHeight) — tune
 // deckOffset up/down so feet sit on the visible floor for each boat.
 export const BOAT_DEFS = {
-  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.85,  seatUp: .64, faceOffset: 0,        turn: 2, accel: 2.6, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.87,  seatUp: .66, faceOffset: 0,        turn: 2, accel: 2.6, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
   'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 12, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
 };
 export const FISH_SMOKE = { along: 1.1, side: 0.45, up: 1.95 };
