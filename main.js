@@ -43,11 +43,7 @@ const { waterMat } = createWater(scene, PALETTES);
 
 const animated = [];
 const { spawnRipple, spawnSplash } = initFx(scene, animated);
-// minimap's own day/night follow-cam upgrade is a separate brief part — for
-// now it still takes one static palette (in its old flat shape), matching
-// its pre-existing behavior; this shim goes away once minimap.js is rewritten
-const minimapBiomeShim = p => ({ water: p.water.color, bed: p.terrain.bed, g1: p.terrain.g1, g2: p.terrain.g2, sand: p.terrain.sand });
-initMinimap(animated, minimapBiomeShim(PALETTES[Lighting.modeKey]), boats, () => controllerApi.char, () => controllerApi.getHeading(), Gallery.isGalleryOpen);
+initMinimap(animated, PALETTES, boats, () => controllerApi.char, () => controllerApi.getHeading(), Gallery.isGalleryOpen);
 
 placeNativeProps(scene, animated);
 
