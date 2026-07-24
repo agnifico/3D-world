@@ -11,8 +11,9 @@ import { terrainHeight, WATER_Y, registerHeightContributor } from './world.js';
 // deckOffset/deckInset define the WALKABLE deck surface (see boatHeight) — tune
 // deckOffset up/down so feet sit on the visible floor for each boat.
 export const BOAT_DEFS = {
-  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.87,  seatUp: .66, faceOffset: 0,        turn: 2, accel: 2.6, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
-  'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 12, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
+  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.37,  seatUp: .39, faceOffset: 0,        turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  'ship-large':     { label: 'Board the galleon',      sitClip: 'idle',  seatAlong: -5.5,  seatUp: 4.5, faceOffset: Math.PI/2,        turn: 1, accel: 5.0, maxSpeed: 20, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
 };
 export const FISH_SMOKE = { along: 1.1, side: 0.45, up: 1.95 };
 
@@ -21,16 +22,35 @@ export const interactables = [];
 let _boardHandler = null;
 export function setBoardHandler(fn) { _boardHandler = fn; }
 
+// Brief 5 Part E: the bridge's "under-deck zone" + clearance, pushed in by
+// props.js (which owns BRIDGE and its geometry) rather than imported here —
+// props.js already imports FROM this module (BOAT_DEFS/registerBoat), so a
+// reverse import would be circular. Same pattern as setBoardHandler above:
+// this module stays generic (a local-transform + bounds check), the caller
+// supplies the specifics. span = { x, z, rot, hw, hd, clearance } — hw/hd
+// define the local footprint a boat's position is tested against; clearance
+// is the measured absolute world-Y of the deck's underside at its tightest
+// point over the water (see props.js for how it's derived).
+let _bridgeSpan = null;
+export function setBridgeSpan(span) { _bridgeSpan = span; }
+
 export function registerBoat(scene, animated, obj, name) {
   const def = BOAT_DEFS[name];
   const b = { obj, name, def, rowPhase: 0, ridden: false, heading: 0, speed: 0 };
   if (def.paddles) b.paddles = obj.getObjectByName('paddles');
   boats.push(b);
-  const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
   // Walkable deck: a flat surface inset from the hull, a little above the base,
   // folded into groundHeight so you can board on foot and stand like on the bridge.
   b.deckY = obj.position.y + (def.deckOffset ?? 0.4);
   b.deckHalf = { x: size.x * 0.5 * (def.deckInset ?? 0.6), z: size.z * 0.5 * (def.deckInset ?? 0.6) };
+  // Brief 5 Part E: airDraft — tallest point above the waterline, MEASURED
+  // from the loaded mesh's own Box3 (not hand-guessed), same spirit as
+  // deckY/deckHalf above. Boats spawn at WATER_Y-0.15 (see spawnKenney) and
+  // float there continuously (see updateBoat below), so that's the correct
+  // waterline reference regardless of the object's exact spawn Y.
+  b.airDraft = box.max.y - (WATER_Y - 0.15);
   interactables.push({
     pos: () => obj.position,
     radius: Math.max(size.x, size.z) * 0.5 + 1.8,
@@ -106,7 +126,21 @@ export function updateBoat(dt, b, keys, char) {
   const nx = o.position.x + Math.sin(b.heading) * b.speed * dt;
   const nz = o.position.z + Math.cos(b.heading) * b.speed * dt;
   const afloat = (WATER_Y - terrainHeight(nx, nz)) > 0.45;
-  if (Math.abs(nx) < 94 && Math.abs(nz) < 94 && afloat) { o.position.x = nx; o.position.z = nz; }
+  // Brief 5 Part E: too-tall-for-the-bridge check — same push-out spirit as
+  // resolveMovement (block the attempted move, don't teleport/clip), applied
+  // to the boat's own position instead of the character's. Row boat (low
+  // airDraft) passes freely; a tall boat gets stopped at the bridge's
+  // footprint and a HUD hint (read by controller.js's refreshPrompt).
+  let bridgeBlocked = false;
+  if (_bridgeSpan && b.airDraft > _bridgeSpan.clearance) {
+    const dx = nx - _bridgeSpan.x, dz = nz - _bridgeSpan.z;
+    const c = Math.cos(_bridgeSpan.rot), s = Math.sin(_bridgeSpan.rot);
+    const lx = dx * c - dz * s, lz = dx * s + dz * c; // world -> local, the verified convention
+    if (Math.abs(lx) < _bridgeSpan.hw && Math.abs(lz) < _bridgeSpan.hd) bridgeBlocked = true;
+  }
+  b.bridgeBlocked = bridgeBlocked;
+  if (bridgeBlocked) { b.speed *= 0.25; }
+  else if (Math.abs(nx) < 94 && Math.abs(nz) < 94 && afloat) { o.position.x = nx; o.position.z = nz; }
   else b.speed *= 0.25;                          // stall against the shallows
   o.rotation.y = b.heading;
   o.position.y = (WATER_Y - 0.15) + Math.sin(bobT * 1.2) * 0.05;

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import * as A from './assets.js';
 import { terrainHeight, WATER_Y, groundHeight, registerHeightContributor } from './world.js';
-import { BOAT_DEFS, registerBoat } from './boats.js';
+import { BOAT_DEFS, registerBoat, setBridgeSpan } from './boats.js';
 import { addCircle, addOBB, removeCollider } from './collision.js';
 
 function fullBox(obj) { return new THREE.Box3().setFromObject(obj); }
@@ -53,25 +53,37 @@ function shrinkHalf(fullSize) {
 // dx/dz on split circles are LOCAL offsets from the object's own origin,
 // rotated by its current rotation.y at query time (so a moved/rotated
 // instance keeps its pillars in the right place).
+// Brief 5: houses get yHigh=Infinity (no roof-walking) — handled as a
+// name-based set rather than a COLLIDER_OVERRIDES field, since houses keep
+// their normal auto-derived low-slice footprint (hw/hd), only the vertical
+// band changes. Deliberately scoped to houses only, not fences/hedges —
+// those already have a low, finite yHigh (thin, excluded from standing via
+// `standable` below) and giving them Infinity too isn't needed to stop
+// roof-walking and would be an unrequested behavior change (Brief 4 made
+// them jumpable over).
+const NO_ROOF_WALK = new Set(['houseA', 'houseB', 'houseC']);
+// standable:false — round/thin/tapered/uneven tops; still collide normally,
+// just excluded from supportAt() (a judgment call, cheap to flip once
+// tested in-browser).
 export const COLLIDER_OVERRIDES = {
   // circles — round objects a bbox-derived OBB would misrepresent
-  well: { shape: 'circle', r: 1.1 }, barrel: { shape: 'circle', r: 0.45 },
+  well: { shape: 'circle', r: 1.1, standable: false }, barrel: { shape: 'circle', r: 0.45, standable: false },
   // the actual watchtower model is a solid tapered cylinder, not separate
   // ground-level legs — one circle at its base radius, not fabricated legs
-  watchtower: { shape: 'circle', r: 2.5 }, windmill: { shape: 'circle', r: 1.8 },
-  lantern: { shape: 'circle', r: 0.25 }, signpost: { shape: 'circle', r: 0.2 }, 'signpost-single': { shape: 'circle', r: 0.2 },
-  wheel: { shape: 'circle', r: 0.35 }, 'tree-log': { shape: 'circle', r: 0.4 }, 'tree-trunk': { shape: 'circle', r: 0.4 },
+  watchtower: { shape: 'circle', r: 2.5, standable: false }, windmill: { shape: 'circle', r: 1.8, standable: false },
+  lantern: { shape: 'circle', r: 0.25, standable: false }, signpost: { shape: 'circle', r: 0.2, standable: false }, 'signpost-single': { shape: 'circle', r: 0.2, standable: false },
+  wheel: { shape: 'circle', r: 0.35, standable: false }, 'tree-log': { shape: 'circle', r: 0.4, standable: false }, 'tree-trunk': { shape: 'circle', r: 0.4, standable: false },
   // thin OBBs — a full bbox would be far too thick to walk close alongside
-  fence: { shape: 'obb', hw: 1.0, hd: 0.12 }, 'fence-fortified': { shape: 'obb', hw: 1.0, hd: 0.12 },
-  hedge: { shape: 'obb', hw: 1.0, hd: 0.3 },
+  fence: { shape: 'obb', hw: 1.0, hd: 0.12, standable: false }, 'fence-fortified': { shape: 'obb', hw: 1.0, hd: 0.12, standable: false },
+  hedge: { shape: 'obb', hw: 1.0, hd: 0.3, standable: false },
   // null — walk-over (flat) or walk-through (decorative/small/an opening)
   bedroll: null, 'bedroll-packed': null, 'tool-axe': null, fish: null, flag: null, 'banner-green': null,
   bottle: null, 'resource-wood': null, 'resource-planks': null, 'resource-stone': null,
   'hedge-gate': null, 'fence-doorway': null, // the walkable openings, not the fence/hedge lines themselves
-  'boat-row-small': null, 'boat-fishing-small': null, // belt-and-braces — already excluded by kind (no static colliders on boats)
+  'boat-row-small': null, 'ship-large': null, 'boat-fishing-small': null, // belt-and-braces — already excluded by kind (no static colliders on boats)
   stoneBridge: null, // handled by two explicit railing OBBs instead (see BRIDGE below) — a full-deck OBB would block the crossing
-  // split — an open structure where one blob collider would block the walk-through gap
-  ruinedArch: { shape: 'split', circles: [{ dx: -1.8, dz: 0, r: 0.55 }, { dx: 1.8, dz: 0, r: 0.55 }] },
+  // split — an open structure where one blob collider would block the walk-through gap; broken/uneven pillar tops, not standable
+  ruinedArch: { shape: 'split', circles: [{ dx: -1.8, dz: 0, r: 0.55 }, { dx: 1.8, dz: 0, r: 0.55 }], standable: false },
 };
 // explicitOverride (from a placement tuple's optional trailing `collider`
 // field) wins over the name-keyed COLLIDER_OVERRIDES table — same shape,
@@ -81,17 +93,22 @@ function deriveCollider(obj, name, explicitOverride) {
   const override = explicitOverride !== undefined ? explicitOverride : (name in COLLIDER_OVERRIDES ? COLLIDER_OVERRIDES[name] : undefined);
   if (override === null) return [];
   const fullSize = fullBox(obj).getSize(new THREE.Vector3());
-  // blockH: absolute world-Y of the collider's top (Part 0 lesson — always
-  // this space, never a bare relative number) — only gates the AIRBORNE
-  // exception, coarse on purpose.
-  const blockH = groundHeight(obj.position.x, obj.position.z) + fullSize.y;
+  // yLow/yHigh: absolute world-Y band for the collider (Part 0 lesson —
+  // always this space, never a bare relative number). yHigh=Infinity (no
+  // roof-walking) for NO_ROOF_WALK names; otherwise the object's own real
+  // top. standable:false in the override, or the NO_ROOF_WALK case, keeps
+  // it out of supportAt() even though it still collides normally.
+  const yLow = groundHeight(obj.position.x, obj.position.z);
+  const noRoofWalk = NO_ROOF_WALK.has(name);
+  const yHigh = noRoofWalk ? Infinity : yLow + fullSize.y;
+  const standable = !noRoofWalk && override?.standable !== false;
   const live = () => ({ x: obj.position.x, z: obj.position.z, rot: obj.rotation.y });
   const ids = [];
   if (override) {
     if (override.shape === 'circle') {
-      ids.push(addCircle(obj.position.x, obj.position.z, override.r, blockH, live).id);
+      ids.push(addCircle(obj.position.x, obj.position.z, override.r, yLow, yHigh, standable, live).id);
     } else if (override.shape === 'obb') {
-      ids.push(addOBB(obj.position.x, obj.position.z, override.hw, override.hd, obj.rotation.y, blockH, live).id);
+      ids.push(addOBB(obj.position.x, obj.position.z, override.hw, override.hd, obj.rotation.y, yLow, yHigh, standable, live).id);
     } else if (override.shape === 'split') {
       for (const circ of override.circles) {
         const liveCirc = () => {
@@ -99,7 +116,7 @@ function deriveCollider(obj, name, explicitOverride) {
           return { x: obj.position.x + circ.dx * c + circ.dz * s, z: obj.position.z + (-circ.dx * s + circ.dz * c) };
         };
         const p0 = liveCirc();
-        ids.push(addCircle(p0.x, p0.z, circ.r, blockH, liveCirc).id);
+        ids.push(addCircle(p0.x, p0.z, circ.r, yLow, yHigh, standable, liveCirc).id);
       }
     }
     return ids;
@@ -107,7 +124,7 @@ function deriveCollider(obj, name, explicitOverride) {
   // auto-derive: low-slice footprint -> OBB, absolute-capped shrink
   const sliceSize = lowSliceBox(obj).getSize(new THREE.Vector3());
   const hw = shrinkHalf(sliceSize.x), hd = shrinkHalf(sliceSize.z);
-  ids.push(addOBB(obj.position.x, obj.position.z, hw, hd, obj.rotation.y, blockH, live).id);
+  ids.push(addOBB(obj.position.x, obj.position.z, hw, hd, obj.rotation.y, yLow, yHigh, standable, live).id);
   return ids;
 }
 
@@ -161,21 +178,71 @@ registerHeightContributor(bridgeHeight, 'bridge');
 // walk off the side mid-span — registered directly (not through
 // deriveCollider/COLLIDER_OVERRIDES; stoneBridge is null-overridden there
 // precisely so a generic full-deck collider never gets derived on top of
-// this). blockH uses the deck height at the *center/peak* of the arch as a
-// uniform conservative worst case (the deck's own height varies
-// continuously along it, per the Part 0 fix — a flat absolute number here
-// would have been the same class of bug) plus a named, tunable rail rise —
-// this needs an actual in-game "dive off the bridge mid-span" test; lower
-// RAIL_RISE if it doesn't clear, per the brief's own instruction.
-const RAIL_RISE = 0.4;
+// this).
+//
+// Brief 5 Part C: measured (Node, against the real terrainHeight/WATER_Y —
+// not guessed) where the stream under the bridge actually reads as deep
+// water (boats.js's own `afloat` definition: (WATER_Y - terrainHeight) >
+// 0.45): local lz in [-3.18, 2.44], asymmetric because the stream bends
+// here. The old rails spanned the full visual deck (lz ±6.5, 13 units) and
+// blocked both banks; RAIL_LZ_LO/HI below pad that measured gap by 0.5 on
+// each side and leave the banks open.
+//
+// yLow uses the MAXIMUM deck-top height across this span — the true local
+// peak at lz=0, which this (now much shorter) span still straddles — NOT
+// the minimum. A single OBB only carries one scalar band, and a
+// minimum-based yLow lets the rail's own yHigh dip close to (or below) the
+// deck surface right at the arch's actual peak, where the real deck is
+// tallest: the walker's feetY there sits close to yHigh, eating the
+// STEP_UP margin and letting them casually step over what should be a
+// barrier (verified by an initial Node table test that failed exactly this
+// way at the deck center — caught before committing). Using the max instead
+// guarantees yLow is never below the true local deck anywhere in the span,
+// so the STEP_UP margin holds everywhere.
+// RAIL_RISE must clear two constraints simultaneously: > STEP_UP (0.5) or
+// the rail becomes a step-up-able curb instead of a barrier; and low enough
+// that a mid-span sideways dive off the deck clears it before the
+// character's horizontal position reaches the rail. Checked via kinematics
+// (vy=6.0, GRAV=20, DIVE_FWD=6.0, character radius 0.35 reaching the rail's
+// inner edge at lx≈1.1): RAIL_RISE=0.6 clears the dive with ~0.16 margin and
+// clears STEP_UP with ~0.1 margin — this needs an actual in-game "dive off
+// the bridge mid-span" test; lower RAIL_RISE if it doesn't clear.
+const RAIL_LZ_LO = -3.68, RAIL_LZ_HI = 2.94;
+const RAIL_RISE = 0.6;
 {
   const c = Math.cos(BRIDGE.rot), s = Math.sin(BRIDGE.rot);
-  const blockH = BRIDGE.y + A.bridgeDeckHeight(0) + RAIL_RISE;
+  const railLzCenter = (RAIL_LZ_LO + RAIL_LZ_HI) / 2, railHd = (RAIL_LZ_HI - RAIL_LZ_LO) / 2;
+  const yLow = BRIDGE.y + A.bridgeDeckHeight(0); // the span straddles lz=0, the arch's true peak
+  const yHigh = yLow + RAIL_RISE;
   for (const side of [-1, 1]) {
     const lx = side * 1.6;
-    const wx = BRIDGE.x + lx * c, wz = BRIDGE.z - lx * s; // forward local->world (lz=0, centered along the deck length)
-    addOBB(wx, wz, 0.15, 6.5, BRIDGE.rot, blockH);
+    const wx = BRIDGE.x + lx * c + railLzCenter * s, wz = BRIDGE.z + (-lx * s + railLzCenter * c); // forward local->world
+    addOBB(wx, wz, 0.15, railHd, BRIDGE.rot, yLow, yHigh, false);
   }
+}
+
+// Brief 5 Part E: boat clearance under the bridge — independent of the
+// character collision system above. WATER_GAP_LZ_LO/HI un-pad RAIL_LZ_LO/HI
+// back to the raw measured water-gap (a boat can only ever be where there's
+// actually deep water, per updateBoat's own `afloat` check, so the padding
+// added for the rail's sideways-egress purpose doesn't apply here).
+// DECK_BOTTOM_OFFSET (0.445) comes directly from createStoneBridge's own
+// deck geometry (assets.js): a 0.45-tall box centered 0.22 below the deck-
+// top formula's return value, so bottom = deckTop - 0.22 - (0.45/2). The
+// worst-case (lowest) deck underside within the water gap sets `clearance`
+// — measured from the actual geometry, not guessed.
+const WATER_GAP_LZ_LO = RAIL_LZ_LO + 0.5, WATER_GAP_LZ_HI = RAIL_LZ_HI - 0.5;
+const DECK_BOTTOM_OFFSET = 0.445;
+const BRIDGE_CLEARANCE = BRIDGE.y + Math.min(A.bridgeDeckHeight(WATER_GAP_LZ_LO), A.bridgeDeckHeight(WATER_GAP_LZ_HI)) - DECK_BOTTOM_OFFSET;
+{
+  // the water gap is asymmetric (the stream bends here, same measurement as
+  // the rails above) — its center is offset from the bridge's own local
+  // origin, so the span's world position needs the same forward local->world
+  // transform used for the rails, not BRIDGE.x/z directly.
+  const c = Math.cos(BRIDGE.rot), s = Math.sin(BRIDGE.rot);
+  const gapLzCenter = (WATER_GAP_LZ_LO + WATER_GAP_LZ_HI) / 2, gapHd = (WATER_GAP_LZ_HI - WATER_GAP_LZ_LO) / 2;
+  const gx = BRIDGE.x + 0 * c + gapLzCenter * s, gz = BRIDGE.z + (-0 * s + gapLzCenter * c);
+  setBridgeSpan({ x: gx, z: gz, rot: BRIDGE.rot, hw: 1.7, hd: gapHd, clearance: BRIDGE_CLEARANCE });
 }
 
 // ================= native hamlet/landmark props =================
@@ -231,7 +298,7 @@ const KENNEY_PACK = {};
 [['survival-kit', ['tent', 'tent-canvas', 'campfire-pit', 'campfire-stand', 'campfire-fishing-stand', 'bedroll', 'bedroll-packed', 'bucket', 'bottle', 'fence', 'fence-doorway', 'fence-fortified', 'barrel', 'box', 'box-open', 'workbench', 'workbench-anvil', 'workbench-grind', 'signpost', 'signpost-single', 'tree-log', 'tree-trunk', 'resource-wood', 'resource-planks', 'resource-stone', 'resource-stone-large', 'tool-axe', 'fish']],
  ['fantasy-town-kit', ['lantern', 'stall-green', 'stall-bench', 'banner-green', 'hedge', 'hedge-gate', 'wheel']],
  ['castle-kit', ['flag']],
- ['watercraft-pack', ['boat-row-small', 'boat-fishing-small']]
+ ['watercraft-pack', ['boat-row-small', 'boat-fishing-small', 'ship-large']]
 ].forEach(([pack, names]) => names.forEach(n => (KENNEY_PACK[n] = pack)));
 export { KENNEY_PACK };
 export const KENNEY_SCALE = { 'survival-kit': 3.2, 'fantasy-town-kit': 1.7, 'castle-kit': 2.2, 'watercraft-pack': 1.7 };
@@ -286,7 +353,9 @@ const KENNEY_PLACEMENTS = [
   // lakeside — fishing stand + catch on the dry shore (pulled back from the
   // lake carve so groundHeight clears the water), boats on the water
   ['campfire-fishing-stand', 24, 30, 2.4], ['fish', 25.6, 31, 0.5], ['fish', 26.2, 30, -0.4, 0.8],
-  ['boat-row-small', 42, 47, 1.2, 1, true], ['boat-fishing-small', 46, 51, 2.0, 1, true],
+  ['boat-row-small', 42, 47, 1.2, 0.75, true], 
+  ['ship-large', 10.58, 92.91, 1.384, 0.75, true],
+  ['boat-fishing-small', 46, 51, 2.0, 1, true],
   // castle flag at the watchtower
   ['flag', -52, 58, 0.5],
 ];
