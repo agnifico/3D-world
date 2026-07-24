@@ -7,11 +7,104 @@ import * as THREE from 'three';
 import * as A from './assets.js';
 import { terrainHeight, WATER_Y, groundHeight, registerHeightContributor } from './world.js';
 import { BOAT_DEFS, registerBoat } from './boats.js';
+import { addCircle, addOBB, removeCollider } from './collision.js';
 
+function fullBox(obj) { return new THREE.Box3().setFromObject(obj); }
 function footprintOf(obj, kind) {
-  const box = new THREE.Box3().setFromObject(obj);
-  const size = box.getSize(new THREE.Vector3());
+  const size = fullBox(obj).getSize(new THREE.Vector3());
   return { kind, x: obj.position.x, z: obj.position.z, r: Math.max(size.x, size.z) / 2, obj };
+}
+
+// ================= collider derivation (Brief 4 Part A) =================
+// A naive full Box3 inflates on any roof overhang/protrusion the same way a
+// tree's canopy radius does (see scatter.js's TREE_TRUNK_RATIO comment for
+// the same class of bug) — so the auto-derived footprint comes from a LOW
+// SLICE of the actual geometry instead: only vertices within LOW_SLICE_Y of
+// the object's own base go into the box. Eaves/roofs/anything above head
+// height stop inflating the footprint automatically. One-time cost per
+// placement (props are low-poly by the project's own tri budget), not
+// per-frame.
+const LOW_SLICE_Y = 1.5;
+function lowSliceBox(obj, maxLocalY = LOW_SLICE_Y) {
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  const baseY = obj.position.y;
+  let any = false;
+  obj.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (v.y - baseY <= maxLocalY) { box.expandByPoint(v); any = true; }
+    }
+  });
+  return any ? box : fullBox(obj); // fallback: an object entirely above the cutoff
+}
+// Absolute-capped shrink, not flat-percentage — a flat 15% is ~0.05 units on
+// a small rock (fine) but ~0.9 units *inside the wall* on a house half-extent
+// (not fine).
+const SHRINK_PCT = 0.15, SHRINK_CAP = 0.2, MIN_HALF = 0.05;
+function shrinkHalf(fullSize) {
+  const half = fullSize / 2;
+  return Math.max(MIN_HALF, half - Math.min(SHRINK_PCT * half, SHRINK_CAP));
+}
+// name -> {shape:'circle', r} | {shape:'obb', hw, hd} | {shape:'split', circles:[{dx,dz,r}]} | null
+// dx/dz on split circles are LOCAL offsets from the object's own origin,
+// rotated by its current rotation.y at query time (so a moved/rotated
+// instance keeps its pillars in the right place).
+export const COLLIDER_OVERRIDES = {
+  // circles — round objects a bbox-derived OBB would misrepresent
+  well: { shape: 'circle', r: 1.1 }, barrel: { shape: 'circle', r: 0.45 },
+  // the actual watchtower model is a solid tapered cylinder, not separate
+  // ground-level legs — one circle at its base radius, not fabricated legs
+  watchtower: { shape: 'circle', r: 2.5 }, windmill: { shape: 'circle', r: 1.8 },
+  lantern: { shape: 'circle', r: 0.25 }, signpost: { shape: 'circle', r: 0.2 }, 'signpost-single': { shape: 'circle', r: 0.2 },
+  wheel: { shape: 'circle', r: 0.35 }, 'tree-log': { shape: 'circle', r: 0.4 }, 'tree-trunk': { shape: 'circle', r: 0.4 },
+  // thin OBBs — a full bbox would be far too thick to walk close alongside
+  fence: { shape: 'obb', hw: 1.0, hd: 0.12 }, 'fence-fortified': { shape: 'obb', hw: 1.0, hd: 0.12 },
+  hedge: { shape: 'obb', hw: 1.0, hd: 0.3 },
+  // null — walk-over (flat) or walk-through (decorative/small/an opening)
+  bedroll: null, 'bedroll-packed': null, 'tool-axe': null, fish: null, flag: null, 'banner-green': null,
+  bottle: null, 'resource-wood': null, 'resource-planks': null, 'resource-stone': null,
+  'hedge-gate': null, 'fence-doorway': null, // the walkable openings, not the fence/hedge lines themselves
+  'boat-row-small': null, 'boat-fishing-small': null, // belt-and-braces — already excluded by kind (no static colliders on boats)
+  stoneBridge: null, // handled by two explicit railing OBBs instead (see BRIDGE below) — a full-deck OBB would block the crossing
+  // split — an open structure where one blob collider would block the walk-through gap
+  ruinedArch: { shape: 'split', circles: [{ dx: -1.8, dz: 0, r: 0.55 }, { dx: 1.8, dz: 0, r: 0.55 }] },
+};
+function deriveCollider(obj, name) {
+  const override = name in COLLIDER_OVERRIDES ? COLLIDER_OVERRIDES[name] : undefined;
+  if (override === null) return [];
+  const fullSize = fullBox(obj).getSize(new THREE.Vector3());
+  // blockH: absolute world-Y of the collider's top (Part 0 lesson — always
+  // this space, never a bare relative number) — only gates the AIRBORNE
+  // exception, coarse on purpose.
+  const blockH = groundHeight(obj.position.x, obj.position.z) + fullSize.y;
+  const live = () => ({ x: obj.position.x, z: obj.position.z, rot: obj.rotation.y });
+  const ids = [];
+  if (override) {
+    if (override.shape === 'circle') {
+      ids.push(addCircle(obj.position.x, obj.position.z, override.r, blockH, live).id);
+    } else if (override.shape === 'obb') {
+      ids.push(addOBB(obj.position.x, obj.position.z, override.hw, override.hd, obj.rotation.y, blockH, live).id);
+    } else if (override.shape === 'split') {
+      for (const circ of override.circles) {
+        const liveCirc = () => {
+          const c = Math.cos(obj.rotation.y), s = Math.sin(obj.rotation.y); // forward local->world, Part 0's verified convention
+          return { x: obj.position.x + circ.dx * c + circ.dz * s, z: obj.position.z + (-circ.dx * s + circ.dz * c) };
+        };
+        const p0 = liveCirc();
+        ids.push(addCircle(p0.x, p0.z, circ.r, blockH, liveCirc).id);
+      }
+    }
+    return ids;
+  }
+  // auto-derive: low-slice footprint -> OBB, absolute-capped shrink
+  const sliceSize = lowSliceBox(obj).getSize(new THREE.Vector3());
+  const hw = shrinkHalf(sliceSize.x), hd = shrinkHalf(sliceSize.z);
+  ids.push(addOBB(obj.position.x, obj.position.z, hw, hd, obj.rotation.y, blockH, live).id);
+  return ids;
 }
 
 // ================= live placement registry (area designer) =================
@@ -21,8 +114,8 @@ function footprintOf(obj, kind) {
 // groundwork for a future collision pass — kept in sync on add/remove.
 export const registry = [];
 let _nextId = 1;
-function registerPlacement(kind, name, obj) {
-  const rec = { id: _nextId++, kind, name, obj };
+function registerPlacement(kind, name, obj, colliderIds) {
+  const rec = { id: _nextId++, kind, name, obj, colliderIds: colliderIds || [] };
   obj.userData.__placementId = rec.id;
   registry.push(rec);
   return rec;
@@ -34,6 +127,7 @@ export function removePlacement(scene, id) {
   scene.remove(rec.obj);
   const fi = propsFootprints.findIndex(f => f.obj === rec.obj);
   if (fi !== -1) propsFootprints.splice(fi, 1);
+  for (const cid of rec.colliderIds) removeCollider(cid);
   return true;
 }
 
@@ -58,6 +152,27 @@ export function bridgeHeight(x, z) {
   return BRIDGE.y + A.bridgeDeckHeight(lz);
 }
 registerHeightContributor(bridgeHeight, 'bridge');
+
+// Two thin railing colliders along the deck edges, so GROUND movement can't
+// walk off the side mid-span — registered directly (not through
+// deriveCollider/COLLIDER_OVERRIDES; stoneBridge is null-overridden there
+// precisely so a generic full-deck collider never gets derived on top of
+// this). blockH uses the deck height at the *center/peak* of the arch as a
+// uniform conservative worst case (the deck's own height varies
+// continuously along it, per the Part 0 fix — a flat absolute number here
+// would have been the same class of bug) plus a named, tunable rail rise —
+// this needs an actual in-game "dive off the bridge mid-span" test; lower
+// RAIL_RISE if it doesn't clear, per the brief's own instruction.
+const RAIL_RISE = 0.4;
+{
+  const c = Math.cos(BRIDGE.rot), s = Math.sin(BRIDGE.rot);
+  const blockH = BRIDGE.y + A.bridgeDeckHeight(0) + RAIL_RISE;
+  for (const side of [-1, 1]) {
+    const lx = side * 1.6;
+    const wx = BRIDGE.x + lx * c, wz = BRIDGE.z - lx * s; // forward local->world (lz=0, centered along the deck length)
+    addOBB(wx, wz, 0.15, 6.5, BRIDGE.rot, blockH);
+  }
+}
 
 // ================= native hamlet/landmark props =================
 export const NATIVE_CATALOG = {
@@ -96,7 +211,8 @@ export function spawnNative(scene, animated, name, x, z, rot = 0, y) {
   scene.add(obj);
   if (obj.userData.blades) animated.push(dt => { obj.userData.blades.rotation.z += dt * 0.7; });
   propsFootprints.push(footprintOf(obj, NATIVE_KIND[name] || name));
-  return registerPlacement('native', name, obj);
+  const colliderIds = deriveCollider(obj, name);
+  return registerPlacement('native', name, obj, colliderIds);
 }
 
 export function placeNativeProps(scene, animated) {
@@ -132,7 +248,11 @@ export async function spawnKenney(scene, animated, name, x, z, rot = 0, sMul = 1
     obj.userData.name = name;
     scene.add(obj);
     propsFootprints.push(footprintOf(obj, name));
-    const rec = registerPlacement('kenney', name, obj);
+    // no static colliders on boats — deck walking is height-contributor-only
+    // (structural guarantee via BOAT_DEFS, on top of the belt-and-braces null
+    // overrides in COLLIDER_OVERRIDES)
+    const colliderIds = BOAT_DEFS[name] ? [] : deriveCollider(obj, name);
+    const rec = registerPlacement('kenney', name, obj, colliderIds);
     if (BOAT_DEFS[name]) registerBoat(scene, animated, obj, name);
     return rec;
   } catch (e) { console.warn(`[kenney] place ${name} failed:`, e.message); return null; }

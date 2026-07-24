@@ -3,6 +3,18 @@ import * as THREE from 'three';
 import * as A from './assets.js';
 import { terrainHeight, distPoly, PATH, WATER_Y } from './world.js';
 import { BRIDGE } from './props.js';
+import { addCircle } from './collision.js';
+
+// Trunk radius, not canopy: scatterFootprints' r (below) is a canopy-sized
+// spacing/avoidance proxy — colliding on it would block ~1.5-2 units of open
+// air around every trunk. Real per-species trunk-base radii in assets.js
+// range ~0.17s-0.5s; rather than plumbing per-species data through, this is
+// a flat ratio against the real per-instance scale already in scope at
+// placement time (not derived back out of the exported canopy r).
+const TREE_TRUNK_RATIO = 0.35;
+// Rocks/bushes are blob-shaped (icosahedron-based, no overhang) — their
+// existing scatterFootprints radius is already a reasonable collision proxy.
+const BUSH_COLLIDE_MIN_R = 0.8; // "large only" per the brief; bush r today ranges ~0.49-1.05
 
 const TREE_MIX = [0.30, 0.28, 0.27, 0.08, 0.07]; // pine oak birch willow dead
 
@@ -74,7 +86,8 @@ export function scatterWorld(scene, animated, PALETTES) {
       const s = 0.8 + R() * 0.5;
       buckets[ti].push(mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, 0.8 + R() * 0.6));
       treePts.push(p);
-      scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 });
+      scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 }); // canopy proxy — spacing/avoidance only, NOT the collider (see TREE_TRUNK_RATIO)
+      addCircle(p.x, p.z, s * TREE_TRUNK_RATIO, Infinity); // trunk-sized, never jumpable
       placed++;
     }
     for (let i = 0; i < templates.length; i++)
@@ -86,7 +99,12 @@ export function scatterWorld(scene, animated, PALETTES) {
     const ms = [];
     for (let i = 0; i < 55; i++) {
       const p = samplePoint(R, { minShore: -0.2, pathClear: 2.5 });
-      if (p) { const s = 0.5 + R() * 1.2; ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, 0.5 + R() * 0.8)); scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 }); }
+      if (p) {
+        const s = 0.5 + R() * 1.2, sy = 0.5 + R() * 0.8;
+        ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, sy));
+        scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 });
+        addCircle(p.x, p.z, s * 0.6, p.h + sy * 0.93); // small/low rocks can be hopped — blockH from the same vertical scale as the visual mesh
+      }
     }
     scene.add(A.makeInstanced(A.createRock(v), ms));
   }
@@ -96,7 +114,12 @@ export function scatterWorld(scene, animated, PALETTES) {
     const ms = [];
     for (let i = 0; i < 70; i++) {
       const p = samplePoint(R, { pathClear: 3.5, pathFade: 8 });
-      if (p) { const s = 0.7 + R() * 0.8; ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s)); scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r: s * 0.7 }); }
+      if (p) {
+        const s = 0.7 + R() * 0.8, r = s * 0.7;
+        ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
+        scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r });
+        if (r > BUSH_COLLIDE_MIN_R) addCircle(p.x, p.z, r, p.h + s * 0.8); // "large only" per the brief
+      }
     }
     scene.add(A.makeInstanced(A.createBush(5), ms));
   }
