@@ -1,9 +1,19 @@
 // Grassland World — collision: circle/OBB colliders, a uniform spatial hash
-// for cheap local queries, and positional push-out-with-sliding movement
-// resolution. Model-agnostic on purpose: no character/rendering globals, so
-// a future animal/NPC wander AI calls the exact same queryColliders/
-// resolveMovement. No physics engine — pure position correction, matching
-// the controller's existing feel.
+// for cheap local queries, positional push-out-with-sliding movement
+// resolution, and a support-surface query for standing on top of things.
+// Model-agnostic on purpose: no character/rendering globals, so a future
+// animal/NPC wander AI calls the exact same queryColliders/resolveMovement/
+// supportAt. No physics engine — pure position correction, matching the
+// controller's existing feel.
+//
+// Brief 5: every collider carries a vertical band, `yLow`/`yHigh`, always in
+// ABSOLUTE WORLD-Y (never relative, never local) — this exact ambiguity
+// caused both Part 0's bridge/boat bug and this brief's "everything blocks
+// at every height" bug, so it's called out here deliberately. `resolveMovement`
+// skips a collider once the character's `[feetY, headY]` band no longer
+// overlaps it (stepped onto it, or passing underneath); `supportAt` answers
+// "what could I stand on here" for the height-contributor registry, using
+// the same `yHigh` values on colliders explicitly marked `standable`.
 const CELL = 8;
 let _nextId = 1;
 const _colliders = new Map(); // id -> record
@@ -43,16 +53,16 @@ const liveX = rec => rec.live ? rec.live().x : rec.x;
 const liveZ = rec => rec.live ? rec.live().z : rec.z;
 const liveRot = rec => rec.live ? rec.live().rot : rec.rot;
 
-export function addCircle(x, z, r, blockH = Infinity, live) {
-  const rec = { id: _nextId++, shape: 'circle', x, z, r, blockH, live };
+export function addCircle(x, z, r, yLow = -Infinity, yHigh = Infinity, standable = true, live) {
+  const rec = { id: _nextId++, shape: 'circle', x, z, r, yLow, yHigh, standable, live };
   const cx = liveX(rec), cz = liveZ(rec);
   rec._minX = cx - r; rec._maxX = cx + r; rec._minZ = cz - r; rec._maxZ = cz + r;
   insert(rec);
   _colliders.set(rec.id, rec);
   return rec;
 }
-export function addOBB(x, z, hw, hd, rot, blockH = Infinity, live) {
-  const rec = { id: _nextId++, shape: 'obb', x, z, hw, hd, rot, blockH, live };
+export function addOBB(x, z, hw, hd, rot, yLow = -Infinity, yHigh = Infinity, standable = true, live) {
+  const rec = { id: _nextId++, shape: 'obb', x, z, hw, hd, rot, yLow, yHigh, standable, live };
   const cx = liveX(rec), cz = liveZ(rec), diag = Math.hypot(hw, hd); // conservative AABB regardless of rotation
   rec._minX = cx - diag; rec._maxX = cx + diag; rec._minZ = cz - diag; rec._maxZ = cz + diag;
   insert(rec);
@@ -90,6 +100,30 @@ export function isNoclip() { return _noclip; }
 // world -> local uses cos(rot)/sin(rot) unnegated (verified against THREE's
 // actual rotation.y matrix during the Part 0 bridge/boat investigation —
 // see props.js's bridgeHeight / boats.js's boatHeight, same convention).
+function insideCircle(px, pz, rec) {
+  const cx = liveX(rec), cz = liveZ(rec);
+  return Math.hypot(px - cx, pz - cz) <= rec.r;
+}
+function insideOBB(px, pz, rec) {
+  const cx = liveX(rec), cz = liveZ(rec), rot = liveRot(rec);
+  const dx = px - cx, dz = pz - cz;
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const lx = dx * c - dz * s, lz = dx * s + dz * c; // world -> local
+  return Math.abs(lx) <= rec.hw && Math.abs(lz) <= rec.hd;
+}
+// "What could I stand on at (x,z)?" — max yHigh among standable colliders
+// whose footprint contains the point, else null. Feeds a single
+// height-contributor registration (controller.js) rather than one per prop.
+export function supportAt(x, z) {
+  let best = null;
+  for (const rec of queryColliders(x, z, 0.01)) {
+    if (rec.standable === false) continue;
+    const inside = rec.shape === 'circle' ? insideCircle(x, z, rec) : insideOBB(x, z, rec);
+    if (inside && (best === null || rec.yHigh > best)) best = rec.yHigh;
+  }
+  return best;
+}
+
 function resolveCircleCircle(px, pz, r, rec) {
   const cx = liveX(rec), cz = liveZ(rec);
   const dx = px - cx, dz = pz - cz;
@@ -128,15 +162,24 @@ function resolveCircleOBB(px, pz, r, rec) {
 // component of a collider hit, so the tangential component of the attempted
 // move is preserved by construction — that's the "slide along the wall"
 // feel, not a separate step.
+//
+// opts.feetY/opts.headY (both absolute world-Y) + opts.stepUp define the
+// character's vertical band. A collider is skipped — not an obstacle right
+// now — when `yHigh <= feetY + stepUp` (already standing on it, or it's low
+// enough to just step onto) or `yLow >= headY` (passing underneath it). If
+// feetY/headY aren't supplied, no vertical filtering happens (blocks
+// unconditionally) — keeps this usable by future callers that don't care
+// about height (e.g. a ground-only NPC).
 export function resolveMovement(x, z, radius, dx, dz, opts = {}) {
   if (_noclip) return { x: x + dx, z: z + dz };
   let nx = x + dx, nz = z + dz;
-  const feetHeight = opts.feetHeight;
+  const { feetY, headY, stepUp = 0 } = opts;
   for (let pass = 0; pass < 3; pass++) {
     const nearby = queryColliders(nx, nz, radius + 3);
     let moved = false;
     for (const rec of nearby) {
-      if (feetHeight !== undefined && rec.blockH <= feetHeight) continue; // airborne clears low obstacles
+      if (feetY !== undefined && rec.yHigh <= feetY + stepUp) continue; // steppable or already above it
+      if (headY !== undefined && rec.yLow >= headY) continue;           // passing underneath it
       const hit = rec.shape === 'circle' ? resolveCircleCircle(nx, nz, radius, rec) : resolveCircleOBB(nx, nz, radius, rec);
       if (hit) { nx += hit.nx * hit.pen; nz += hit.nz * hit.pen; moved = true; }
     }

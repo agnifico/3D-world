@@ -2,13 +2,19 @@
 // and the character state machine: GROUND (idle/walk/run/wade), AIRBORNE
 // (jump/dive/leap), SWIM, RIDING(boat), EMOTE, STEP_OUT.
 import * as THREE from 'three';
-import { terrainHeight, groundHeight, resolveSupport } from './world.js';
-import { resolveMovement } from './collision.js';
+import { terrainHeight, groundHeight, resolveSupport, registerHeightContributor } from './world.js';
+import { resolveMovement, supportAt } from './collision.js';
 import { boats, interactables, updateBoat, setBoardHandler } from './boats.js';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
 import { requestToggle } from './lighting.js';
 import { isGalleryOpen } from './gallery.js';
 import * as A from './assets.js';
+
+// Brief 5 Part B: one contributor wrapping the live collider set, not one
+// per prop — reuses the existing height-contributor registry instead of a
+// parallel system. Registered once at module scope, like props.js/boats.js
+// register their own contributors (bridge/boat decks) from their own modules.
+registerHeightContributor((x, z) => supportAt(x, z) ?? -Infinity, 'props-support');
 
 export function initController(scene, animated, opts) {
   const { canvas, spawnRipple, spawnSplash, sfxSplash, sfxStep, sfxJump, sfxBoard, onToggleGallery, onSwapStateChange, onCharacterChanged } = opts;
@@ -81,6 +87,7 @@ export function initController(scene, animated, opts) {
   const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 6.0;
   const WATER_Y = -0.9;
   const CHAR_RADIUS = 0.35; // Brief 4 Part B — horizontal collision radius, resolveMovement() calls below
+  const CHAR_HEIGHT = 1.7, STEP_UP = 0.5; // Brief 5 — vertical band height, step-up threshold (both owned here so collision.js/world.js stay pure)
   let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
 
   // Brief 4 Part 0: "depth at my feet" — never negative-but-meaningless once
@@ -88,8 +95,13 @@ export function initController(scene, animated, opts) {
   // reads as exactly dry. Distinct from the dive-ahead sampling below, which
   // intentionally keeps raw WATER_Y-support (depth of the water body ahead,
   // not at a specific standing position) per the brief's classification.
-  function waterDepthAt(x, z) {
-    const support = groundHeight(x, z);
+  // Brief 5: feetY (optional) filters out contributors — like the bridge
+  // deck — that are more than STEP_UP above the character's actual current
+  // Y, so a swimmer passing under the bridge doesn't get read as "on the
+  // deck" just because the deck is the tallest thing at that (x,z). Omitted
+  // by disembark()'s call (boarding bypasses the filter, per the brief).
+  function waterDepthAt(x, z, feetY) {
+    const support = feetY !== undefined ? resolveSupport(x, z, feetY, STEP_UP).height : groundHeight(x, z);
     return support >= WATER_Y ? 0 : WATER_Y - support;
   }
 
@@ -113,7 +125,7 @@ export function initController(scene, animated, opts) {
     GROUND: {
       enter(p) { state.impulseT = p.impulseT ?? 0; },
       update(dt) {
-        const support = groundHeight(char.position.x, char.position.z);
+        const support = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         if (waterDepth > SWIM_DEPTH) { const carry = state.impulseT; transition('SWIM', { impulseT: carry }); }
         const restY = state.name === 'SWIM' ? (WATER_Y - SWIM_SINK) : support;
         groundY += (restY - groundY) * Math.min(1, dt * 14);
@@ -124,7 +136,7 @@ export function initController(scene, animated, opts) {
     SWIM: {
       enter(p) { state.impulseT = p.impulseT ?? 0; },
       update(dt) {
-        const support = groundHeight(char.position.x, char.position.z);
+        const support = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         if (waterDepth < SWIM_DEPTH - 0.3) { const carry = state.impulseT; transition('GROUND', { impulseT: carry }); }
         const restY = state.name === 'SWIM' ? (WATER_Y - SWIM_SINK) : support;
         groundY += (restY - groundY) * Math.min(1, dt * 14);
@@ -142,16 +154,20 @@ export function initController(scene, animated, opts) {
         char.position.y += state.vy * dt;
         if (state.kind === 'dive') { // lunge forward so the dive carries into the water even from a standstill
           const dx = Math.sin(heading) * DIVE_FWD * dt, dz = Math.cos(heading) * DIVE_FWD * dt;
-          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetHeight: char.position.y });
+          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
           if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
         }
         if (state.airFwd) { // horizontal travel during a leap → parabolic arc off the boat, not a vertical pop
           const dx = Math.sin(heading) * state.airFwd * dt, dz = Math.cos(heading) * state.airFwd * dt;
-          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetHeight: char.position.y });
+          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
           if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
         }
         const swimY = WATER_Y - SWIM_SINK;
-        const support = groundHeight(char.position.x, char.position.z);
+        // Landing resolves support normally (Brief 5) — as the fall descends,
+        // char.position.y approaches the surface and comes within STEP_UP of
+        // it, so the filter never blocks a genuine landing; it only keeps a
+        // still-high-up character from being yanked onto something below.
+        const support = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         const depthHere = support >= WATER_Y ? 0 : WATER_Y - support;
         // A dive settles into a swim at the surface line over ANY real water and is
         // clamped at swimY, so it never plunges to the bed ("davy jones"). A plain
@@ -186,7 +202,7 @@ export function initController(scene, animated, opts) {
     EMOTE: {
       enter(p) { if (locomotion) locomotion.setState(p.clipName, { fade: 0.25 }); },
       update(dt) {
-        const support = groundHeight(char.position.x, char.position.z);
+        const support = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         groundY += (support - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
@@ -198,7 +214,7 @@ export function initController(scene, animated, opts) {
         if (locomotion && clips.hopOut) locomotion.setState('hopOut', { oneShot: true, fade: 0.15 });
       },
       update(dt) {
-        const support = groundHeight(char.position.x, char.position.z);
+        const support = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         if (!state.swimming && waterDepth > SWIM_DEPTH) state.swimming = true;
         if (state.swimming && waterDepth < SWIM_DEPTH - 0.3) state.swimming = false;
         const restY = state.swimming ? (WATER_Y - SWIM_SINK) : support;
@@ -371,9 +387,9 @@ export function initController(scene, animated, opts) {
     updateInteract();
     refreshPrompt();
     // water depth under the character (surface minus supporting ground/deck): drives wade drag, swim, dive
-    waterDepth = waterDepthAt(char.position.x, char.position.z);
+    waterDepth = waterDepthAt(char.position.x, char.position.z, char.position.y);
     if (footingOn) {
-      const r = resolveSupport(char.position.x, char.position.z);
+      const r = resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP);
       const th = terrainHeight(char.position.x, char.position.z);
       footingEl.textContent = `support: ${r.contributor} @ ${r.height.toFixed(3)}  |  terrain: ${th.toFixed(3)}  |  waterDepth: ${waterDepth.toFixed(3)}  |  state: ${state.name}`;
     }
@@ -402,7 +418,7 @@ export function initController(scene, animated, opts) {
       if (isSwim) speed = shift ? 5 : 3.6;               // swim pace
       else if (waterDepth > WADE_START) speed *= 0.5;    // wading drag through shallow water
       const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
-      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz);
+      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
       if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) {    // water is walkable now — depth drives wade/swim
         char.position.x = r.x; char.position.z = r.z;
       }
@@ -411,7 +427,7 @@ export function initController(scene, animated, opts) {
       // plays walk/swim so the character breaks out of the clip's clamped final frame.
       const speed = isSwim ? 3.6 : 4;
       const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
-      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz);
+      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
       if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
       moving = true;
     }

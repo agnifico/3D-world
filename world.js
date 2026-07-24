@@ -67,11 +67,21 @@ export function groundHeight(x, z) {
   return h;
 }
 // Same max-over-contributors computation as groundHeight, but also reports
-// which one won — for the __footing() debug HUD and (per Brief 4 Part 0)
-// eventually the wade/swim depth fix itself.
-export function resolveSupport(x, z) {
+// which one won — for the __footing() debug HUD and the wade/swim depth fix
+// (Brief 4 Part 0). Brief 5: feetY/stepUp (both optional, both absolute
+// world-Y / a scalar) make this height-AWARE of where the character
+// actually is — any contributor whose value is more than `stepUp` above
+// `feetY` is ignored, so a swimmer passing under the bridge deck (or under
+// a tall rock) doesn't get yanked up onto it just because the deck is the
+// tallest thing at that (x,z). Omit feetY/stepUp for the legacy unfiltered
+// max (deliberate teleports — boarding via E, __tp — bypass the filter).
+export function resolveSupport(x, z, feetY, stepUp) {
   let h = -Infinity, contributor = null;
-  for (const c of _contributors) { const v = c.fn(x, z); if (v > h) { h = v; contributor = c.label; } }
+  for (const c of _contributors) {
+    const v = c.fn(x, z);
+    if (feetY !== undefined && stepUp !== undefined && v > feetY + stepUp) continue;
+    if (v > h) { h = v; contributor = c.label; }
+  }
   return { height: h, contributor };
 }
 registerHeightContributor(terrainHeight, 'terrain');

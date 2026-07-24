@@ -87,7 +87,7 @@ export function scatterWorld(scene, animated, PALETTES) {
       buckets[ti].push(mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, 0.8 + R() * 0.6));
       treePts.push(p);
       scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 }); // canopy proxy — spacing/avoidance only, NOT the collider (see TREE_TRUNK_RATIO)
-      addCircle(p.x, p.z, s * TREE_TRUNK_RATIO, Infinity); // trunk-sized, never jumpable
+      addCircle(p.x, p.z, s * TREE_TRUNK_RATIO, p.h, Infinity, false); // trunk-sized, never jumpable, not standable
       placed++;
     }
     for (let i = 0; i < templates.length; i++)
@@ -103,7 +103,7 @@ export function scatterWorld(scene, animated, PALETTES) {
         const s = 0.5 + R() * 1.2, sy = 0.5 + R() * 0.8;
         ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, sy));
         scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 });
-        addCircle(p.x, p.z, s * 0.6, p.h + sy * 0.93); // small/low rocks can be hopped — blockH from the same vertical scale as the visual mesh
+        addCircle(p.x, p.z, s * 0.6, p.h, p.h + sy * 0.93, true); // small/low rocks can be hopped, and stood on — vertical band from the same scale as the visual mesh
       }
     }
     scene.add(A.makeInstanced(A.createRock(v), ms));
@@ -118,7 +118,7 @@ export function scatterWorld(scene, animated, PALETTES) {
         const s = 0.7 + R() * 0.8, r = s * 0.7;
         ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
         scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r });
-        if (r > BUSH_COLLIDE_MIN_R) addCircle(p.x, p.z, r, p.h + s * 0.8); // "large only" per the brief
+        if (r > BUSH_COLLIDE_MIN_R) addCircle(p.x, p.z, r, p.h, p.h + s * 0.8, false); // "large only" per the brief; blob-shaped, not standable
       }
     }
     scene.add(A.makeInstanced(A.createBush(5), ms));
