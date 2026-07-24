@@ -57,11 +57,21 @@ export function terrainHeight(x, z) {
 // from their own modules at import time, so world.js never has to import
 // them back — that would-be circular dependency (props.js/boats.js need
 // terrainHeight too) is exactly what this registry breaks.
-const _contributors = [];
-export function registerHeightContributor(fn) { _contributors.push(fn); }
+// `label` is optional and purely diagnostic (see resolveSupport) — passing
+// it doesn't change groundHeight's behavior at all.
+const _contributors = []; // { fn, label }
+export function registerHeightContributor(fn, label) { _contributors.push({ fn, label: label || fn.name || 'unknown' }); }
 export function groundHeight(x, z) {
   let h = -Infinity;
-  for (const fn of _contributors) { const v = fn(x, z); if (v > h) h = v; }
+  for (const c of _contributors) { const v = c.fn(x, z); if (v > h) h = v; }
   return h;
 }
-registerHeightContributor(terrainHeight);
+// Same max-over-contributors computation as groundHeight, but also reports
+// which one won — for the __footing() debug HUD and (per Brief 4 Part 0)
+// eventually the wade/swim depth fix itself.
+export function resolveSupport(x, z) {
+  let h = -Infinity, contributor = null;
+  for (const c of _contributors) { const v = c.fn(x, z); if (v > h) { h = v; contributor = c.label; } }
+  return { height: h, contributor };
+}
+registerHeightContributor(terrainHeight, 'terrain');

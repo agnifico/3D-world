@@ -51,9 +51,13 @@ export function bridgeHeight(x, z) {
   const lx = dx * c - dz * s; // width axis (across the deck)
   const lz = dx * s + dz * c; // length axis (along the deck) — matches the visual
   if (Math.abs(lx) > 1.7 || Math.abs(lz) > 6.6) return -Infinity;
-  return BRIDGE.y + A.bridgeDeckHeight(lz, 0.8); // same formula as the visual deck, walkable-surface peak
+  // Brief 4 Part 0: this used to pass peak=0.8, a leftover from before the
+  // dedup in Brief 1, while the visual mesh (createStoneBridge) uses the
+  // default peak=1.5 — a ~0.7-unit gap at deck center that read as sinking to
+  // waist height. Walkable surface now matches the visual deck exactly.
+  return BRIDGE.y + A.bridgeDeckHeight(lz);
 }
-registerHeightContributor(bridgeHeight);
+registerHeightContributor(bridgeHeight, 'bridge');
 
 // ================= native hamlet/landmark props =================
 export const NATIVE_CATALOG = {

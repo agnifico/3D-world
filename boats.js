@@ -54,13 +54,43 @@ export function boatHeight(x, z) {
   for (const b of boats) {
     if (b.ridden || b.deckY === undefined) continue;
     const dx = x - b.obj.position.x, dz = z - b.obj.position.z;
-    const c = Math.cos(-b.obj.rotation.y), s = Math.sin(-b.obj.rotation.y);
+    // Brief 4 Part 0: this was cos(-rot)/sin(-rot) — the wrong sign for the
+    // world->local inverse (bridgeHeight, which is correct, uses cos(rot)/
+    // sin(rot) unnegated). Verified against THREE's actual rotation.y matrix:
+    // at rot=0 both signs agree by coincidence (sin(0)=0), which is why it
+    // could look fine near a boat's own placement heading; at rot=1.2 (both
+    // boats' actual spawn rotation) the wrong sign recovers a completely
+    // different local point, so most of the visible deck read as "off the
+    // footprint" -> fell through to the water/stream bed beneath the hull.
+    const c = Math.cos(b.obj.rotation.y), s = Math.sin(b.obj.rotation.y);
     const lx = dx * c - dz * s, lz = dx * s + dz * c;
     if (Math.abs(lx) < b.deckHalf.x && Math.abs(lz) < b.deckHalf.z) best = Math.max(best, b.deckY);
   }
   return best;
 }
-registerHeightContributor(boatHeight);
+registerHeightContributor(boatHeight, 'boat');
+
+// Live deck calibration (Brief 4 Part 0) — deckOffset/deckInset are hand-
+// tuned per boat against the loaded GLB's visual floor, which nothing in
+// code can derive automatically. window.__deckTune('boat-row-small', {
+// deckOffset: 0.5, deckInset: 0.8 }) adjusts every currently-placed boat of
+// that name live (re-deriving deckY/deckHalf), so the right numbers can be
+// found by eye and then copied into BOAT_DEFS above as the permanent fix.
+window.__deckTune = (name, { deckOffset, deckInset } = {}) => {
+  const def = BOAT_DEFS[name];
+  if (!def) return `unknown boat "${name}"`;
+  if (deckOffset !== undefined) def.deckOffset = deckOffset;
+  if (deckInset !== undefined) def.deckInset = deckInset;
+  let n = 0;
+  for (const b of boats) {
+    if (b.name !== name) continue;
+    const size = new THREE.Box3().setFromObject(b.obj).getSize(new THREE.Vector3());
+    b.deckY = b.obj.position.y + (def.deckOffset ?? 0.4);
+    b.deckHalf = { x: size.x * 0.5 * (def.deckInset ?? 0.6), z: size.z * 0.5 * (def.deckInset ?? 0.6) };
+    n++;
+  }
+  return { name, deckOffset: def.deckOffset, deckInset: def.deckInset, updated: n };
+};
 
 let bobT = 0;
 export function updateBoat(dt, b, keys, char) {

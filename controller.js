@@ -2,7 +2,7 @@
 // and the character state machine: GROUND (idle/walk/run/wade), AIRBORNE
 // (jump/dive/leap), SWIM, RIDING(boat), EMOTE, STEP_OUT.
 import * as THREE from 'three';
-import { terrainHeight, groundHeight } from './world.js';
+import { terrainHeight, groundHeight, resolveSupport } from './world.js';
 import { boats, interactables, updateBoat, setBoardHandler } from './boats.js';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
 import { requestToggle } from './lighting.js';
@@ -81,6 +81,16 @@ export function initController(scene, animated, opts) {
   const WATER_Y = -0.9;
   let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
 
+  // Brief 4 Part 0: "depth at my feet" — never negative-but-meaningless once
+  // clamped, support >= WATER_Y (solid footing, deck or dry land) always
+  // reads as exactly dry. Distinct from the dive-ahead sampling below, which
+  // intentionally keeps raw WATER_Y-support (depth of the water body ahead,
+  // not at a specific standing position) per the brief's classification.
+  function waterDepthAt(x, z) {
+    const support = groundHeight(x, z);
+    return support >= WATER_Y ? 0 : WATER_Y - support;
+  }
+
   // ================= character state machine =================
   // Each state: enter(params), update(dt) [vertical/physics only — WASD
   // movement itself is shared across every non-riding state below, since the
@@ -140,7 +150,7 @@ export function initController(scene, animated, opts) {
         }
         const swimY = WATER_Y - SWIM_SINK;
         const support = groundHeight(char.position.x, char.position.z);
-        const depthHere = WATER_Y - support;
+        const depthHere = support >= WATER_Y ? 0 : WATER_Y - support;
         // A dive settles into a swim at the surface line over ANY real water and is
         // clamped at swimY, so it never plunges to the bed ("davy jones"). A plain
         // jump only starts swimming once the water is properly deep.
@@ -288,6 +298,17 @@ export function initController(scene, animated, opts) {
     panX = e.clientX; panY = e.clientY; panT = performance.now();
   });
 
+  // ================= footing debug (Brief 4 Part 0 investigation) =================
+  // window.__footing(true) shows a live {winning contributor, support height,
+  // terrain height, computed water depth} line so a sink can be correlated
+  // against exactly what groundHeight resolved to at that instant. Kept
+  // permanently behind the toggle rather than removed once Part 0 lands.
+  const footingEl = document.createElement('div');
+  footingEl.style.cssText = 'position:fixed; left:50%; bottom:64px; transform:translateX(-50%); z-index:5; display:none; font:12px ui-monospace, monospace; color:#eafff2; background:rgba(10,14,12,.78); border-radius:6px; padding:5px 12px; white-space:pre; pointer-events:none;';
+  document.body.appendChild(footingEl);
+  let footingOn = false;
+  window.__footing = (v = true) => { footingOn = v; footingEl.style.display = v ? '' : 'none'; };
+
   // ================= boating & interactions =================
   const promptEl = document.getElementById('prompt');
   const promptLabelEl = document.getElementById('promptLabel');
@@ -321,7 +342,7 @@ export function initController(scene, animated, opts) {
       const off = b.def.stepOff ?? 1.8;
       char.position.x += Math.sin(heading) * off;
       char.position.z += Math.cos(heading) * off;
-      const depth = WATER_Y - groundHeight(char.position.x, char.position.z);
+      const depth = waterDepthAt(char.position.x, char.position.z);
       const swimmingNow = depth > SWIM_DEPTH;
       groundY = swimmingNow ? (WATER_Y - SWIM_SINK) : groundHeight(char.position.x, char.position.z);
       char.position.y = groundY;
@@ -348,7 +369,12 @@ export function initController(scene, animated, opts) {
     updateInteract();
     refreshPrompt();
     // water depth under the character (surface minus supporting ground/deck): drives wade drag, swim, dive
-    waterDepth = WATER_Y - groundHeight(char.position.x, char.position.z);
+    waterDepth = waterDepthAt(char.position.x, char.position.z);
+    if (footingOn) {
+      const r = resolveSupport(char.position.x, char.position.z);
+      const th = terrainHeight(char.position.x, char.position.z);
+      footingEl.textContent = `support: ${r.contributor} @ ${r.height.toFixed(3)}  |  terrain: ${th.toFixed(3)}  |  waterDepth: ${waterDepth.toFixed(3)}  |  state: ${state.name}`;
+    }
     const isSwim = isSwimNow();
     // WASD movement runs for every non-riding state, including AIRBORNE/STEP_OUT
     // (air control / drift during a leap or the step-out one-shot) — matches the
