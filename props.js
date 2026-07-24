@@ -73,8 +73,12 @@ export const COLLIDER_OVERRIDES = {
   // split — an open structure where one blob collider would block the walk-through gap
   ruinedArch: { shape: 'split', circles: [{ dx: -1.8, dz: 0, r: 0.55 }, { dx: 1.8, dz: 0, r: 0.55 }] },
 };
-function deriveCollider(obj, name) {
-  const override = name in COLLIDER_OVERRIDES ? COLLIDER_OVERRIDES[name] : undefined;
+// explicitOverride (from a placement tuple's optional trailing `collider`
+// field) wins over the name-keyed COLLIDER_OVERRIDES table — same shape,
+// just a per-instance escape hatch for the rare prop that needs to differ
+// from every other instance of the same model.
+function deriveCollider(obj, name, explicitOverride) {
+  const override = explicitOverride !== undefined ? explicitOverride : (name in COLLIDER_OVERRIDES ? COLLIDER_OVERRIDES[name] : undefined);
   if (override === null) return [];
   const fullSize = fullBox(obj).getSize(new THREE.Vector3());
   // blockH: absolute world-Y of the collider's top (Part 0 lesson — always
@@ -188,7 +192,7 @@ const NATIVE_KIND = {
   signpost: 'signpost', watchtower: 'watchtower', windmill: 'windmill',
   ruinedArch: 'ruined-arch', stoneBridge: 'bridge',
 };
-// [catalogName, x, z, rot, y?]
+// [catalogName, x, z, rot, y?, collider?] — collider overrides COLLIDER_OVERRIDES for this instance only
 const NATIVE_PLACEMENTS = [
   ['houseA', -14, -48, 0.5],
   ['houseB', -4, -52, -0.3],
@@ -202,7 +206,7 @@ const NATIVE_PLACEMENTS = [
   ['stoneBridge', BRIDGE.x, BRIDGE.z, BRIDGE.rot, BRIDGE.y],
 ];
 
-export function spawnNative(scene, animated, name, x, z, rot = 0, y) {
+export function spawnNative(scene, animated, name, x, z, rot = 0, y, collider) {
   const make = NATIVE_CATALOG[name];
   if (!make) { console.warn('[props] unknown native prop', name); return null; }
   const obj = make();
@@ -211,12 +215,12 @@ export function spawnNative(scene, animated, name, x, z, rot = 0, y) {
   scene.add(obj);
   if (obj.userData.blades) animated.push(dt => { obj.userData.blades.rotation.z += dt * 0.7; });
   propsFootprints.push(footprintOf(obj, NATIVE_KIND[name] || name));
-  const colliderIds = deriveCollider(obj, name);
+  const colliderIds = deriveCollider(obj, name, collider);
   return registerPlacement('native', name, obj, colliderIds);
 }
 
 export function placeNativeProps(scene, animated) {
-  for (const [name, x, z, rot, y] of NATIVE_PLACEMENTS) spawnNative(scene, animated, name, x, z, rot || 0, y);
+  for (const [name, x, z, rot, y, collider] of NATIVE_PLACEMENTS) spawnNative(scene, animated, name, x, z, rot || 0, y, collider);
 }
 
 // ================= Kenney set dressing =================
@@ -235,9 +239,10 @@ const KENNEY_DRESS_OVERRIDES = {
   bedroll: { remap: { '#4aa8b8': 0xe8dfc8 } },
   'bedroll-packed': { remap: { '#4aa8b8': 0xe8dfc8 } },
 };
-// name, x, z, rot, scaleMul?, onWater?, overrides? — overrides (if given) wins
-// over KENNEY_DRESS_OVERRIDES[name]; used for per-instance area-designer recolors.
-export async function spawnKenney(scene, animated, name, x, z, rot = 0, sMul = 1, onWater = false, overrides) {
+// name, x, z, rot, scaleMul?, onWater?, overrides?, collider? — overrides (if
+// given) wins over KENNEY_DRESS_OVERRIDES[name]; used for per-instance
+// area-designer recolors. collider (if given) wins over COLLIDER_OVERRIDES[name].
+export async function spawnKenney(scene, animated, name, x, z, rot = 0, sMul = 1, onWater = false, overrides, collider) {
   const pack = KENNEY_PACK[name];
   if (!pack) { console.warn('[kenney] unknown model', name); return null; }
   try {
@@ -251,13 +256,13 @@ export async function spawnKenney(scene, animated, name, x, z, rot = 0, sMul = 1
     // no static colliders on boats — deck walking is height-contributor-only
     // (structural guarantee via BOAT_DEFS, on top of the belt-and-braces null
     // overrides in COLLIDER_OVERRIDES)
-    const colliderIds = BOAT_DEFS[name] ? [] : deriveCollider(obj, name);
+    const colliderIds = BOAT_DEFS[name] ? [] : deriveCollider(obj, name, collider);
     const rec = registerPlacement('kenney', name, obj, colliderIds);
     if (BOAT_DEFS[name]) registerBoat(scene, animated, obj, name);
     return rec;
   } catch (e) { console.warn(`[kenney] place ${name} failed:`, e.message); return null; }
 }
-// [name, x, z, rot, scaleMul?, onWater?]
+// [name, x, z, rot, scaleMul?, onWater?, overrides?, collider?]
 const KENNEY_PLACEMENTS = [
   // camp clearing, east of the hamlet
   ['tent', 21, -25, 0.6], ['campfire-pit', 16.5, -28, 0], ['campfire-stand', 15.4, -29.4, 0.3],
@@ -287,7 +292,7 @@ const KENNEY_PLACEMENTS = [
 ];
 
 export async function placeKenneyProps(scene, animated) {
-  for (const [n, x, z, rot, sm, w, overrides] of KENNEY_PLACEMENTS) {
-    await spawnKenney(scene, animated, n, x, z, rot || 0, sm || 1, !!w, overrides);
+  for (const [n, x, z, rot, sm, w, overrides, collider] of KENNEY_PLACEMENTS) {
+    await spawnKenney(scene, animated, n, x, z, rot || 0, sm || 1, !!w, overrides, collider);
   }
 }

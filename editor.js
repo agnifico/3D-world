@@ -9,11 +9,81 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { groundHeight, WATER_Y } from './world.js';
 import { registry, removePlacement, spawnNative, spawnKenney, KENNEY_PACK, KENNEY_SCALE } from './props.js';
 import { KENNEY_PALETTE, recolorKenneyMesh, recolorNativeMesh } from './assets.js';
+import { getAllColliders } from './collision.js';
 
 let scene, camera, domElement, animated, getChar;
 let raycaster, transform;
 let open = false, selected = null, lockY = false;
 let onSelectionChange = null;
+
+// ================= collider debug overlay (Brief 4 Part C) =================
+// F9 toggles a wireframe of every registered collider — independent of the
+// L-key panel (works whether or not the Area Designer is open), same pattern
+// as the panel's own key handling. The LineSegments geometry is built once
+// per collider-count change and its position buffer is rewritten in place
+// every visible frame (reading live x/z/rot for props-sourced colliders) —
+// never reallocated per frame, per review feedback on the first Parts A-C plan.
+const CIRCLE_SEGS = 16;
+let overlayOn = false, overlayLines = null, overlayCount = -1;
+function segCountFor(rec) { return rec.shape === 'circle' ? CIRCLE_SEGS : 4; }
+function buildOverlayGeometry(colliders) {
+  let segs = 0;
+  for (const rec of colliders) segs += segCountFor(rec);
+  const positions = new Float32Array(segs * 2 * 3); // 2 verts/segment, 3 floats/vert
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xff2d55, depthTest: false, transparent: true, opacity: 0.9 });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.renderOrder = 999;
+  lines.frustumCulled = false;
+  return lines;
+}
+function writeOverlayPositions(colliders) {
+  const pos = overlayLines.geometry.attributes.position.array;
+  let o = 0;
+  for (const rec of colliders) {
+    const cx = rec.live ? rec.live().x : rec.x;
+    const cz = rec.live ? rec.live().z : rec.z;
+    const y = groundHeight(cx, cz) + 0.06; // just above the walkable surface — avoid z-fighting
+    if (rec.shape === 'circle') {
+      for (let i = 0; i < CIRCLE_SEGS; i++) {
+        const a0 = (i / CIRCLE_SEGS) * Math.PI * 2, a1 = ((i + 1) / CIRCLE_SEGS) * Math.PI * 2;
+        pos[o++] = cx + Math.cos(a0) * rec.r; pos[o++] = y; pos[o++] = cz + Math.sin(a0) * rec.r;
+        pos[o++] = cx + Math.cos(a1) * rec.r; pos[o++] = y; pos[o++] = cz + Math.sin(a1) * rec.r;
+      }
+    } else {
+      const rot = rec.live ? rec.live().rot : rec.rot;
+      const c = Math.cos(rot), s = Math.sin(rot); // forward local->world, Part 0's verified convention
+      const corners = [[-rec.hw, -rec.hd], [rec.hw, -rec.hd], [rec.hw, rec.hd], [-rec.hw, rec.hd]];
+      const world = corners.map(([lx, lz]) => [cx + lx * c + lz * s, cz + (-lx * s + lz * c)]);
+      for (let i = 0; i < 4; i++) {
+        const [x0, z0] = world[i], [x1, z1] = world[(i + 1) % 4];
+        pos[o++] = x0; pos[o++] = y; pos[o++] = z0;
+        pos[o++] = x1; pos[o++] = y; pos[o++] = z1;
+      }
+    }
+  }
+  overlayLines.geometry.attributes.position.needsUpdate = true;
+}
+function updateOverlay() {
+  if (!overlayOn) { if (overlayLines) overlayLines.visible = false; return; }
+  const colliders = getAllColliders();
+  if (colliders.length !== overlayCount) {
+    if (overlayLines) { scene.remove(overlayLines); overlayLines.geometry.dispose(); overlayLines.material.dispose(); }
+    overlayLines = buildOverlayGeometry(colliders);
+    scene.add(overlayLines);
+    overlayCount = colliders.length;
+  }
+  overlayLines.visible = true;
+  writeOverlayPositions(colliders);
+}
+export function setColliderOverlay(v = true) { overlayOn = v; }
+window.__colliders = (v = true) => setColliderOverlay(v); // console/debug hook, usable outside the editor
+window.__colliderStats = () => { // console/debug hook — exact live counts, since scatter placement is randomized
+  const cs = getAllColliders();
+  const circles = cs.filter(c => c.shape === 'circle').length;
+  return { total: cs.length, circles, obbs: cs.length - circles };
+};
 
 function notify() { if (onSelectionChange) onSelectionChange(selected); }
 
@@ -62,6 +132,7 @@ const MODES = ['translate', 'rotate', 'scale'];
 function onKeyDown(e) {
   if (!e.isTrusted) return;
   if (e.code === 'KeyL') { toggle(); return; }
+  if (e.code === 'F9') { e.preventDefault(); setColliderOverlay(!overlayOn); return; } // independent of the panel — works whether or not it's open
   if (!open) return;
   if (e.code === 'Tab') { e.preventDefault(); transform.mode = MODES[(MODES.indexOf(transform.mode) + 1) % MODES.length]; notify(); }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selected) { e.preventDefault(); removeSelected(); }
@@ -85,6 +156,7 @@ export function initEditor(deps) {
   transform.addEventListener('dragging-changed', e => { if (!e.value) { snapY(); notify(); } });
   domElement.addEventListener('pointerdown', onPointerDown);
   addEventListener('keydown', onKeyDown);
+  animated.push(updateOverlay);
 }
 
 export function isEditorOpen() { return open; }
