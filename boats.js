@@ -33,6 +33,11 @@ export function setBoardHandler(fn) { _boardHandler = fn; }
 // point over the water (see props.js for how it's derived).
 let _bridgeSpan = null;
 export function setBridgeSpan(span) { _bridgeSpan = span; }
+// airDraft is measured from a Box3 that includes everything on the boat
+// (rigging, raised paddles, etc.), which reads stricter than what actually
+// needs to duck under the arch — a small tolerance so the smallest boat
+// isn't blocked by its own margin of measurement error.
+const BRIDGE_CLEARANCE_MARGIN = 0.3;
 
 export function registerBoat(scene, animated, obj, name) {
   const def = BOAT_DEFS[name];
@@ -132,7 +137,7 @@ export function updateBoat(dt, b, keys, char) {
   // airDraft) passes freely; a tall boat gets stopped at the bridge's
   // footprint and a HUD hint (read by controller.js's refreshPrompt).
   let bridgeBlocked = false;
-  if (_bridgeSpan && b.airDraft > _bridgeSpan.clearance) {
+  if (_bridgeSpan && b.airDraft > _bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN) {
     const dx = nx - _bridgeSpan.x, dz = nz - _bridgeSpan.z;
     const c = Math.cos(_bridgeSpan.rot), s = Math.sin(_bridgeSpan.rot);
     const lx = dx * c - dz * s, lz = dx * s + dz * c; // world -> local, the verified convention

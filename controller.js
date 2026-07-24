@@ -20,7 +20,8 @@ export function initController(scene, animated, opts) {
   const { canvas, spawnRipple, spawnSplash, sfxSplash, sfxStep, sfxJump, sfxBoard, onToggleGallery, onSwapStateChange, onCharacterChanged } = opts;
 
   const char = new THREE.Group();
-  char.position.set(25, terrainHeight(25, 37), 37);
+  const SPAWN_X = 25, SPAWN_Z = 37, SPAWN_Y = terrainHeight(SPAWN_X, SPAWN_Z);
+  char.position.set(SPAWN_X, SPAWN_Y, SPAWN_Z);
   const placeholder = A.createCharacter();
   let currentModel = placeholder;
   char.add(placeholder);
@@ -81,7 +82,7 @@ export function initController(scene, animated, opts) {
   }
 
   const keys = {};
-  let heading = 0, groundY = 0, waterDepth = 0, curRunning = false, curMoving = false;
+  let heading = 0, groundY = SPAWN_Y, waterDepth = 0, curRunning = false, curMoving = false;
   let activeInteract = null;
   // swim tuning: depth = water surface (WATER_Y) minus the ground/bed under the character
   const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 6.0;

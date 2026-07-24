@@ -82,6 +82,14 @@ export function resolveSupport(x, z, feetY, stepUp) {
     if (feetY !== undefined && stepUp !== undefined && v > feetY + stepUp) continue;
     if (v > h) { h = v; contributor = c.label; }
   }
+  // Nothing was reachable via step-up (every contributor filtered out) — an
+  // out-of-band feetY (spawn, a hot-swap, anything before groundY has
+  // caught up to where the character actually is) would otherwise resolve
+  // to -Infinity, which locks the caller's lerp toward it into -Infinity
+  // then NaN forever (nothing can ever "step up" out of that). Falling back
+  // to the unfiltered max is always safe here: it's exactly what every
+  // caller used before this filter existed.
+  if (h === -Infinity && feetY !== undefined && stepUp !== undefined) return resolveSupport(x, z);
   return { height: h, contributor };
 }
 registerHeightContributor(terrainHeight, 'terrain');

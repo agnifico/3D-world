@@ -12,9 +12,11 @@ import { addCircle } from './collision.js';
 // a flat ratio against the real per-instance scale already in scope at
 // placement time (not derived back out of the exported canopy r).
 const TREE_TRUNK_RATIO = 0.35;
-// Rocks/bushes are blob-shaped (icosahedron-based, no overhang) — their
-// existing scatterFootprints radius is already a reasonable collision proxy.
-const BUSH_COLLIDE_MIN_R = 0.8; // "large only" per the brief; bush r today ranges ~0.49-1.05
+// Rocks are blob-shaped (icosahedron-based, no overhang) — their existing
+// scatterFootprints radius is already a reasonable collision proxy. Bushes
+// are decorative/walk-through (no collider at all — see the bush loop
+// below); an earlier size-based "large bushes only" split existed here but
+// read as inconsistent in practice, so it's gone.
 
 const TREE_MIX = [0.30, 0.28, 0.27, 0.08, 0.07]; // pine oak birch willow dead
 
@@ -117,8 +119,7 @@ export function scatterWorld(scene, animated, PALETTES) {
       if (p) {
         const s = 0.7 + R() * 0.8, r = s * 0.7;
         ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
-        scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r });
-        if (r > BUSH_COLLIDE_MIN_R) addCircle(p.x, p.z, r, p.h, p.h + s * 0.8, false); // "large only" per the brief; blob-shaped, not standable
+        scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r }); // decorative — walk-through, like flowers/mushrooms/grass (no size-based split, per feedback: it read as inconsistent)
       }
     }
     scene.add(A.makeInstanced(A.createBush(5), ms));
