@@ -3,6 +3,7 @@
 // (jump/dive/leap), SWIM, RIDING(boat), EMOTE, STEP_OUT.
 import * as THREE from 'three';
 import { terrainHeight, groundHeight, resolveSupport } from './world.js';
+import { resolveMovement } from './collision.js';
 import { boats, interactables, updateBoat, setBoardHandler } from './boats.js';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
 import { requestToggle } from './lighting.js';
@@ -79,6 +80,7 @@ export function initController(scene, animated, opts) {
   // swim tuning: depth = water surface (WATER_Y) minus the ground/bed under the character
   const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 6.0;
   const WATER_Y = -0.9;
+  const CHAR_RADIUS = 0.35; // Brief 4 Part B — horizontal collision radius, resolveMovement() calls below
   let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
 
   // Brief 4 Part 0: "depth at my feet" — never negative-but-meaningless once
@@ -139,14 +141,14 @@ export function initController(scene, animated, opts) {
         state.vy -= GRAV * dt;
         char.position.y += state.vy * dt;
         if (state.kind === 'dive') { // lunge forward so the dive carries into the water even from a standstill
-          const nx = char.position.x + Math.sin(heading) * DIVE_FWD * dt;
-          const nz = char.position.z + Math.cos(heading) * DIVE_FWD * dt;
-          if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+          const dx = Math.sin(heading) * DIVE_FWD * dt, dz = Math.cos(heading) * DIVE_FWD * dt;
+          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetHeight: char.position.y });
+          if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
         }
         if (state.airFwd) { // horizontal travel during a leap → parabolic arc off the boat, not a vertical pop
-          const nx = char.position.x + Math.sin(heading) * state.airFwd * dt;
-          const nz = char.position.z + Math.cos(heading) * state.airFwd * dt;
-          if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+          const dx = Math.sin(heading) * state.airFwd * dt, dz = Math.cos(heading) * state.airFwd * dt;
+          const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetHeight: char.position.y });
+          if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
         }
         const swimY = WATER_Y - SWIM_SINK;
         const support = groundHeight(char.position.x, char.position.z);
@@ -399,18 +401,18 @@ export function initController(scene, animated, opts) {
       let speed = run ? 8 : 4;
       if (isSwim) speed = shift ? 5 : 3.6;               // swim pace
       else if (waterDepth > WADE_START) speed *= 0.5;    // wading drag through shallow water
-      const nx = char.position.x + Math.sin(heading) * speed * dt;
-      const nz = char.position.z + Math.cos(heading) * speed * dt;
-      if (Math.abs(nx) < 95 && Math.abs(nz) < 95) {      // water is walkable now — depth drives wade/swim
-        char.position.x = nx; char.position.z = nz;
+      const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
+      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz);
+      if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) {    // water is walkable now — depth drives wade/swim
+        char.position.x = r.x; char.position.z = r.z;
       }
     } else if ((state.name === 'GROUND' || state.name === 'SWIM') && state.impulseT > 0) {
       // forced forward step out of a just-landed dive/leap/step-out — moves +
       // plays walk/swim so the character breaks out of the clip's clamped final frame.
       const speed = isSwim ? 3.6 : 4;
-      const nx = char.position.x + Math.sin(heading) * speed * dt;
-      const nz = char.position.z + Math.cos(heading) * speed * dt;
-      if (Math.abs(nx) < 95 && Math.abs(nz) < 95) { char.position.x = nx; char.position.z = nz; }
+      const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
+      const r = resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz);
+      if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
       moving = true;
     }
     if ((state.name === 'GROUND' || state.name === 'SWIM') && state.impulseT > 0) state.impulseT -= dt;
