@@ -39,6 +39,10 @@ export function setBridgeSpan(span) { _bridgeSpan = span; }
 // isn't blocked by its own margin of measurement error.
 const BRIDGE_CLEARANCE_MARGIN = 0.3;
 
+function isDescendant(root, node) {
+  for (let n = node; n; n = n.parent) if (n === root) return true;
+  return false;
+}
 export function registerBoat(scene, animated, obj, name) {
   const def = BOAT_DEFS[name];
   const b = { obj, name, def, rowPhase: 0, ridden: false, heading: 0, speed: 0 };
@@ -54,8 +58,15 @@ export function registerBoat(scene, animated, obj, name) {
   // from the loaded mesh's own Box3 (not hand-guessed), same spirit as
   // deckY/deckHalf above. Boats spawn at WATER_Y-0.15 (see spawnKenney) and
   // float there continuously (see updateBoat below), so that's the correct
-  // waterline reference regardless of the object's exact spawn Y.
-  b.airDraft = box.max.y - (WATER_Y - 0.15);
+  // waterline reference regardless of the object's exact spawn Y. Excludes
+  // the paddles subtree (if any): oars swing well above the hull at rest
+  // and would gate bridge clearance on rigging that isn't actually part of
+  // the hull passing under the arch — a real rower ships the oars, not the
+  // boat itself getting shorter.
+  const hullBox = new THREE.Box3();
+  obj.traverse(o => { if (o.isMesh && !(b.paddles && isDescendant(b.paddles, o))) hullBox.expandByObject(o); });
+  const hullMaxY = hullBox.isEmpty() ? box.max.y : hullBox.max.y;
+  b.airDraft = hullMaxY - (WATER_Y - 0.15);
   interactables.push({
     pos: () => obj.position,
     radius: Math.max(size.x, size.z) * 0.5 + 1.8,
@@ -116,6 +127,16 @@ window.__deckTune = (name, { deckOffset, deckInset } = {}) => {
   }
   return { name, deckOffset: def.deckOffset, deckInset: def.deckInset, updated: n };
 };
+
+// console/debug hook — exact measured numbers for the bridge-clearance
+// check, since none of this (loaded GLB geometry) can be measured in Node.
+window.__boatDraft = () => boats.map(b => ({
+  name: b.name,
+  airDraft: +b.airDraft.toFixed(3),
+  clearance: _bridgeSpan ? +_bridgeSpan.clearance.toFixed(3) : null,
+  threshold: _bridgeSpan ? +(_bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN).toFixed(3) : null,
+  wouldClear: _bridgeSpan ? b.airDraft <= _bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN : null,
+}));
 
 let bobT = 0;
 export function updateBoat(dt, b, keys, char) {
