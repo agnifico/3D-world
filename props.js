@@ -228,22 +228,20 @@ const RAIL_RISE = 0.6;
 // added for the rail's sideways-egress purpose doesn't apply here).
 // DECK_BOTTOM_OFFSET (0.445) comes directly from createStoneBridge's own
 // deck geometry (assets.js): a 0.45-tall box centered 0.22 below the deck-
-// top formula's return value, so bottom = deckTop - 0.22 - (0.45/2). The
-// worst-case (lowest) deck underside within the water gap sets `clearance`
-// — measured from the actual geometry, not guessed.
+// top formula's return value, so bottom = deckTop - 0.22 - (0.45/2).
+//
+// clearance is a function of lz, not a single scalar — the arch is tallest
+// at its center (lz=0) and lowest at the water-gap's own edges. An earlier
+// version used the single worst-case (lowest) value across the whole gap,
+// which blocked a boat everywhere in the span, including dead center where
+// there's actually plenty of headroom — exactly backwards from what you'd
+// want (some clipping right at the low edges is fine; blocking the highest,
+// most-open point is not). clearanceAt(lz) is measured from the real deck
+// formula at the boat's own position instead.
 const WATER_GAP_LZ_LO = RAIL_LZ_LO + 0.5, WATER_GAP_LZ_HI = RAIL_LZ_HI - 0.5;
 const DECK_BOTTOM_OFFSET = 0.445;
-const BRIDGE_CLEARANCE = BRIDGE.y + Math.min(A.bridgeDeckHeight(WATER_GAP_LZ_LO), A.bridgeDeckHeight(WATER_GAP_LZ_HI)) - DECK_BOTTOM_OFFSET;
-{
-  // the water gap is asymmetric (the stream bends here, same measurement as
-  // the rails above) — its center is offset from the bridge's own local
-  // origin, so the span's world position needs the same forward local->world
-  // transform used for the rails, not BRIDGE.x/z directly.
-  const c = Math.cos(BRIDGE.rot), s = Math.sin(BRIDGE.rot);
-  const gapLzCenter = (WATER_GAP_LZ_LO + WATER_GAP_LZ_HI) / 2, gapHd = (WATER_GAP_LZ_HI - WATER_GAP_LZ_LO) / 2;
-  const gx = BRIDGE.x + 0 * c + gapLzCenter * s, gz = BRIDGE.z + (-0 * s + gapLzCenter * c);
-  setBridgeSpan({ x: gx, z: gz, rot: BRIDGE.rot, hw: 1.7, hd: gapHd, clearance: BRIDGE_CLEARANCE });
-}
+const clearanceAt = lz => BRIDGE.y + A.bridgeDeckHeight(lz) - DECK_BOTTOM_OFFSET;
+setBridgeSpan({ x: BRIDGE.x, z: BRIDGE.z, rot: BRIDGE.rot, hw: 1.7, lzLo: WATER_GAP_LZ_LO, lzHi: WATER_GAP_LZ_HI, clearanceAt });
 
 // ================= native hamlet/landmark props =================
 export const NATIVE_CATALOG = {

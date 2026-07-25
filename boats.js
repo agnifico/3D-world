@@ -27,10 +27,12 @@ export function setBoardHandler(fn) { _boardHandler = fn; }
 // props.js already imports FROM this module (BOAT_DEFS/registerBoat), so a
 // reverse import would be circular. Same pattern as setBoardHandler above:
 // this module stays generic (a local-transform + bounds check), the caller
-// supplies the specifics. span = { x, z, rot, hw, hd, clearance } — hw/hd
-// define the local footprint a boat's position is tested against; clearance
-// is the measured absolute world-Y of the deck's underside at its tightest
-// point over the water (see props.js for how it's derived).
+// supplies the specifics. span = { x, z, rot, hw, lzLo, lzHi, clearanceAt }
+// — hw/lzLo/lzHi define the local footprint a boat's position is tested
+// against; clearanceAt(lz) returns the measured absolute world-Y of the
+// deck's underside AT that specific point along the span, not a single
+// worst-case number — the arch is tallest at its center and lowest at the
+// water-gap's edges, so clearance genuinely depends on where the boat is.
 let _bridgeSpan = null;
 export function setBridgeSpan(span) { _bridgeSpan = span; }
 // airDraft is measured from a Box3 that includes everything on the boat
@@ -130,13 +132,21 @@ window.__deckTune = (name, { deckOffset, deckInset } = {}) => {
 
 // console/debug hook — exact measured numbers for the bridge-clearance
 // check, since none of this (loaded GLB geometry) can be measured in Node.
-window.__boatDraft = () => boats.map(b => ({
-  name: b.name,
-  airDraft: +b.airDraft.toFixed(3),
-  clearance: _bridgeSpan ? +_bridgeSpan.clearance.toFixed(3) : null,
-  threshold: _bridgeSpan ? +(_bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN).toFixed(3) : null,
-  wouldClear: _bridgeSpan ? b.airDraft <= _bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN : null,
-}));
+// clearance now varies along the span (tallest at the center, lowest at the
+// water-gap's own edges), so this reports both ends of that range.
+window.__boatDraft = () => boats.map(b => {
+  const center = _bridgeSpan ? _bridgeSpan.clearanceAt(0) : null;
+  const edge = _bridgeSpan ? Math.min(_bridgeSpan.clearanceAt(_bridgeSpan.lzLo), _bridgeSpan.clearanceAt(_bridgeSpan.lzHi)) : null;
+  return {
+    name: b.name,
+    airDraft: +b.airDraft.toFixed(3),
+    clearanceAtCenter: center !== null ? +center.toFixed(3) : null,
+    clearanceAtEdge: edge !== null ? +edge.toFixed(3) : null,
+    marginedThresholdAtCenter: center !== null ? +(center + BRIDGE_CLEARANCE_MARGIN).toFixed(3) : null,
+    clearsAtCenter: center !== null ? b.airDraft <= center + BRIDGE_CLEARANCE_MARGIN : null,
+    clearsAtEdge: edge !== null ? b.airDraft <= edge + BRIDGE_CLEARANCE_MARGIN : null,
+  };
+});
 
 let bobT = 0;
 export function updateBoat(dt, b, keys, char) {
@@ -158,11 +168,14 @@ export function updateBoat(dt, b, keys, char) {
   // airDraft) passes freely; a tall boat gets stopped at the bridge's
   // footprint and a HUD hint (read by controller.js's refreshPrompt).
   let bridgeBlocked = false;
-  if (_bridgeSpan && b.airDraft > _bridgeSpan.clearance + BRIDGE_CLEARANCE_MARGIN) {
+  if (_bridgeSpan) {
     const dx = nx - _bridgeSpan.x, dz = nz - _bridgeSpan.z;
     const c = Math.cos(_bridgeSpan.rot), s = Math.sin(_bridgeSpan.rot);
     const lx = dx * c - dz * s, lz = dx * s + dz * c; // world -> local, the verified convention
-    if (Math.abs(lx) < _bridgeSpan.hw && Math.abs(lz) < _bridgeSpan.hd) bridgeBlocked = true;
+    if (Math.abs(lx) < _bridgeSpan.hw && lz > _bridgeSpan.lzLo && lz < _bridgeSpan.lzHi) {
+      const localClearance = _bridgeSpan.clearanceAt(lz);
+      if (b.airDraft > localClearance + BRIDGE_CLEARANCE_MARGIN) bridgeBlocked = true;
+    }
   }
   b.bridgeBlocked = bridgeBlocked;
   if (bridgeBlocked) { b.speed *= 0.25; }
