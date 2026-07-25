@@ -22,7 +22,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 // boat-sit → idle) and movement/physics keep working.
 export const CHARACTERS = {
   mia: {
-    dir: 'assets/mia/', model: 'Mia.glb', height: 1.7,
+    dir: 'assets/mia/', model: 'mia.glb', height: 1.7,
     clips: {
       idle: 'Idle with Skin.fbx', walk: 'Walking.fbx', run: 'Fast Run.fbx',
       jump: 'Running Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Walking Jump.fbx',
@@ -34,7 +34,7 @@ export const CHARACTERS = {
     },
   },
   vic: {
-    dir: 'assets/vic/', model: 'Vic.glb', height: 1.7,
+    dir: 'assets/vic/', model: 'vic.glb', height: 1.7,
     clips: {
       idle: 'idle_with_skin.fbx', walk: 'Walking.fbx', run: 'Fast Run.fbx',
       jump: 'Jump.fbx', jumpIdle: 'Stationary Jump.fbx', jumpWalk: 'Jump(2).fbx',
