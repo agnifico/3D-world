@@ -6,6 +6,29 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+// Brief 10 — the FBX→GLB conversion that produced every catalogue nature
+// asset baked metallicFactor≈0.4 / roughnessFactor≈0.415 onto EVERY
+// material regardless of part (confirmed: identical on Wood/Green/Rock/
+// Snow/Leaves across BIGNature and Simple_Nature — a conversion-tool
+// default, not intentional authoring). Quaternius nature is meant to read
+// flat/matte. At metalness 0.4, a material's diffuse contribution is cut
+// to 60% of its base color and its specular reflects the base color
+// itself (not a neutral 0.04) — under this codebase's warm sun +
+// olive-toned hemisphere ground, that's enough on its own to explain every
+// reported symptom: a metallic sheen on foliage/rock, "gold" highlights on
+// thin bright shapes (the stretched grass-as-seaweed fronds), and
+// "chocolate" snow (a near-white surface losing most of its diffuse white
+// and picking up the environment's warm/olive tint instead). None of these
+// GLBs actually carry vertex colors (checked directly — no COLOR_0
+// attribute anywhere in this set); they're solid per-part baseColorFactor
+// materials, so there's no colorspace bug to chase here, just this one.
+function normalizeNatureMaterial(mat) {
+  mat.metalness = 0;
+  mat.roughness = 0.9;
+  mat.flatShading = true; // matches every procedural material's own mat() default in assets.js — low-poly faceted, not smoothed
+  mat.needsUpdate = true;
+}
+
 let _loader = null;
 const _templateCache = new Map(); // url -> Promise<THREE.Group>
 
@@ -22,7 +45,11 @@ function loadRaw(url) {
       const box = new THREE.Box3().setFromObject(scene);
       scene.position.y -= box.min.y;
       scene.updateMatrixWorld(true);
-      scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = true; o.receiveShadow = true;
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) normalizeNatureMaterial(m);
+      });
       return scene;
     }));
   }
