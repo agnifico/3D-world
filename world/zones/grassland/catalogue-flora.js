@@ -63,6 +63,24 @@ function pickVariant(R, family) {
   return weightedPick(items, R, weights.slice(0, n));
 }
 
+// Brief 10 — per-family base-scale correction (recipe-level, applied once
+// per family, not per-instance): user observed willows reading too small
+// and bushes too tall against the ~1.7u character. Multiplies onto the
+// existing seeded s/sy formulas below so the shape of the per-instance
+// variation is preserved — only its center moves. Measured native
+// (unscaled) heights to ground the direction: Willow's raw avg height
+// (~2.86u across its 5 variants) is actually in line with CommonTree's
+// (~2.87u), so "too small" is a deliberate call to make willows read as
+// the larger, sweeping species they should be, not a geometry defect.
+// Bush's raw avg height (~1.2u) combined with the OLD 0.7–1.5 scale range
+// could reach 1.79u — taller than the character — confirming "too tall"
+// directly.
+const FAMILY_SCALE = {
+  Willow: 1.25,       // before: s in [0.85, 1.30] (~2.4–3.7u tall) -> after: ~[1.06, 1.63] (~3.0–4.6u)
+  Bush: 0.55,         // before: s in [0.70, 1.50] (~0.8–1.8u tall) -> after: ~[0.39, 0.83] (~0.5–1.0u)
+  BushBerries: 0.55,
+};
+
 const TREE_SPECIES = [
   { family: 'CommonTree', weight: 0.48, deadCapable: true },
   { family: 'PineTree', weight: 0.24, deadCapable: false },
@@ -114,7 +132,9 @@ export function placeCatalogueFloraSync() {
     const season = seasonAt(p.x, p.z);
     const variant = pickVariant(R, family);
 
-    const s = 0.85 + R() * 0.45, sy = s * (0.95 + R() * 0.1);
+    let s = 0.85 + R() * 0.45;
+    s *= FAMILY_SCALE[family] || 1;
+    const sy = s * (0.95 + R() * 0.1);
     addToGroup(groups, { set: 'BIGNature', category: null, family, season, state, variant },
       mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, sy));
     treePts.push(p);
@@ -150,7 +170,8 @@ export function placeCatalogueFloraSync() {
     // (no seasonal variants at all) — never request a combo that can't exist.
     const bushSeason = isBerries ? 'normal' : (season === 'snow' ? 'snow' : 'normal');
     const variant = pickVariant(R, family);
-    const s = 0.7 + R() * 0.8;
+    let s = 0.7 + R() * 0.8;
+    s *= FAMILY_SCALE[family] || 1;
     addToGroup(groups, { set: 'BIGNature', category: null, family, season: bushSeason, state: 'alive', variant },
       mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
     scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r: s * 0.7 }); // decorative — walk-through
