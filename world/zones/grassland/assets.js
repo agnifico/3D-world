@@ -8,6 +8,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // every call site here and in scatter.js (A.rng(seed)) is unchanged.
 import { mulberry32 as rng } from '../../core/math.js';
 export { rng };
+// makeInstanced/addWind moved to core/instancing.js — Lagoon's catalogue
+// scatter needs the exact same helpers now. Re-exported so this module's
+// existing `A.makeInstanced`/`A.addWind` call sites are unchanged.
+export { makeInstanced, addWind } from '../../core/instancing.js';
 
 // ---------- utils ----------
 const _mats = new Map();
@@ -41,44 +45,6 @@ export function prismGeometry(w, h, d) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
   g.computeVertexNormals();
   return g;
-}
-
-// Turn a template Group into InstancedMeshes (one per mesh in the template),
-// applying each Matrix4 in `matrices`. Massive draw-call savings for repeats.
-export function makeInstanced(template, matrices, opts = {}) {
-  template.updateMatrixWorld(true);
-  const out = new THREE.Group();
-  const tmp = new THREE.Matrix4();
-  template.traverse(child => {
-    if (!child.isMesh) return;
-    const im = new THREE.InstancedMesh(child.geometry, child.material, matrices.length);
-    for (let i = 0; i < matrices.length; i++) {
-      tmp.multiplyMatrices(matrices[i], child.matrixWorld);
-      im.setMatrixAt(i, tmp);
-    }
-    im.castShadow = opts.shadow !== false;
-    im.receiveShadow = true;
-    im.instanceMatrix.needsUpdate = true;
-    out.add(im);
-  });
-  return out;
-}
-
-// Inject a gentle wind sway into an instanced material's vertex shader.
-export function addWind(material, strength = 0.1, speed = 1.7) {
-  material.onBeforeCompile = shader => {
-    shader.uniforms.uTime = { value: 0 };
-    shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace(
-      '#include <begin_vertex>',
-      `#include <begin_vertex>
-      #ifdef USE_INSTANCING
-        vec2 wpp = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
-        float sww = sin(uTime*${speed.toFixed(2)} + wpp.x*0.4 + wpp.y*0.35) * ${strength.toFixed(3)} * smoothstep(0.02, 0.5, transformed.y);
-        transformed.x += sww; transformed.z += sww * 0.7;
-      #endif`
-    );
-    material.userData.shader = shader;
-  };
 }
 
 // ---------- trees (procedural, seeded) ----------

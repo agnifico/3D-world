@@ -10,6 +10,7 @@ import { initNightFx } from './night-fx.js';
 import { initMinimap, disposeMinimap } from './minimap.js';
 import { placeNativeProps, placeKenneyProps, registerBridge, resetRegistry } from './props.js';
 import { scatterWorld, resetScatter } from './scatter.js';
+import { placeCatalogueFloraSync, instantiateCatalogueFlora } from './catalogue-flora.js';
 import * as Gallery from './gallery.js';
 import { initEditor, disposeEditor } from './editor.js';
 import { initEditorPanel, disposeEditorPanel } from './editor-panel.js';
@@ -50,7 +51,13 @@ function build(ctx) {
   registerBridge(ctx);
   placeKenneyProps(ctx, ctx.scene, ctx.animated); // fire-and-forget — awaits internally per placement
 
-  const { applyGrassBlend, flowerMat } = scatterWorld(ctx, ctx.scene, ctx.animated, PALETTES);
+  // Trees/rocks/bushes: position/species/variant decided synchronously
+  // (treePts must be ready before scatterWorld's mushroom-clustering pass,
+  // right below); the actual GLB load + instancing + collision registration
+  // is fire-and-forget async, same convention as placeKenneyProps above.
+  const { groups: catalogueFloraGroups } = placeCatalogueFloraSync();
+  const { applyGrassBlend, flowerMat } = scatterWorld(ctx.scene, ctx.animated, PALETTES);
+  instantiateCatalogueFlora(ctx, ctx.scene, catalogueFloraGroups).catch(e => console.error('[catalogue-flora]', e));
 
   Gallery.buildGallery(ctx, ctx.scene, ctx.animated, open => ctx.onOverlayToggle?.(open));
 

@@ -1,28 +1,21 @@
-// Grassland zone — scattering: trees, rocks, bushes, mushrooms, flowers, grass.
+// Grassland zone — scattering: mushrooms, flowers, grass (procedural).
+// Trees/rocks/bushes are catalogue-driven real models — see
+// catalogue-flora.js — but share this module's samplePoint/AVOID/mtx
+// placement primitives and treePts/scatterFootprints bookkeeping.
 import * as THREE from 'three';
 import * as A from './assets.js';
 import { terrainHeight, distPoly, PATH, WATER_Y } from './world.js';
 import { BRIDGE } from './props.js';
 
-// Trunk radius, not canopy: scatterFootprints' r (below) is a canopy-sized
-// spacing/avoidance proxy — colliding on it would block ~1.5-2 units of open
-// air around every trunk. Real per-species trunk-base radii in assets.js
-// range ~0.17s-0.5s; rather than plumbing per-species data through, this is
-// a flat ratio against the real per-instance scale already in scope at
-// placement time (not derived back out of the exported canopy r).
-const TREE_TRUNK_RATIO = 0.35;
-
-const TREE_MIX = [0.30, 0.28, 0.27, 0.08, 0.07]; // pine oak birch willow dead
-
 const AVOID = [
   { x: -9, z: -45, r: 15 }, { x: -55, z: 60, r: 8 }, { x: 55, z: -55, r: 8 },
   { x: -60, z: -15, r: 7 }, { x: BRIDGE.x, z: BRIDGE.z, r: 9 },
 ];
-function blockedBy(x, z, extra = 0) {
+export function blockedBy(x, z, extra = 0) {
   for (const a of AVOID) if (Math.hypot(x - a.x, z - a.z) < a.r + extra) return true;
   return false;
 }
-function samplePoint(R, opts = {}) {
+export function samplePoint(R, opts = {}) {
   for (let tries = 0; tries < 40; tries++) {
     const x = (R() - 0.5) * 188, z = (R() - 0.5) * 188;
     const h = terrainHeight(x, z);
@@ -36,7 +29,7 @@ function samplePoint(R, opts = {}) {
   }
   return null;
 }
-const mtx = (x, y, z, rotY, s, sy = s) =>
+export const mtx = (x, y, z, rotY, s, sy = s) =>
   new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
     new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
@@ -53,69 +46,13 @@ export const scatterFootprints = [];
 // day/night-dependent) — only the head material's emissiveIntensity
 // (flowerGlow) is palette-reactive, and that's a single material property
 // the caller can lerp directly (see the returned `flowerMat`).
-export function scatterWorld(ctx, scene, animated, PALETTES) {
+export function scatterWorld(scene, animated, PALETTES) {
   const R = A.rng(1234);
 
-  {
-    const buckets = []; // per template: matrix list
-    const templates = [];
-    for (const f of A.TREE_FACTORIES) for (let v = 0; v < 2; v++) { templates.push(f(f.name.length * 7 + v * 13 + 3)); buckets.push([]); }
-    const cum = []; let acc = 0;
-    for (const w of TREE_MIX) { acc += w; cum.push(acc); }
-    const speciesFor = (h) => {
-      // willows hug the shore
-      if (h < WATER_Y + 1.6 && R() < 0.55) return 6 + Math.round(R()); // willow templates
-      const w = R() * acc;
-      for (let sp = 0; sp < 5; sp++) if (w < cum[sp]) return sp * 2 + Math.round(R());
-      return 8;
-    };
-    let placed = 0, guard = 0;
-    while (placed < 115 && guard++ < 3000) {
-      const p = samplePoint(R, { pathClear: 5, avoidExtra: 2 });
-      if (!p) continue;
-      let ok = true;
-      for (const t of treePts) if (Math.hypot(p.x - t.x, p.z - t.z) < 4) { ok = false; break; }
-      if (!ok) continue;
-      const ti = speciesFor(p.h);
-      const s = 0.8 + R() * 0.5;
-      buckets[ti].push(mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, 0.8 + R() * 0.6));
-      treePts.push(p);
-      scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 }); // canopy proxy — spacing/avoidance only, NOT the collider
-      ctx.collisionRegistry.addCircle(p.x, p.z, s * TREE_TRUNK_RATIO, p.h, Infinity, false); // trunk-sized, never jumpable, not standable
-      placed++;
-    }
-    for (let i = 0; i < templates.length; i++)
-      if (buckets[i].length) scene.add(A.makeInstanced(templates[i], buckets[i]));
-  }
-
-  // --- rocks: 3 variants ---
-  for (let v = 0; v < 3; v++) {
-    const ms = [];
-    for (let i = 0; i < 55; i++) {
-      const p = samplePoint(R, { minShore: -0.2, pathClear: 2.5 });
-      if (p) {
-        const s = 0.5 + R() * 1.2, sy = 0.5 + R() * 0.8;
-        ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, sy));
-        scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 });
-        ctx.collisionRegistry.addCircle(p.x, p.z, s * 0.6, p.h, p.h + sy * 0.93, true); // small/low rocks can be hopped, and stood on
-      }
-    }
-    scene.add(A.makeInstanced(A.createRock(v), ms));
-  }
-
-  // --- bushes ---
-  {
-    const ms = [];
-    for (let i = 0; i < 70; i++) {
-      const p = samplePoint(R, { pathClear: 3.5, pathFade: 8 });
-      if (p) {
-        const s = 0.7 + R() * 0.8, r = s * 0.7;
-        ms.push(mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
-        scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r }); // decorative — walk-through
-      }
-    }
-    scene.add(A.makeInstanced(A.createBush(5), ms));
-  }
+  // Mushrooms cluster around treePts, which catalogue-flora.js's synchronous
+  // placement pass fills BEFORE this runs (zone.js calls it first) — trees
+  // themselves are loaded/instanced asynchronously after, but their (x,z,h)
+  // positions are already known here.
 
   // --- mushrooms (cluster near trees) ---
   {
