@@ -128,9 +128,9 @@ const REEF_GAP_HI      = 0.62;
 // At least one big (beach + prop dressing), at least two tiny.
 export const ISLETS = [
   { name: 'Longbeach',  x: -23, z: -37, r: 39, peak: 5.0, rough: 0.65 }, // BIG — broad, spacious beach + palms
-  { name: 'Kiln',       x:  31, z:   9, r: 16, peak: 3.6, rough: 0.7 },
+  { name: 'Kiln',       x:  31, z:   9, r: 25, peak: -0.01, rough: 0.7 },
   { name: 'Warden',     x: -35, z:  22, r: 14, peak: 3.1, rough: 0.7 },
-  { name: 'Pebble',     x:  14, z:  -9, r:  8, peak: 1.7, rough: 0.4 },
+  { name: 'Pebble',     x:  14, z:  -9, r:  8, peak: 1.0, rough: 0.4 },
   { name: 'Gull',       x:  41, z: -23, r:  5, peak: 1.2, rough: 0.3 }, // tiny
   { name: 'Lone Stack', x:  -7, z:  31, r:  4.5, peak: 2.4, rough: 0.3 }, // tiny sea-stack by the Drop
 ];
@@ -138,8 +138,8 @@ export const ISLETS = [
 // ── 4. Sandbars (barely-breaking ridges — wadeable causeways between islets) ───
 // top ~ WATER_Y so they surface only just. Great readable traversal.
 export const SANDBARS = [
-  { ax: -23, az: -37, bx: 14, bz:  -9, width: 6.5, top:  0.12, rough: 0.35 }, // Longbeach -> Pebble
-  { ax:  14, az:  -9, bx: 31, bz:   9, width: 5.5, top: -0.05, rough: 0.30 }, // Pebble -> Kiln (just submerged)
+  { ax: -23, az: -37, bx: 14, bz:  -9, width: 20, top:  0.2, rough: 1 }, // Longbeach -> Pebble
+  { ax:  14, az:  -9, bx: 31, bz:   9, width: 10, top: -0.05, rough: 0.30 }, // Pebble -> Kiln (just submerged)
   { ax: -35, az:  22, bx: -7, bz:  31, width: 5.0, top:  0.08, rough: 0.30 }, // Warden -> Lone Stack
 ];
 
@@ -371,12 +371,6 @@ export const scatterRecipe = {
   area: { min: -95, max: 95 },
   kinds: [
     {
-      id: 'kelp',                                   // tall swaying fronds, deep areas
-      count: 240, minDepth: 4.5, maxDepth: 13.0, slopeMin: 0.55, place: 'seabed',
-      height: [2.6, 5.6], radius: [0.10, 0.20], sway: 0.6, swayScale: 0.45,
-      color: '#3f7d5a', colorNight: '#123038', glowNight: 0.0,
-    },
-    {
       id: 'coral',                                  // low-poly clusters — the reef ACCENT: ONE 3-colour family
       count: 280, minDepth: 1.0, maxDepth: 9.0, slopeMin: 0.35, place: 'seabed',
       scale: [0.5, 1.5], sway: 0.0,
@@ -403,13 +397,24 @@ export const scatterRecipe = {
       height: [0.9, 1.9], sway: 0.6, swayScale: 1.0,
       color: '#c7b24a', colorNight: '#38472a', glowNight: 0.0,
     },
-    {
-      id: 'palm',                                   // silhouette placeholders (Quaternius later)
-      count: 30, minDepth: -6.0, maxDepth: -0.7, slopeMin: 0.62, place: 'land',
-      height: [4.0, 7.0], sway: 0.18, swayScale: 0.3,
-      color: '#3c6b3a', colorNight: '#12222a', trunk: '#b9a17a', trunkNight: '#2a2b28', glowNight: 0.0,
-    },
   ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CATALOGUE BANDS  —  depth-band data (same discipline as scatterRecipe
+//  above, kept here rather than in the renderer) for the real-GLB scatter
+//  kinds zones/lagoon/catalogue-flora.js builds — Brief 9's palms/seaweed/
+//  reef rocks/shore vegetation. `palm` supersedes the old procedural `palm`
+//  kind (removed above) AND the temp-real-palms.js swap-in hack (retired —
+//  see TEMP-MODELS.md); `seaweed` supersedes the old procedural `kelp` kind
+//  at the same reef depth band, now real Simple_Nature grass stretched tall
+//  + thin instead of hand-rolled blade geometry.
+// ─────────────────────────────────────────────────────────────────────────────
+export const catalogueBands = {
+  palm: { count: 30, minDepth: -6.0, maxDepth: -0.7, slopeMin: 0.62 },
+  seaweed: { count: 220, minDepth: 4.5, maxDepth: 13.0, slopeMin: 0.55 },
+  reefRock: { count: 60, minDepth: 0.5, maxDepth: 4.0, slopeMin: 0.5 },
+  shoreBush: { count: 40, minDepth: -1.2, maxDepth: 0.8, slopeMin: 0.55 },
 };
 
 

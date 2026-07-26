@@ -11,11 +11,7 @@ import {
 import { createLagoon } from './lagoon-fx.js';
 import { disposeGroup, registerPortals } from '../../core/zone.js';
 import { createStoneArch } from '../../core/portal-arch.js';
-// TEMP — see temp-real-palms.js's header. Delete this import + the one call
-// below (and the file itself) to revert to the procedural placeholder palms.
-import { swapInRealPalms } from './temp-real-palms.js';
-// The equivalent seaweed/kelp swap-in (temp-real-seaweed.js) was reverted —
-// see world/zones/lagoon/TEMP-MODELS.md for the full handoff note on why.
+import { placeCatalogueFloraSync, instantiateCatalogueFlora } from './catalogue-flora.js';
 
 // The data zone object lagoon-fx.js's createLagoon(zone) expects — same
 // shape terrain.js used to bundle as its own default export.
@@ -50,10 +46,13 @@ function build(ctx) {
   const lagoon = createLagoon(zoneData, { hemi: ctx.lighting.hemi, sun: ctx.lighting.sun });
   lagoon.attach(ctx.scene); // parents lagoon's content group under this zone's private group
 
-  // TEMP — swap real palm models in over the procedural placeholders, at
-  // the exact same placed positions. Fire-and-forget (async load), matching
-  // this codebase's existing convention for non-blocking asset placement.
-  swapInRealPalms(lagoon, ctx.scene);
+  // Real Pirates palms + reef rocks, Simple_Nature grass stretched into
+  // seaweed + shore bushes — catalogue-driven, instanced (see
+  // catalogue-flora.js). Placement is sync; loading/instancing is
+  // fire-and-forget async, same convention as Grassland's placeKenneyProps/
+  // catalogue-flora.js.
+  const { groups: catalogueFloraGroups } = placeCatalogueFloraSync();
+  instantiateCatalogueFlora(ctx, ctx.scene, catalogueFloraGroups).catch(e => console.error('[lagoon catalogue-flora]', e));
 
   // Lagoon resolves its OWN 4-keyframe day cycle internally (richer than the
   // shell's generic 2-field blend — water depth stops, terrain grade,

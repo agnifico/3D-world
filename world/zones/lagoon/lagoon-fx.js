@@ -100,14 +100,6 @@ function clumpGeometry(nBlades, width, height, spread, taper, seed) {
   return gb.geo();
 }
 
-// A single tall kelp blade (more segments -> smooth bend).
-function kelpGeometry() {
-  const gb = new GB();
-  bladeInto(gb, 0, 0, 0.22, 1.0, 8, 0.35, 0, null);
-  bladeInto(gb, 0, 0, 0.22, 1.0, 8, 0.35, Math.PI * 0.5, null); // cross blade for volume
-  return gb.geo();
-}
-
 // Lumpy low-poly coral (displaced icosphere, stretched up a touch).
 function coralGeometry() {
   const g = new THREE.IcosahedronGeometry(0.5, 2);
@@ -133,58 +125,12 @@ function shellGeometry() {
   return new THREE.SphereGeometry(0.5, 7, 3, 0, Math.PI * 2, 0, Math.PI * 0.5);
 }
 
-// Palm silhouette placeholder: leaning trunk + radial fronds (baked vertex colours).
-function palmGeometry(trunkHex, frondHex) {
-  const gb = new GB();
-  const trunk = C(trunkHex), frond = C(frondHex);
-  const H = 1.0, lean = 0.12;
-  // trunk: 4-sided tapered prism
-  const seg = 5, rB = 0.06, rT = 0.035;
-  const ring = (y, r, cx) => {
-    const idx = [];
-    for (let k = 0; k < 4; k++) {
-      const a = k / 4 * Math.PI * 2 + Math.PI / 4;
-      idx.push(gb.v(cx + Math.cos(a) * r, y, Math.sin(a) * r, trunk.r, trunk.g, trunk.b));
-    }
-    return idx;
-  };
-  let prev = ring(0, rB, 0);
-  for (let s = 1; s <= seg; s++) {
-    const t = s / seg, y = t * H, r = lerp(rB, rT, t), cx = lean * t * t;
-    const cur = ring(y, r, cx);
-    for (let k = 0; k < 4; k++) gb.quad(prev[k], cur[k], cur[(k + 1) % 4], prev[(k + 1) % 4]);
-    prev = cur;
-  }
-  // canopy: fronds radiating from the top
-  const topY = H, topX = lean;
-  const nFr = 7;
-  for (let f = 0; f < nFr; f++) {
-    const a = f / nFr * Math.PI * 2;
-    const dx = Math.cos(a), dz = Math.sin(a);
-    const len = 0.5, droop = 0.16, wid = 0.06;
-    const bx = topX, bz = 0;
-    const perpx = -dz, perpz = dx;
-    const b0 = gb.v(bx - perpx * wid, topY, bz - perpz * wid, frond.r, frond.g, frond.b);
-    const b1 = gb.v(bx + perpx * wid, topY, bz + perpz * wid, frond.r, frond.g, frond.b);
-    const mx = bx + dx * len * 0.55, mz = bz + dz * len * 0.55, my = topY + 0.05;
-    const m0 = gb.v(mx - perpx * wid * 0.7, my, mz - perpz * wid * 0.7, frond.r, frond.g, frond.b);
-    const m1 = gb.v(mx + perpx * wid * 0.7, my, mz + perpz * wid * 0.7, frond.r, frond.g, frond.b);
-    const tx = bx + dx * len, tz = bz + dz * len, ty = topY - droop;
-    const tip = gb.v(tx, ty, tz, frond.r, frond.g, frond.b);
-    gb.quad(b0, b1, m1, m0);
-    gb.tri(m0, m1, tip);
-  }
-  return gb.geo();
-}
-
-function geometryFor(id, kind) {
+function geometryFor(id) {
   switch (id) {
-    case 'kelp':     return kelpGeometry();
     case 'coral':    return coralGeometry();
     case 'seagrass': return clumpGeometry(6, 0.05, 1.0, 0.18, 0.15, 11);
     case 'reeds':    return clumpGeometry(5, 0.045, 1.0, 0.16, 0.1, 23);
     case 'shells':   return shellGeometry();
-    case 'palm':     return palmGeometry(kind.trunk || '#b9a17a', kind.color);
     default:         return new THREE.BoxGeometry(0.3, 0.3, 0.3);
   }
 }
@@ -197,9 +143,8 @@ function geometryFor(id, kind) {
 // Flora material: per-instance colour, height-scaled sway, night colour blend
 // + bioluminescent glow. One shared material per kind.
 function floraMaterial(kind, WATER_Y) {
-  const useVertexColor = kind.id === 'palm'; // palm bakes trunk/frond colours; others use instanceColor
   const mat = new THREE.MeshStandardMaterial({
-    vertexColors: useVertexColor,
+    vertexColors: false, // all remaining procedural kinds use per-instance instanceColor, not baked vertex colors
     roughness: 0.85, metalness: 0.0,
     side: THREE.DoubleSide,
     transparent: false,
@@ -235,7 +180,6 @@ function floraMaterial(kind, WATER_Y) {
   };
   mat.customProgramCacheKey = () => 'lagoon-flora-' + kind.id;
   mat.userData.u = u;
-  mat.userData.useVertexColor = useVertexColor;
   return mat;
 }
 
@@ -593,13 +537,12 @@ function buildFlora(zone, day) {
       placed.push({ x, y: h, z, rot: rng() * Math.PI * 2, r: rng(), n });
     }
 
-    const geo = geometryFor(kind.id, kind);
+    const geo = geometryFor(kind.id);
     const mat = floraMaterial(kind, zone.WATER_Y);
     const count = Math.max(placed.length, 1);
     const mesh = new THREE.InstancedMesh(geo, mat, count);
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const phases = new Float32Array(count);
-    const useVC = mat.userData.useVertexColor;
     const palette = (kind.colors || [kind.color]).map(C);
 
     for (let i = 0; i < placed.length; i++) {
@@ -621,12 +564,10 @@ function buildFlora(zone, day) {
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
       phases[i] = pl.r * 100;
-      if (!useVC) {
-        col.copy(palette[(pl.r * palette.length) | 0] || palette[0]);
-        // small per-instance value jitter
-        col.offsetHSL(0, 0, (pl.r - 0.5) * 0.08);
-        mesh.setColorAt(i, col);
-      }
+      col.copy(palette[(pl.r * palette.length) | 0] || palette[0]);
+      // small per-instance value jitter
+      col.offsetHSL(0, 0, (pl.r - 0.5) * 0.08);
+      mesh.setColorAt(i, col);
     }
     // fill remaining (if under-placed) off-screen
     for (let i = placed.length; i < count; i++) {
