@@ -1,0 +1,7 @@
+.DS_Store
+
+# Master asset shelf (Brief 9) — multi-GB source packs (FBX/glTF masters),
+# never served, never reorganized. tools/catalogue-assets.mjs reads from
+# here and copies only the used subset into world/assets/nature/ (which IS
+# tracked). Re-fetch/restore this locally; it doesn't belong in git history.
+/3DResources/
