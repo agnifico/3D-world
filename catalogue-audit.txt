@@ -1,0 +1,75 @@
+Catalogue integrity audit
+Generated: 2026-07-27 (Track A session)
+
+METHOD
+1. Loaded world/assets/catalogue.json (1903 variant entries across 9 sets).
+2. For every variant, checked its `source` (3DResources/...) resolves on disk.
+3. For every variant carrying a `served` field (i.e. every USED entry's copied
+   file), checked `world/<served>` resolves on disk.
+4. Separately, for every set under 3DResources/, walked every .fbx and
+   checked for a same-directory, same-basename .glb or .gltf sibling — this
+   is what the cataloguer itself requires (tools/catalogue-assets.mjs walks
+   3DResources/ recursively and only picks up .glb/.gltf files; it never
+   reads .fbx directly).
+
+RESULT: catalogue clean, 1903 entries, 0 missing source, 0 missing served.
+
+  total variants checked : 1903
+  missing source (3DResources/...) : 0
+  missing served (world/assets/nature/...) : 0
+
+Per-set FBX -> GLB/GLTF conversion coverage (3DResources/):
+  BIGNature        fbx=150  glb=150  gltf=0     -- fully converted
+  Medieval Village  fbx=176  glb=352  gltf=176   -- fully converted (2 glb variants per model, unrelated to this bug)
+  NNK Style         fbx=136  glb=0    gltf=68    -- see note below, not a gap
+  Simple_Nature     fbx=13   glb=13   gltf=0     -- fully converted
+  ghibli_nature     fbx=0    glb=36   gltf=36    -- pack ships pre-built gltf, no fbx masters here
+  girl#1            fbx=17   glb=18   gltf=0     -- fully converted (+1 extra glb, character rig, unrelated)
+  girl#2            fbx=11   glb=12   gltf=0     -- fully converted
+  kenney-models     fbx=591  glb=1182 gltf=0     -- fully converted (2 glb variants per model)
+  pirates           fbx=0    glb=72   gltf=72    -- pack ships pre-built gltf, no fbx masters here
+
+NOTE on NNK Style: its 136 .fbx live under "FBX/" and "FBX (Unity)/"
+sub-folders (68 models x 2 export flavors); the pack separately ships 68
+pre-built .gltf under its own "glTF/" folder. Same-directory sibling check
+flags all 136 fbx as "no glb", which is correct in isolation but is not a
+conversion gap: the cataloguer never needed to convert these because the
+pack already shipped usable .gltf, which IS what the cataloguer catalogues.
+NNK Style is not in the USED list (catalogue-assets.mjs) so none of it is
+served today regardless.
+
+CONCLUSION
+The specific failure mode described in the session brief — an FBX->GLB batch
+silently dropping files, producing catalogue entries with a `served` path
+that doesn't exist on disk — does not reproduce against the current state of
+this repo. Every family in BIGNature (including Grass, Grass_Short, Plant,
+Cactus, Corn, Wheat, Flowers, Lilypad, TreeStump, WoodLog — none of which
+are in the current USED list) already has a complete, matching set of
+converted .glb files sitting in 3DResources/BIGNature/. Nothing was ever
+lost at the conversion layer for the sets this game currently draws from.
+
+If grass/shrubbery previously failed to render in-game, the most likely
+explanation given this evidence is a runtime or recipe-level gap, not a
+missing file: see world/zones/grassland/catalogue-flora.js and
+world/zones/lagoon/catalogue-flora.js's un-caught promise rejection on a
+per-group GLTFLoader failure (a single 404 or parse error aborts every
+group processed after it in the same await loop, since nothing there was
+wrapped in try/catch) — hardened this session regardless of whether it's
+currently triggered, since it's the exact "silent, cascading" shape the
+brief is worried about. See PROJECT-STATE.md for detail.
+
+Three-layer hardening applied this session so this class of bug becomes
+structurally impossible even if a future asset drop reintroduces a real
+conversion gap:
+  1. tools/convert-fbx.mjs (new) — per-file exit-code checked FBX->GLB
+     conversion with a PASS/FAIL manifest; non-zero process exit on any
+     failure. No such reusable/auditable script existed before this session.
+  2. tools/catalogue-assets.mjs — now checks the source file exists before
+     copyFileSync; a missing source is skipped (no phantom `served` entry
+     written) and reported in a loud end-of-run summary; non-zero exit if
+     anything was skipped.
+  3. world/core/asset-diagnostics.js (new) + both catalogue-flora.js modules
+     — a GLTFLoader failure for one group no longer aborts the whole
+     placement pass; it's caught per-iteration, console.error'd with the
+     exact URL and the family/recipe that referenced it, and surfaced via an
+     on-screen "missing assets: N" badge.

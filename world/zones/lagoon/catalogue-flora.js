@@ -18,6 +18,7 @@ import { WATER_Y, terrainHeight, terrainNormal, catalogueBands } from './terrain
 import { loadCatalogue, findEntries, servedURL, weightedPick } from '../../core/catalogue.js';
 import { loadTintedTemplate } from '../../core/gltf-assets.js';
 import { makeInstanced, addWind, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
+import { reportMissingAsset } from '../../core/asset-diagnostics.js';
 
 const AREA = { min: -95, max: 95 };
 
@@ -83,7 +84,7 @@ export function placeCatalogueFloraSync() {
   // transform: scaleY way up, scaleXZ down, so it reads as fronds, not
   // flat grass tufts sitting on the seabed.
   for (const p of placeBand(rng, catalogueBands.seaweed)) {
-    const sxz = 0.32 + rng() * 0.22, sy = 3.4 + rng() * 2.2;
+    const sxz = 3 + rng() * 0.22, sy = 3.4 + rng() * 2.2;
     addToGroup(groups, { set: 'Simple_Nature', category: null, family: 'Grass', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Grass) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, sxz, sy, sxz));
   }
@@ -97,8 +98,8 @@ export function placeCatalogueFloraSync() {
 
   // Shore bushes — Simple_Nature bush, small vegetation on the waterline-ish band.
   for (const p of placeBand(rng, catalogueBands.shoreBush)) {
-    const s = 0.5 + rng() * 0.6;
-    addToGroup(groups, { set: 'Simple_Nature', category: null, family: 'Bush', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Bush) },
+    const s = .5 + rng() * 0.6;
+    addToGroup(groups, { set: 'BIGNature', category: null, family: 'Rock', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Bush) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
   }
 
@@ -115,16 +116,26 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
   const resolved = [];
   for (const g of groups.values()) {
     const entry = findEntries(manifest, { set: g.set, category: g.category, family: g.family, season: g.season, state: g.state })[0];
-    if (!entry) { console.warn('[lagoon catalogue-flora] no catalogue entry for', g.family); continue; }
+    if (!entry) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no catalogue entry'); continue; }
     const variantRec = entry.variants.find(v => v.variant === g.variant) || entry.variants[0];
-    if (!variantRec?.served) { console.warn('[lagoon catalogue-flora] no served file for', g.family); continue; }
+    if (!variantRec?.served) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no served file'); continue; }
     const tint = g.family === 'Grass' ? SEAWEED_TINT : null;
-    resolved.push({ g, templatePromise: loadTintedTemplate(servedURL(variantRec.served), tint) });
+    const url = servedURL(variantRec.served);
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint) });
   }
 
   const swayMaterials = new Set();
-  for (const { g, templatePromise } of resolved) {
-    const template = await templatePromise;
+  for (const { g, url, templatePromise } of resolved) {
+    // See grassland/catalogue-flora.js's identical guard: one group's load
+    // failure is reported and skipped, never a reason to abort the rest of
+    // this loop (palms/rocks/bushes placed after the failing group).
+    let template;
+    try {
+      template = await templatePromise;
+    } catch (e) {
+      reportMissingAsset(url, `lagoon catalogue-flora: ${g.family} failed to load (${e.message})`);
+      continue;
+    }
     if (g.family === 'Grass') {
       // Underwater sway — reuses the shared addWind helper (the same
       // mechanism Grassland's grass/flowers use) rather than forking a new

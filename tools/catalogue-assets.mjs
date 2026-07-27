@@ -8,7 +8,7 @@
 //
 // Re-run this script any time a new family is added to USED — that's the
 // whole update path, nothing else needs to change by hand.
-import { readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, extname, basename, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -192,7 +192,14 @@ function isUsed(entry) {
   return USED.some(u => u.set === entry.set && u.family === entry.family && (u.category === undefined ? true : u.category === entry.category));
 }
 
+// Catalogue integrity: the catalogue must be structurally incapable of
+// lying about what's servable. A `served` path is only ever written once
+// the file has actually been copied — if the source that walk() found a
+// moment ago has since vanished (deleted, or a symlink that broke), or the
+// copy itself fails, that variant is skipped and reported below instead of
+// silently getting a `served` path nothing backs.
 const copied = [];
+const skipped = [];
 for (const entry of entries) {
   const used = isUsed(entry);
   entry.used = used;
@@ -201,9 +208,15 @@ for (const entry of entries) {
   mkdirSync(destDir, { recursive: true });
   for (const v of entry.variants) {
     const srcAbs = join(ROOT, v.source);
+    if (!existsSync(srcAbs)) { skipped.push({ entry: entry.id, variant: v.variant, source: v.source }); continue; }
     const filename = basename(srcAbs);
     const destAbs = join(destDir, filename);
-    copyFileSync(srcAbs, destAbs);
+    try {
+      copyFileSync(srcAbs, destAbs);
+    } catch (e) {
+      skipped.push({ entry: entry.id, variant: v.variant, source: v.source, reason: e.message });
+      continue;
+    }
     v.served = `assets/nature/${entry.set}/${filename}`;
     copied.push(relative(ROOT, destAbs));
   }
@@ -232,3 +245,12 @@ console.log('Tag counts:');
 for (const [t, n] of Object.entries(tagCounts).sort((a, b) => b[1] - a[1])) console.log(`  ${t.padEnd(14)} ${n}`);
 console.log(`\nCopied ${copied.length} files into ${relative(ROOT, NATURE_OUT)}/:`);
 for (const c of copied) console.log(`  ${c}`);
+
+if (skipped.length) {
+  console.log(`\n\x1b[31m\x1b[1mSKIPPED ${skipped.length} used variant(s) — no phantom catalogue entry written:\x1b[0m`);
+  for (const s of skipped) console.log(`  ${s.entry} variant ${s.variant ?? ''} -- ${s.source}${s.reason ? ` (${s.reason})` : ' (source not found on disk)'}`);
+  console.log(`\x1b[31mRun tools/convert-fbx.mjs against the source FBX to fix, then re-run this script.\x1b[0m`);
+  process.exitCode = 1;
+} else {
+  console.log(`\ncatalogue clean: ${entries.filter(e => e.used).length} used entries, 0 missing`);
+}

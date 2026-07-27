@@ -19,6 +19,7 @@ import { samplePoint, mtx, treePts, scatterFootprints } from './scatter.js';
 import { loadCatalogue, findEntries, servedURL, weightedPick } from '../../core/catalogue.js';
 import { loadTintedTemplate, measureTrunkRadius, measureFootprint } from '../../core/gltf-assets.js';
 import { makeInstanced, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
+import { reportMissingAsset } from '../../core/asset-diagnostics.js';
 
 // Quaternius nature GLBs carry solid per-part materials (no textures, no
 // vertex colors — see the tools/catalogue-assets.mjs inspection notes), so
@@ -205,14 +206,24 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
     const baseEntries = findEntries(manifest, { set: g.set, category: g.category, family: g.family, season: g.season, state: g.state });
     const mossEntries = baseEntries.filter(e => g.moss ? e.tags.includes('moss') : !e.tags.includes('moss'));
     const entry = mossEntries[0] || baseEntries[0];
-    if (!entry) { console.warn('[catalogue-flora] no catalogue entry for', g.family, g.season, g.state); continue; }
+    if (!entry) { reportMissingAsset(`${g.set}/${g.family}/${g.season}/${g.state}`, 'grassland catalogue-flora: no catalogue entry'); continue; }
     const variantRec = entry.variants.find(v => v.variant === g.variant) || entry.variants[0];
-    if (!variantRec?.served) { console.warn('[catalogue-flora] no served file for', g.family, g.season, g.state); continue; }
-    resolved.push({ g, templatePromise: loadTintedTemplate(servedURL(variantRec.served), GRASSLAND_TINT) });
+    if (!variantRec?.served) { reportMissingAsset(`${g.set}/${g.family}/${g.season}/${g.state}`, 'grassland catalogue-flora: no served file'); continue; }
+    const url = servedURL(variantRec.served);
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, GRASSLAND_TINT) });
   }
 
-  for (const { g, templatePromise } of resolved) {
-    const template = await templatePromise; // already in flight (or done) — this await never blocks a fetch that hasn't started yet
+  for (const { g, url, templatePromise } of resolved) {
+    // A load failure here (404, parse error) must not take down every group
+    // that comes after it in this loop — one bad file is reported and
+    // skipped, not a reason to blank the rest of the zone's flora.
+    let template;
+    try {
+      template = await templatePromise; // already in flight (or done) — this await never blocks a fetch that hasn't started yet
+    } catch (e) {
+      reportMissingAsset(url, `grassland catalogue-flora: ${g.family} failed to load (${e.message})`);
+      continue;
+    }
     const instanced = makeInstanced(template, g.matrices);
 
     if (g.family === 'Rock') {
