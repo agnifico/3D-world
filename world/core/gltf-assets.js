@@ -22,17 +22,33 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // GLBs actually carry vertex colors (checked directly — no COLOR_0
 // attribute anywhere in this set); they're solid per-part baseColorFactor
 // materials, so there's no colorspace bug to chase here, just this one.
-function normalizeNatureMaterial(mat) {
+//
+// RESOLVER-BINDING-SESSION Layer 3 — this used to be an unconditional
+// transform applied to EVERY loaded model regardless of pack. Now gated on
+// the caller's resolved pack policy (core/asset-policy.js, surfaced via
+// core/catalogue.js's resolveAsset): 'flat-matte' reproduces this exact
+// former behavior for the packs that need it (BIGNature/Simple_Nature/
+// pirates/kenney-models); 'authored' (the default) leaves the GLB's
+// exported material untouched — this is what let the NNK smoke test prove
+// the old blind override was destroying NNK's canopy detail.
+function applyMaterialPolicy(mat, materialMode) {
+  if (materialMode !== 'flat-matte') return; // 'authored' (default): leave the exported material alone
   mat.metalness = 0;
   mat.roughness = 0.9;
   mat.flatShading = true; // matches every procedural material's own mat() default in assets.js — low-poly faceted, not smoothed
   mat.needsUpdate = true;
 }
 
+const DEFAULT_POLICY = { material: 'authored', scaleFactor: 1 }; // pass-through fallback for a caller that doesn't (yet) pass one
+
 let _loader = null;
 const _templateCache = new Map(); // url -> Promise<THREE.Group>
 
-function loadRaw(url) {
+// policy is a pure function of the url's pack (core/asset-policy.js), and a
+// given url only ever belongs to one pack, so caching by url alone (not
+// url+policy) is safe — no caller can ever request the same url under two
+// different policies.
+function loadRaw(url, policy) {
   if (!_templateCache.has(url)) {
     _loader = _loader || new GLTFLoader();
     _templateCache.set(url, _loader.loadAsync(url).then(gltf => {
@@ -48,7 +64,7 @@ function loadRaw(url) {
       scene.traverse(o => {
         if (!o.isMesh) return;
         o.castShadow = true; o.receiveShadow = true;
-        for (const m of Array.isArray(o.material) ? o.material : [o.material]) normalizeNatureMaterial(m);
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) applyMaterialPolicy(m, policy.material);
       });
       return scene;
     }));
@@ -96,10 +112,10 @@ export function measureFootprint(template) {
 // Cached per (url + remap) so different zones tinting the same source GLB
 // to different palettes never share (or fight over) one mutated material.
 const _tintedCache = new Map();
-export function loadTintedTemplate(url, remap) {
+export function loadTintedTemplate(url, remap, policy = DEFAULT_POLICY) {
   const key = url + '::' + JSON.stringify(remap || {});
   if (!_tintedCache.has(key)) {
-    _tintedCache.set(key, loadRaw(url).then(rawTemplate => {
+    _tintedCache.set(key, loadRaw(url, policy).then(rawTemplate => {
       if (!remap) return rawTemplate;
       const tinted = rawTemplate.clone(true); // clone(true) shares geometry by reference, NOT materials' colors here, since we replace materials below rather than mutate the shared ones
       tinted.traverse(o => {

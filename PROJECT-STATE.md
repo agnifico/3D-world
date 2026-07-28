@@ -44,20 +44,111 @@ reflect current reality as of this session, not a full project history.)
     showroom, not a placement rehearsal).
 
 ## Known bugs / OPEN
-- `world/zones/lagoon/catalogue-flora.js:99-102` — the `shoreBush` band is
-  commented "Shore bushes — Simple_Nature bush, small vegetation" but the
-  code requests `{ set: 'BIGNature', category: null, family: 'Rock' }`,
-  i.e. it actually places BIGNature rocks, not Simple_Nature bushes. Reads
-  like a copy/paste leftover from the reefRock band just above it. Not
-  fixed this session — it's a recipe/content bug, not a pipeline-integrity
-  one, and Track A was scoped to the catalogue/conversion/runtime pipeline
-  only. Flagging for a follow-up session.
+- Lagoon `shoreBush` scale (`world/zones/lagoon/catalogue-flora.js`'s
+  shoreBush loop) is UNVERIFIED in-browser: re-tuned this session against
+  NNK Bush_Common's measured native bbox (the old 2-2.6 range was tuned for
+  a completely different model and would read 3-4u tall). Eyeball and
+  adjust the jitter range or `bindings.js`'s optional `scale` override if
+  it reads wrong.
+- Lagoon `mainShip`'s placement (25,-25) and rotation (0.4 rad) are a
+  reasonable numeric guess (open water, clear of every islet/sandbar/
+  portal — checked against terrain.js's own terrainHeight/depthAt) but
+  UNVERIFIED in-browser. Nudge `bindings.js`'s `where`/`rotation` if it
+  reads wrong.
 
 ## Queue
-1. Fix the `shoreBush` family mismatch above (small, isolated).
+1. Eyeball-verify the two RESOLVER-BINDING-SESSION proof bindings above
+   (shoreBush scale, mainShip placement) and adjust in `bindings.js` if
+   needed — no code change either way, just constants.
 2. Lagoon reed/groundcover as its own catalogue flora entry — placement/
-   design pass, not pipeline work. [surfaced this session as the next
-   flora-content item once catalogue integrity was confirmed clean]
+   design pass, not pipeline work. [surfaced pre-RESOLVER-BINDING-SESSION as
+   the next flora-content item once catalogue integrity was confirmed clean]
+3. Promote script (`npm run promote`, shelf -> served) and the area
+   designer — both explicitly deferred out of RESOLVER-BINDING-SESSION's
+   scope; the area designer needs the binding tables below to exist first,
+   which they now do.
+4. Consider whether `pirates` pack policy (`world/core/asset-policy.js`)
+   should flip from 'flat-matte' to 'authored' — direct GLB inspection this
+   session found it carries a real texture atlas (same class as NNK), but it
+   was kept flat-matte to avoid changing the already-served PalmTree/Rock
+   look without Agni eyeballing first. One-line edit either way.
+
+## RESOLVER-BINDING-SESSION — 2026-07-28/29 (asset reference layer)
+Built the promised "use any of my 1,903 models by name, anywhere, without
+touching code" as three layers:
+
+1. **Layer 1 — resolver** (`world/core/catalogue.js`): `resolveAsset(manifest,
+   catalogueId, variant?)` returns `{ url, pack, entry, policy }` — served
+   path if the entry is `used`, else its shelf `source` path (same
+   served-or-shelf logic the NNK smoke test proved out), plus the pack's
+   Layer 3 policy. `parseCatalogueId(id)` is a new pure string decode (no
+   manifest needed) of the documented canonical id shape
+   `${set}:${category||''}:${family}:${season}:${state}:${extra}` — this is
+   what lets a zone's SYNC placement pass read a binding's pack before the
+   (async) catalogue.json fetch could possibly resolve. `findEntries` no
+   longer hard-filters to `used===true` (checked: its only two callers,
+   grassland/lagoon catalogue-flora.js, both now resolve served-or-shelf
+   themselves) — this is what makes shelf-only bindings (NNK, the pirates
+   ship) actually work through the existing scatter/placement pipeline
+   instead of silently reporting "no catalogue entry". `resolveAssetUrl`
+   (the smoke test's narrower helper) is retired; `resolveAsset` supersedes
+   it.
+2. **Layer 2 — per-zone binding tables**: `world/zones/{grassland,lagoon,
+   highland}/bindings.js`, same row shape everywhere — `{ family, id,
+   count?, scale?, rotation?, tint?, where? }`. Grassland/lagoon's existing
+   hardcoded `{set:'BIGNature',...}` literals in catalogue-flora.js's
+   placement loops now read `PACK[family]` (parsed once from the binding's
+   id) instead — a repoint is a one-line edit to bindings.js, no other code
+   changes. Highland's is intentionally empty (structural only): its own
+   terrain.js scatterRecipe is still `held: true`, unrelated to and not
+   unpaused by this session.
+   - **shoreBush fix** (`lagoon/bindings.js`): was `{set:'Simple_Nature',
+     family:'Grass'}` (comment said bush, code placed grass), then — found
+     already mid-edit, uncommitted, in the working tree at session start —
+     `{set:'NNK Style', family:'Bush'}` (closer, but 'Bush' isn't a real NNK
+     family, so it silently resolved to nothing). Fixed to the real family,
+     `NNK Style::Bush_Common:normal:alive:` — this is also this session's
+     "bind one NNK family into a zone" proof, landed as a real scatter
+     species rather than a one-off static prop.
+   - **mainShip** (`lagoon/bindings.js`, new): `pirates:Ship:Large:normal:
+     alive:` — a single hand-placed prop (not a scatter species), placed at
+     (25,-25) in open water via a new `placeMainShip()` in lagoon/catalogue-
+     flora.js. This is the session's main proof: a shelf-only, never-before-
+     served model reachable purely by editing a data file.
+3. **Layer 3 — per-pack policy** (`world/core/asset-policy.js`, new):
+   `{ material: 'authored'|'flat-matte', scaleFactor }` per pack, default
+   (absent) = pass-through authored/1x. This REPLACES the unconditional
+   flatShading/metalness/roughness override that used to apply to every
+   loaded model in `core/gltf-assets.js` regardless of pack — confirmed via
+   direct GLB inspection this session that BIGNature/Simple_Nature carry
+   solid untextured materials (the override's actual intended target, kept
+   flat-matte) while NNK/pirates/ghibli_nature carry a real baseColorTexture
+   atlas the override was never validated against (NNK authored per the
+   smoke test's own finding; pirates deliberately kept flat-matte anyway —
+   see Queue item 4 — to avoid changing the already-served palm/rock look
+   without a human eyeballing it first). `gltf-assets.js`'s
+   `loadTintedTemplate`/`loadRaw` now take a `policy` param (default
+   pass-through, not the old hardcoded override) — every caller updated:
+   both catalogue-flora.js files, gallery/zone.js's two call sites (keyed
+   off each room's pack, so Gallery v4's shelf walk gets correct-per-pack
+   treatment too, not just the two placement zones).
+
+**Verified** (agent-checkable, no browser needed): every binding id parses
+to the exact real catalogue.json entry (set/category/family match
+exactly); `resolveAsset` produces correct served-vs-shelf URLs for a served
+entry (BIGNature CommonTree), a shelf .glb (pirates Ship_Large), and a
+shelf .gltf+.bin+texture (NNK Bush_Common) — all three files confirmed to
+exist on disk at the exact resolved paths, including the NNK gltf's
+separately-referenced .bin and .png. `node --check` clean on every new/
+edited file. grassland's migration is a confirmed no-op (every BIGNature
+policy scaleFactor is 1, so the new `PACK[family].policy.scaleFactor`
+multiplier changes nothing already shipping).
+
+**Not verified** (needs Agni, eyeball-only per the session brief — this is
+deterministic plumbing, failure is a visible 404 or an obviously-wrong
+scale, nothing subtle): the ship actually appearing in Lagoon at a sane
+size with its texture visible; shoreBush's re-tuned scale reading right;
+whether pirates' flat-matte call (Queue item 4) is the one Agni wants.
 
 ## Catalogue integrity — 2026-07-27 (Track A)
 **Root cause: not present in the current repo.** Audited all 1903 catalogue

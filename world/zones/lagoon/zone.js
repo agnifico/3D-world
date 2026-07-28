@@ -11,7 +11,7 @@ import {
 import { createLagoon } from './lagoon-fx.js';
 import { disposeGroup, registerPortals } from '../../core/zone.js';
 import { createStoneArch } from '../../core/portal-arch.js';
-import { placeCatalogueFloraSync, instantiateCatalogueFlora } from './catalogue-flora.js';
+import { placeCatalogueFloraSync, instantiateCatalogueFlora, placeMainShip } from './catalogue-flora.js';
 
 // The data zone object lagoon-fx.js's createLagoon(zone) expects — same
 // shape terrain.js used to bundle as its own default export.
@@ -53,6 +53,7 @@ function build(ctx) {
   // catalogue-flora.js.
   const { groups: catalogueFloraGroups } = placeCatalogueFloraSync();
   instantiateCatalogueFlora(ctx, ctx.scene, catalogueFloraGroups).catch(e => console.error('[lagoon catalogue-flora]', e));
+  placeMainShip(ctx.scene).catch(e => console.error('[lagoon mainShip]', e)); // RESOLVER-BINDING-SESSION proof binding — fire-and-forget, same convention as above
 
   // Lagoon resolves its OWN 4-keyframe day cycle internally (richer than the
   // shell's generic 2-field blend — water depth stops, terrain grade,

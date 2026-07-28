@@ -1,13 +1,18 @@
 // Gallery zone — the Zone contract object (see core/zone.js). A walkable
-// showroom that force-loads every served catalogue entry, one family ("room")
-// at a time: [ and ] page between rooms (fully disposing the previous
-// room's models), M marks the nearest model keep/fix/cut, X exports one
-// gallery-marks.json covering the WHOLE served set. This is the only thing
-// that touches every catalogue entry the game could place — recipe-driven
-// zones (Grassland, Lagoon) only load what they actually scatter.
+// showroom over the WHOLE catalogue (Gallery v4: every entry Agni owns —
+// 1,903 variants across ~876 family rooms — not just the 131 the game
+// currently serves), one family ("room") at a time: [ and ] page between
+// rooms (fully disposing the previous room's models), M marks the nearest
+// model keep/fix/cut, X exports one gallery-marks.json covering the WHOLE
+// catalogue. Served entries load through the game path (core/gltf-assets.js
+// + FAMILY_SCALE); shelf (never-served) entries load straight from their
+// 3DResources/ source — see rooms.js's loadUrl resolution. A "keep" mark on
+// a shelf model is the promotion shopping list for a later session; this one
+// only makes the shelf visible and walkable, it never copies or catalogues
+// anything itself.
 import * as THREE from 'three';
-import { servedURL } from '../../core/catalogue.js';
 import { loadTintedTemplate } from '../../core/gltf-assets.js';
+import { getPackPolicy } from '../../core/asset-policy.js';
 import { loadRooms } from './rooms.js';
 import * as Marks from './marks.js';
 
@@ -34,7 +39,7 @@ let currentViews = []; // [{ slot, wrapper, label, template, failed }] for the A
 let focusedView = null;
 let focusRing = null;
 let rawMode = false;
-let exportBtn = null;
+let exportBtn = null, roomJump = null;
 
 // A single shared placeholder geometry, reused for every loading/load-failed
 // slot across the gallery's whole lifetime — tagged sharedGeometry so
@@ -82,6 +87,23 @@ function updateLabel(sprite, text, verdict) {
   sprite.material.map.needsUpdate = true;
 }
 
+// Small corner tag distinguishing what the game already ships (SERVED) from
+// what's only ever been catalogued (SHELF) — independent of the keep/fix/cut
+// verdict color, so the two signals never get confused.
+function makeStatusTag(used) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 56;
+  const cx = cv.getContext('2d');
+  cx.fillStyle = used ? '#3a7bd5' : '#b8781f';
+  cx.font = '700 30px system-ui, sans-serif';
+  cx.textAlign = 'center';
+  cx.fillText(used ? 'SERVED' : 'SHELF', 128, 38);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+  sp.scale.set(1.5, 0.33, 1);
+  sp.renderOrder = 10;
+  sp.userData.galleryOwned = true;
+  return sp;
+}
+
 function makePlaceholder(failed) {
   const mesh = new THREE.Mesh(PLACEHOLDER_GEO, new THREE.MeshBasicMaterial({ color: failed ? 0xe0453a : 0xbbbbbb, wireframe: true }));
   if (failed) mesh.scale.setScalar(1.6);
@@ -116,7 +138,7 @@ function makeFocusRing() {
 async function measureRoomCellSize(room) {
   if (!room.slots.length) return 6;
   try {
-    const template = await loadTintedTemplate(servedURL(room.slots[0].served), null);
+    const template = await loadTintedTemplate(room.slots[0].loadUrl, null, getPackPolicy(room.set));
     const size = new THREE.Box3().setFromObject(template).getSize(new THREE.Vector3());
     return Math.max(3, Math.max(size.x, size.z) * 2.8 + 2);
   } catch {
@@ -132,6 +154,7 @@ async function loadRoom(idx) {
   rawMode = false;
   roomIdx = idx;
   const room = rooms[idx];
+  if (roomJump) roomJump.value = String(idx);
   roomGroup = new THREE.Group();
   sceneRoot.add(roomGroup);
 
@@ -151,28 +174,32 @@ async function loadRoom(idx) {
     const placeholder = makePlaceholder(false);
     wrapper.add(placeholder);
 
-    const label = makeLabel(`${slot.name} …`, Marks.getVerdict(slot.served));
+    const label = makeLabel(`${slot.name} …`, Marks.getVerdict(slot.marksKey));
     label.position.set(0, 1.9, 0.6);
     wrapper.add(label);
+
+    const tag = makeStatusTag(slot.used);
+    tag.position.set(0, 2.35, 0.6);
+    wrapper.add(tag);
 
     const view = { slot, wrapper, label, template: null, failed: false };
     currentViews.push(view);
 
-    loadTintedTemplate(servedURL(slot.served), null).then(template => {
+    loadTintedTemplate(slot.loadUrl, null, getPackPolicy(room.set)).then(template => {
       if (token !== roomToken) return;
       wrapper.remove(placeholder);
       const clone = template.clone(true);
       clone.scale.setScalar(rawMode ? 1 : (FAMILY_SCALE[slot.family] || 1));
       wrapper.add(clone);
       view.template = clone;
-      updateLabel(label, slot.name, Marks.getVerdict(slot.served));
+      updateLabel(label, slot.name, Marks.getVerdict(slot.marksKey));
     }).catch(e => {
       if (token !== roomToken) return;
       wrapper.remove(placeholder);
       wrapper.add(makePlaceholder(true));
       view.failed = true;
-      Marks.setLoadFail(slot.served, e.message);
-      console.error(`[gallery] ${slot.served} failed to load: ${e.message}`);
+      Marks.setLoadFail(slot.marksKey, e.message);
+      console.error(`[gallery] ${slot.loadUrl} failed to load: ${e.message}`);
       updateLabel(label, `${slot.name} — LOAD FAIL`, 'loadfail');
     });
   });
@@ -185,7 +212,7 @@ function pageRoom(delta) {
 
 function handleMark() {
   if (!focusedView) return;
-  const verdict = Marks.cycleMark(focusedView.slot.served);
+  const verdict = Marks.cycleMark(focusedView.slot.marksKey);
   updateLabel(focusedView.label, focusedView.failed ? `${focusedView.slot.name} — LOAD FAIL` : focusedView.slot.name, verdict);
 }
 
@@ -228,13 +255,31 @@ function makeExportButton() {
   return btn;
 }
 
+// ~876 rooms means the [ ] pager alone can't reach a given family in
+// reasonable time — a native <select> gets type-to-jump and keyboard
+// navigation for free (every browser already implements it for free-text
+// option search) without building a custom search UI. Populated once rooms
+// resolve; blurred right after a jump so WASD movement isn't swallowed by
+// the still-focused control.
+function makeRoomJump() {
+  const select = document.createElement('select');
+  select.style.cssText = 'position:fixed; right:12px; top:12px; z-index:5; font:600 12px ui-sans-serif, system-ui, sans-serif; padding:5px 8px; border-radius:6px; max-width:280px;';
+  select.addEventListener('change', () => { loadRoom(Number(select.value)); select.blur(); });
+  document.body.appendChild(select);
+  return select;
+}
+function populateRoomJump() {
+  if (!roomJump) return;
+  roomJump.innerHTML = rooms.map((r, i) => `<option value="${i}">${r.key} (${r.slots.length})</option>`).join('');
+}
+
 function renderHud() {
   const el = document.getElementById('hudText');
   if (!el || !rooms.length) return;
   const room = rooms[roomIdx];
   const t = Marks.totals(rooms.flatMap(r => r.slots));
-  el.innerHTML = `<b>Gallery — ${room.family}</b> <small style="opacity:.55">room ${roomIdx + 1} of ${rooms.length} · ${room.slots.length} models</small><br>`
-    + `<b>[ ]</b> page rooms · <b>M</b> mark keep/fix/cut · <b>X</b> export JSON · <b>R</b> raw scale (${rawMode ? 'ON' : 'off'}) · <b>K</b> back to world<br>`
+  el.innerHTML = `<b>Gallery — ${room.key}</b> <small style="opacity:.55">room ${roomIdx + 1} of ${rooms.length} · ${room.servedCount} served / ${room.shelfCount} shelf</small><br>`
+    + `<b>[ ]</b> page rooms · dropdown (top-right) jumps rooms · <b>M</b> mark keep/fix/cut · <b>X</b> export JSON · <b>R</b> raw scale (${rawMode ? 'ON' : 'off'}) · <b>K</b> back to world<br>`
     + `keep ${t.keep} · fix ${t.fix} · cut ${t.cut} · loadfail ${t.loadfail} · unmarked ${t.unmarked}`;
 }
 
@@ -266,11 +311,13 @@ function build(ctx) {
   sceneRoot.add(focusRing);
 
   exportBtn = makeExportButton();
+  roomJump = makeRoomJump();
   addEventListener('keydown', onKeydown, { signal: abortCtl.signal });
 
   loadRooms().then(loaded => {
     rooms = loaded;
     if (!sceneRoot) return; // disposed before the catalogue fetch resolved
+    populateRoomJump();
     loadRoom(0);
   });
 
@@ -295,8 +342,9 @@ function dispose() {
   disposeOwned(sceneRoot);
   realScene.remove(sceneRoot);
   exportBtn?.remove();
+  roomJump?.remove();
   abortCtl?.abort();
-  rooms = []; roomGroup = null; currentViews = []; focusedView = null; exportBtn = null;
+  rooms = []; roomGroup = null; currentViews = []; focusedView = null; exportBtn = null; roomJump = null;
   sceneRoot = null; realScene = null; getChar = null; abortCtl = null;
   roomToken++;
 }

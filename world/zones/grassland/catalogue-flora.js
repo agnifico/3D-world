@@ -16,10 +16,22 @@ import * as THREE from 'three';
 import * as A from './assets.js';
 import { terrainHeight, WATER_Y } from './world.js';
 import { samplePoint, mtx, treePts, scatterFootprints } from './scatter.js';
-import { loadCatalogue, findEntries, servedURL, weightedPick } from '../../core/catalogue.js';
+import { loadCatalogue, findEntries, servedURL, sourceURL, weightedPick, parseCatalogueId } from '../../core/catalogue.js';
 import { loadTintedTemplate, measureTrunkRadius, measureFootprint } from '../../core/gltf-assets.js';
 import { makeInstanced, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
 import { reportMissingAsset } from '../../core/asset-diagnostics.js';
+import { getPackPolicy } from '../../core/asset-policy.js';
+import { bindings } from './bindings.js';
+
+// RESOLVER-BINDING-SESSION Layer 2 — resolves each binding's id once, pure
+// sync string parse (core/catalogue.js's parseCatalogueId), no manifest
+// fetch needed. Keyed by the same family names placement below already
+// switches on, so a binding repoint (edit bindings.js) is a one-line change
+// here to take effect, nothing else in this file needs to know.
+const PACK = Object.fromEntries(Object.entries(bindings).map(([slot, b]) => {
+  const parsed = parseCatalogueId(b.id);
+  return [slot, { ...parsed, policy: getPackPolicy(parsed.set) }];
+}));
 
 // Quaternius nature GLBs carry solid per-part materials (no textures, no
 // vertex colors — see the tools/catalogue-assets.mjs inspection notes), so
@@ -135,8 +147,9 @@ export function placeCatalogueFloraSync() {
 
     let s = 0.85 + R() * 0.45;
     s *= FAMILY_SCALE[family] || 1;
+    s *= PACK[family].policy.scaleFactor;
     const sy = s * (0.95 + R() * 0.1);
-    addToGroup(groups, { set: 'BIGNature', category: null, family, season, state, variant },
+    addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family, season, state, variant },
       mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, sy));
     treePts.push(p);
     scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 }); // canopy proxy — spacing/avoidance only, NOT the collider (see instantiateCatalogueFlora)
@@ -152,8 +165,10 @@ export function placeCatalogueFloraSync() {
     const state = 'alive';
     const rockSeason = season === 'snow' ? 'snow' : (R() < 0.2 ? 'mossy' : 'normal'); // 'mossy' resolved to the Rock+moss entry below
     const variant = pickVariant(R, 'Rock');
-    const s = 0.5 + R() * 1.2, sy = s * (0.8 + R() * 0.5);
-    addToGroup(groups, { set: 'BIGNature', category: null, family: 'Rock', season: rockSeason === 'mossy' ? 'normal' : rockSeason, state, variant, moss: rockSeason === 'mossy' },
+    let s = 0.5 + R() * 1.2;
+    s *= PACK.Rock.policy.scaleFactor;
+    const sy = s * (0.8 + R() * 0.5);
+    addToGroup(groups, { set: PACK.Rock.set, category: PACK.Rock.category, family: 'Rock', season: rockSeason === 'mossy' ? 'normal' : rockSeason, state, variant, moss: rockSeason === 'mossy' },
       mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, sy));
     scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 });
     placed++;
@@ -173,7 +188,8 @@ export function placeCatalogueFloraSync() {
     const variant = pickVariant(R, family);
     let s = 0.7 + R() * 0.8;
     s *= FAMILY_SCALE[family] || 1;
-    addToGroup(groups, { set: 'BIGNature', category: null, family, season: bushSeason, state: 'alive', variant },
+    s *= PACK[family].policy.scaleFactor;
+    addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family, season: bushSeason, state: 'alive', variant },
       mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
     scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r: s * 0.7 }); // decorative — walk-through
     placed++;
@@ -208,9 +224,12 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
     const entry = mossEntries[0] || baseEntries[0];
     if (!entry) { reportMissingAsset(`${g.set}/${g.family}/${g.season}/${g.state}`, 'grassland catalogue-flora: no catalogue entry'); continue; }
     const variantRec = entry.variants.find(v => v.variant === g.variant) || entry.variants[0];
-    if (!variantRec?.served) { reportMissingAsset(`${g.set}/${g.family}/${g.season}/${g.state}`, 'grassland catalogue-flora: no served file'); continue; }
-    const url = servedURL(variantRec.served);
-    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, GRASSLAND_TINT) });
+    if (!variantRec) { reportMissingAsset(`${g.set}/${g.family}/${g.season}/${g.state}`, 'grassland catalogue-flora: no variant record'); continue; }
+    // RESOLVER-BINDING-SESSION — served-or-shelf, same fallback core/
+    // catalogue.js's resolveAsset uses: a binding can point at a shelf-only
+    // (never-served) entry, not just BIGNature's currently-all-served set.
+    const url = variantRec.served ? servedURL(variantRec.served) : sourceURL(variantRec.source);
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, GRASSLAND_TINT, getPackPolicy(g.set)) });
   }
 
   for (const { g, url, templatePromise } of resolved) {

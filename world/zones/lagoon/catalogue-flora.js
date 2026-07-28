@@ -15,12 +15,21 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../../core/math.js';
 import { WATER_Y, terrainHeight, terrainNormal, catalogueBands } from './terrain.js';
-import { loadCatalogue, findEntries, servedURL, weightedPick } from '../../core/catalogue.js';
+import { loadCatalogue, findEntries, servedURL, sourceURL, weightedPick, parseCatalogueId, resolveAsset } from '../../core/catalogue.js';
 import { loadTintedTemplate } from '../../core/gltf-assets.js';
 import { makeInstanced, addWind, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
 import { reportMissingAsset } from '../../core/asset-diagnostics.js';
+import { getPackPolicy } from '../../core/asset-policy.js';
+import { bindings } from './bindings.js';
 
 const AREA = { min: -95, max: 95 };
+
+// RESOLVER-BINDING-SESSION Layer 2 — see grassland/catalogue-flora.js's
+// identical PACK map for why this is a pure sync parse (no manifest fetch).
+const PACK = Object.fromEntries(Object.entries(bindings).map(([slot, b]) => {
+  const parsed = parseCatalogueId(b.id);
+  return [slot, { ...parsed, policy: getPackPolicy(parsed.set) }];
+}));
 
 // Simple_Nature's grass GLB carries one solid-color material named "Leaves"
 // (no texture, no vertex colors — same convention as BIGNature's nature
@@ -29,7 +38,10 @@ const AREA = { min: -95, max: 95 };
 // a green lifted straight from Grassland.
 const SEAWEED_TINT = { Leaves: '#3f7d5a' };
 
-const VARIANT_COUNT = { PalmTree: 3, Grass: 3, Rock: 5, Bush: 3 };
+// Keyed by SLOT (not resolved family) — a binding repoint can change how
+// many variants the bound entry actually has, so this needs a matching edit
+// alongside bindings.js's id, same discipline as grassland's VARIANT_COUNT.
+const VARIANT_COUNT = { palmTree: 3, seaweed: 3, reefRock: 5, shoreBush: 1 };
 function pickVariant(rng, n) {
   const items = Array.from({ length: n }, (_, i) => i + 1);
   return weightedPick(items, rng);
@@ -74,8 +86,9 @@ export function placeCatalogueFloraSync() {
   // Palms — real Pirates models, land band (above water, same footprint the
   // old placeholder/temp-swap palms used).
   for (const p of placeBand(rng, catalogueBands.palm)) {
-    const s = 0.8 + rng() * 0.6;
-    addToGroup(groups, { set: 'pirates', category: 'Environment', family: 'PalmTree', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.PalmTree) },
+    const pack = PACK.palmTree;
+    const s = (0.8 + rng() * 0.6) * pack.policy.scaleFactor;
+    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.palmTree) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
   }
 
@@ -84,22 +97,33 @@ export function placeCatalogueFloraSync() {
   // transform: scaleY way up, scaleXZ down, so it reads as fronds, not
   // flat grass tufts sitting on the seabed.
   for (const p of placeBand(rng, catalogueBands.seaweed)) {
-    const sxz = 3 + rng() * 0.22, sy = 3.4 + rng() * 2.2;
-    addToGroup(groups, { set: 'Simple_Nature', category: null, family: 'Grass', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Grass) },
+    const pack = PACK.seaweed;
+    const sxz = (3 + rng() * 0.22) * pack.policy.scaleFactor, sy = (3.4 + rng() * 2.2) * pack.policy.scaleFactor;
+    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.seaweed) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, sxz, sy, sxz));
   }
 
   // Reef rocks — Pirates rocks, shallow band.
   for (const p of placeBand(rng, catalogueBands.reefRock)) {
-    const s = 0.5 + rng() * 0.9;
-    addToGroup(groups, { set: 'pirates', category: 'Environment', family: 'Rock', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Rock) },
+    const pack = PACK.reefRock;
+    const s = (0.5 + rng() * 0.9) * pack.policy.scaleFactor;
+    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.reefRock) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
   }
 
-  // Shore bushes — Simple_Nature bush, small vegetation on the waterline-ish band.
+  // Shore bushes — NNK Style Bush_Common (RESOLVER-BINDING-SESSION fix, see
+  // bindings.js's header). Native GLB bbox measured directly: ~1.6u tall —
+  // the old 2-2.6 scale range was tuned for a totally different model
+  // (Simple_Nature's stretched grass blade) and would read 3-4u tall here,
+  // taller than the character. Re-tuned against Bush_Common's own measured
+  // height, landing ~0.5-0.7u once the NNK pack's 0.4x policy scaleFactor is
+  // folded in (core/asset-policy.js) — UNVERIFIED in-browser, eyeball and
+  // adjust this range (or bindings.js's optional `scale` override) if it
+  // reads wrong.
   for (const p of placeBand(rng, catalogueBands.shoreBush)) {
-    const s = 2 + rng() * 0.6;
-    addToGroup(groups, { set: 'Simple_Nature', category: null, family: 'Grass', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Bush) },
+    const pack = PACK.shoreBush;
+    const s = (0.85 + rng() * 0.3) * pack.policy.scaleFactor;
+    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.shoreBush) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
   }
 
@@ -118,10 +142,13 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
     const entry = findEntries(manifest, { set: g.set, category: g.category, family: g.family, season: g.season, state: g.state })[0];
     if (!entry) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no catalogue entry'); continue; }
     const variantRec = entry.variants.find(v => v.variant === g.variant) || entry.variants[0];
-    if (!variantRec?.served) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no served file'); continue; }
+    if (!variantRec) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no variant record'); continue; }
     const tint = g.family === 'Grass' ? SEAWEED_TINT : null;
-    const url = servedURL(variantRec.served);
-    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint) });
+    // RESOLVER-BINDING-SESSION — served-or-shelf, same fallback core/
+    // catalogue.js's resolveAsset uses: a binding can now point at a
+    // shelf-only (never-served) entry, like shoreBush's NNK Style bush.
+    const url = variantRec.served ? servedURL(variantRec.served) : sourceURL(variantRec.source);
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint, getPackPolicy(g.set)) });
   }
 
   const swayMaterials = new Set();
@@ -163,4 +190,38 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
   scene.add(palmGroup, seaweedGroup, rockGroup, bushGroup);
   summarizeInstancing('lagoon catalogue flora (palm+seaweed+rock+bush)', [palmGroup, seaweedGroup, rockGroup, bushGroup]);
   if (ctx.renderer) logDrawCallsNextFrame(ctx, ctx.renderer, 'lagoon (post catalogue-flora)');
+}
+
+// RESOLVER-BINDING-SESSION proof binding — mainShip isn't a scatter species
+// like the four above: one hand-placed prop, resolved straight through
+// Layer 1 (core/catalogue.js's resolveAsset) rather than findEntries, and
+// loaded with its pack's Layer 3 policy. No matrix-group batching — a
+// one-instance InstancedMesh would be pure overhead for a single prop. Not
+// part of the two-phase sync/async split above: no placement budget or
+// treePts-style ordering dependency to protect, same as the (now-retired)
+// NNK smoke test's own placement, which used this same direct-load shape.
+// Fire-and-forget from lagoon/zone.js, same convention as
+// instantiateCatalogueFlora above.
+export async function placeMainShip(scene) {
+  const b = bindings.mainShip;
+  const manifest = await loadCatalogue();
+  const resolved = resolveAsset(manifest, b.id);
+  if (!resolved) { reportMissingAsset(b.id, 'lagoon bindings: mainShip catalogue id not found'); return; }
+  let template;
+  try {
+    template = await loadTintedTemplate(resolved.url, null, resolved.policy);
+  } catch (e) {
+    reportMissingAsset(resolved.url, `lagoon bindings: mainShip failed to load (${e.message})`);
+    return;
+  }
+  const ship = template.clone(true);
+  const scale = (b.scale ?? 1) * resolved.policy.scaleFactor;
+  ship.scale.setScalar(scale);
+  ship.rotation.y = b.rotation ?? 0;
+  // Floats at the waterline, same -0.15 draft convention core/boats.js uses
+  // for every actually-sailable boat spawn — this ship is a static prop,
+  // not a rideable one, but the same "just barely submerged" look applies.
+  ship.position.set(b.where.x, WATER_Y - 0.15, b.where.z);
+  ship.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(ship);
 }
