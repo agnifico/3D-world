@@ -23,7 +23,8 @@ import { createStoneArch } from '../../core/portal-arch.js';
 // on foot. (55,33) numerically checked against terrainHeight — 3.3 units
 // underwater, well clear of the shoreline.
 const PORTALS = [
-  { id: 'shore-arch', x: 55, z: 33, targetZone: 'lagoon', targetPortal: 'drowned-arch' },
+  { id: 'shore-arch',    x: 55, z: 33, targetZone: 'lagoon',   targetPortal: 'drowned-arch' },
+  { id: 'highland-arch', x: 22, z: 49, targetZone: 'highland', targetPortal: 'plunge-arch' },
 ];
 
 // scratch Color reused by the water-blend subscriber below (module-scope so

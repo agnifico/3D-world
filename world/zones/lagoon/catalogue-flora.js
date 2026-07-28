@@ -98,8 +98,8 @@ export function placeCatalogueFloraSync() {
 
   // Shore bushes — Simple_Nature bush, small vegetation on the waterline-ish band.
   for (const p of placeBand(rng, catalogueBands.shoreBush)) {
-    const s = .5 + rng() * 0.6;
-    addToGroup(groups, { set: 'BIGNature', category: null, family: 'Rock', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Bush) },
+    const s = 2 + rng() * 0.6;
+    addToGroup(groups, { set: 'Simple_Nature', category: null, family: 'Grass', season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.Bush) },
       mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
   }
 

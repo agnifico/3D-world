@@ -262,7 +262,7 @@ const KENNEY_PLACEMENTS = [
   ['resource-stone-large', 36, -33.6, 0.3],
   ['campfire-fishing-stand', 24, 30, 2.4], ['fish', 25.6, 31, 0.5], ['fish', 26.2, 30, -0.4, 0.8],
   ['boat-row-small', 42, 47, 1.2, 0.75, true],
-  ['ship-large', 10.58, 92.91, 1.384, 0.75, true],
+  ['ship-large', 50, 80, 1.384, .75, true],
   ['boat-fishing-small', 46, 51, 2.0, 1, true],
   ['flag', -52, 58, 0.5],
 ];

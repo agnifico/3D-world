@@ -17,8 +17,10 @@ import { CHARACTER } from './character/character.js';
 import { initController } from './character/controller.js';
 import grasslandZone from './zones/grassland/zone.js';
 import lagoonZone from './zones/lagoon/zone.js';
+import highland from './zones/highland/zone.js';
+import galleryZone from './zones/gallery/zone.js';
 
-const ZONES = { grassland: grasslandZone, lagoon: lagoonZone };
+const ZONES = { grassland: grasslandZone, lagoon: lagoonZone, highland: highland, gallery: galleryZone };
 
 // ================= renderer / scene / camera =================
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -63,7 +65,7 @@ const coordsEl = document.getElementById('coords');
 let currentCharName = CHARACTER;
 let WORLD_HUD = '';
 function buildWorldHud() {
-  return `<b>${currentZone ? currentZone.name : 'World'}</b> <small style="opacity:.55">world shell</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>N</b> day/night · <b>C</b> character (${currentCharName}) · <b>1-3</b> emote`;
+  return `<b>${currentZone ? currentZone.name : 'World'}</b> <small style="opacity:.55">world shell</small><br>WASD move · Space jump/dive · hold right-click to look (all directions) · scroll zoom · Shift walk/run · swim in deep water · <b>E</b> board / interact · <b>G</b> gallery · <b>K</b> catalogue gallery · <b>N</b> day/night · <b>C</b> character (${currentCharName}) · <b>1-3</b> emote`;
 }
 
 let overlayOpen = false; // true while a zone's own overlay (e.g. Grassland's gallery) is open
@@ -219,6 +221,21 @@ addEventListener('keydown', e => {
   if (!e.isTrusted || e.code !== 'KeyP') return;
   const portal = currentZone?.portals?.[0];
   if (portal) crossPortal(portal);
+});
+
+// Catalogue gallery (K): a full zone swap, not an overlay, so it force-loads
+// every served catalogue entry via the same build/dispose lifecycle any
+// other zone gets. Remembers which zone was active so K again returns there.
+let zoneBeforeGallery = null;
+addEventListener('keydown', e => {
+  if (!e.isTrusted || e.code !== 'KeyK' || overlayOpen) return;
+  if (currentZone?.id === 'gallery') {
+    loadZone(zoneBeforeGallery || 'grassland');
+    zoneBeforeGallery = null;
+  } else {
+    zoneBeforeGallery = currentZone?.id;
+    loadZone('gallery');
+  }
 });
 
 const _params = new URLSearchParams(location.search);

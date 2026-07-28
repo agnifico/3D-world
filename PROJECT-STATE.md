@@ -9,6 +9,39 @@ reflect current reality as of this session, not a full project history.)
 - Brief 10 — nature material normalization (metalness/roughness) + per-family
   scale correction (willows up, bushes down).
 - Catalogue integrity (Track A) — see detail below.
+- Gallery v3 (2026-07-28) — paginated catalogue gallery, restored as a full
+  zone (`world/zones/gallery/`) on the **K** hotkey (`G` still opens
+  Grassland's own procedural-factory overlay, untouched). Groups all 131
+  served catalogue variants into 11 family rooms; `[`/`]` page between them,
+  fully disposing the previous room's models each time (verified stable at
+  ~197 geometries across 5 K in/out cycles + a full double pass through all
+  11 rooms — no growth). Walk near a model, **M** cycles
+  unmarked→keep→fix→cut (label recolors white/green/amber/red); a failed
+  load auto-marks `loadfail` (red wireframe box) with the caught error
+  string. **X** downloads one `gallery-marks.json` covering every served
+  entry, visited or not, plus a best-effort clipboard copy. **R** toggles
+  the per-family Brief-10 scale correction off for the current room (native
+  1:1 scale) to compare against the shipping look. Marks persist to
+  `localStorage` (`gallery-marks`) — the one sanctioned exception to
+  CLAUDE.md's no-storage rule, confirmed with the user; see the hard-
+  constraints section there. Verified end-to-end with a headless-Chromium
+  Playwright driver (not just `node --check`): room paging, marking,
+  raw-scale toggle, export schema, and a forced load-failure (aborted GLB
+  request) all behave correctly, zero console errors.
+  - One real bug caught during verification, fixed before shipping:
+    `main.js`'s `handleCharacterChanged` (fires whenever the character's
+    async GLB finishes loading, independent of zone) overwrites
+    `hudText.innerHTML` with the generic per-zone HUD. If that lands after
+    the gallery's own last HUD write, the custom room/totals HUD would stay
+    clobbered indefinitely. Fixed entirely inside `zone.js` — HUD is
+    re-rendered unconditionally every frame instead of on a dirty flag, so
+    it always wins the last write. No changes needed elsewhere.
+  - Grid spacing per room is measured from ONE representative variant's
+    bounding box (rooms are single-family, so variants are similar-scale),
+    not the true max across all variants — a deliberate, cheap tradeoff to
+    avoid either guessing flat spacing or reflowing an already-visible grid.
+  - No collision registered for gallery props (walk-through by design — a
+    showroom, not a placement rehearsal).
 
 ## Known bugs / OPEN
 - `world/zones/lagoon/catalogue-flora.js:99-102` — the `shoreBush` band is

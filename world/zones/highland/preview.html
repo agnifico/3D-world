@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Highland Terraces — Zone 3 Preview</title>
+<style>
+  :root {
+    --ink: #eef0e6; --ink-dim: #b7c0ad; --panel: rgba(30, 34, 26, 0.62);
+    --panel-solid: rgba(26, 30, 22, 0.92); --edge: rgba(196, 210, 170, 0.22);
+    --accent: #a9c07e; --accent-warm: #e6c58a;
+    --font: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfd4c2; }
+  canvas { display: block; }
+
+  #lock-hint { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: opacity .25s ease; }
+  #lock-hint .pill { font-family: var(--font); font-size: 13px; letter-spacing: .04em; color: var(--ink);
+    background: var(--panel-solid); border: 1px solid var(--edge); border-radius: 999px; padding: 10px 18px; backdrop-filter: blur(8px); box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  #lock-hint .pill b { color: var(--accent); font-weight: 600; }
+  body.locked #lock-hint { opacity: 0; }
+
+  #hud { position: fixed; top: 14px; left: 14px; z-index: 10; width: 246px; font-family: var(--font); color: var(--ink);
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; backdrop-filter: blur(12px) saturate(1.1); box-shadow: 0 10px 40px rgba(0,0,0,.32); user-select: none; }
+  #hud .hd { padding: 12px 14px 10px; border-bottom: 1px solid var(--edge); }
+  #hud .hd .title { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  #hud .hd .sub { font-size: 10.5px; color: var(--ink-dim); margin-top: 3px; letter-spacing: .02em; }
+  #hud .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 13px; }
+  .sec-label { font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; }
+
+  .dn-row { display: flex; align-items: center; gap: 8px; }
+  #dn { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 4px;
+    background: linear-gradient(90deg, #e5cdb3, #d4d9c4 42%, #b39a96 76%, #151b24); outline: none; }
+  #dn::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); border: 2px solid var(--accent); cursor: pointer; box-shadow: 0 0 8px rgba(169,192,126,.6); }
+  #dn::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--ink); border: 2px solid var(--accent); cursor: pointer; }
+  #dn-val { font-size: 10.5px; color: var(--accent-warm); width: 46px; text-align: right; }
+
+  .views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .views button { font-family: var(--font); font-size: 10px; letter-spacing: .02em; color: var(--ink);
+    background: rgba(255,255,255,.05); border: 1px solid var(--edge); border-radius: 8px; padding: 7px 3px; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+  .views button:hover { background: rgba(169,192,126,.18); border-color: var(--accent); }
+  .views button.hero { border-color: var(--accent-warm); color: var(--accent-warm); }
+
+  .toggles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 10px; }
+  .tg { display: flex; align-items: center; gap: 7px; font-size: 11px; cursor: pointer; color: var(--ink); }
+  .tg input { appearance: none; -webkit-appearance: none; width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--edge); background: rgba(255,255,255,.04); display: grid; place-content: center; cursor: pointer; margin: 0; }
+  .tg input:checked { background: var(--accent); border-color: var(--accent); }
+  .tg input:checked::after { content: ""; width: 6px; height: 6px; border-radius: 1px; background: #1a1e16; }
+
+  #readout { font-size: 10.5px; line-height: 1.65; color: var(--ink-dim); }
+  #readout .row { display: flex; justify-content: space-between; gap: 10px; }
+  #readout .v { color: var(--ink); }
+  #readout .above { color: var(--accent-warm); }
+  #readout .below { color: #6fb6c4; }
+
+  #help { position: fixed; bottom: 12px; left: 14px; z-index: 10; font-family: var(--font); font-size: 10px; color: rgba(40,46,32,.62); letter-spacing: .03em; }
+  #help b { color: rgba(40,46,32,.85); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div id="lock-hint"><div class="pill"><b>Click</b> to look around · <b>WASD</b> move · <b>Q/E</b> down/up · <b>Shift</b> boost</div></div>
+
+  <div id="hud">
+    <div class="hd">
+      <div class="title">Highland Terraces</div>
+      <div class="sub">Zone 3 · grassland → alpine transition</div>
+    </div>
+    <div class="body">
+      <div>
+        <div class="sec-label">Time of day</div>
+        <div class="dn-row">
+          <input id="dn" type="range" min="0" max="1" step="0.01" value="0.35" />
+          <span id="dn-val">Midday</span>
+        </div>
+      </div>
+      <div>
+        <div class="sec-label">Views</div>
+        <div class="views">
+          <button data-view="entry">Entry</button>
+          <button data-view="terraces">Terraces</button>
+          <button data-view="aerial">Aerial</button>
+          <button data-view="dive" class="hero">Dive&nbsp;pt</button>
+          <button data-view="gorge">Gorge</button>
+          <button data-view="pool">Pool</button>
+        </div>
+      </div>
+      <div>
+        <div class="sec-label">Layers</div>
+        <div class="toggles" id="toggles"></div>
+      </div>
+      <div>
+        <div class="sec-label">Readout</div>
+        <div id="readout">
+          <div class="row"><span>pos</span><span class="v" id="r-pos">–</span></div>
+          <div class="row"><span>ground</span><span class="v" id="r-bed">–</span></div>
+          <div class="row"><span>state</span><span class="v" id="r-state">–</span></div>
+          <div class="row"><span>fps</span><span class="v" id="r-fps">–</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="help"><b>Highland Terraces</b> — free-fly preview · the <b>Dive pt</b> view is the pool sightline check</div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+    // Standalone harness — talks straight to the pure-data terrain module +
+    // createHighland (never the Zone-contract wrapper, which normalizes
+    // spawnPoints for the shell and would drop the richer {position,lookAt}
+    // the view buttons want). `import * as zone` mirrors the property access.
+    import * as zone from './terrain.js';
+    import { createHighland } from './highland-fx.js';
+    import { createStoneArch } from '../../core/portal-arch.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400);
+    scene.__cam = camera; // lets the sky dome follow the camera
+
+    const highland = createHighland(zone); // no opts → owns its own lights + sky + fog
+    highland.attach(scene);
+
+    // portal arch markers (the shell adds these in zone.js; shown here so portal
+    // placement is eyeball-able in the preview too)
+    for (const p of zone.portals) {
+      const arch = createStoneArch();
+      arch.position.set(p.x, zone.terrainHeight(p.x, p.z), p.z);
+      scene.add(arch);
+    }
+
+    const controls = new PointerLockControls(camera, renderer.domElement);
+    renderer.domElement.addEventListener('click', () => controls.lock());
+    controls.addEventListener('lock', () => document.body.classList.add('locked'));
+    controls.addEventListener('unlock', () => document.body.classList.remove('locked'));
+
+    const keys = new Set();
+    addEventListener('keydown', (e) => keys.add(e.code));
+    addEventListener('keyup', (e) => keys.delete(e.code));
+    const UP = new THREE.Vector3(0, 1, 0);
+    const fwd = new THREE.Vector3(), right = new THREE.Vector3(), mv = new THREE.Vector3();
+    function fly(dt) {
+      camera.getWorldDirection(fwd); right.crossVectors(fwd, UP).normalize(); mv.set(0, 0, 0);
+      if (keys.has('KeyW')) mv.add(fwd); if (keys.has('KeyS')) mv.sub(fwd);
+      if (keys.has('KeyD')) mv.add(right); if (keys.has('KeyA')) mv.sub(right);
+      if (keys.has('KeyE')) mv.y += 1; if (keys.has('KeyQ')) mv.y -= 1;
+      if (mv.lengthSq() > 0) { mv.normalize(); camera.position.addScaledVector(mv, 22 * (keys.has('ShiftLeft') ? 3.2 : 1) * dt); }
+    }
+
+    const VIEWS = {
+      entry:    { pos: zone.spawnPoints.entry.position, look: zone.spawnPoints.entry.lookAt },
+      dive:     { pos: zone.spawnPoints.dive.position,  look: zone.spawnPoints.dive.lookAt },
+      pool:     { pos: zone.spawnPoints.pool.position,  look: zone.spawnPoints.pool.lookAt },
+      terraces: { pos: [-30, 46, 92],  look: [14, 8, -34] },
+      aerial:   { pos: [14, 168, 46],  look: [14, 0, -22] },
+      gorge:    { pos: [70, 26, 74],   look: [70, -2, -34] },
+    };
+    function setView(name) {
+      const v = VIEWS[name]; if (!v) return;
+      camera.position.set(v.pos[0], v.pos[1], v.pos[2]);
+      camera.lookAt(v.look[0], v.look[1], v.look[2]);
+    }
+    document.querySelectorAll('.views button').forEach((b) => b.addEventListener('click', () => { setView(b.dataset.view); b.blur(); }));
+    setView('terraces');
+
+    const dn = document.getElementById('dn'), dnVal = document.getElementById('dn-val');
+    function dnLabel(t) { return t < 0.17 ? 'Dawn' : t < 0.53 ? 'Midday' : t < 0.86 ? 'Dusk' : 'Night'; }
+    dn.addEventListener('input', () => { const t = parseFloat(dn.value); highland.setDayNight(t); dnVal.textContent = dnLabel(t); });
+
+    const LAYERS = [['terrain', 'Terrain'], ['water', 'Water'], ['sky', 'Sky']];
+    const tgWrap = document.getElementById('toggles');
+    LAYERS.forEach(([id, label]) => {
+      const l = document.createElement('label'); l.className = 'tg';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+      cb.addEventListener('change', () => highland.setLayerEnabled(id, cb.checked));
+      l.appendChild(cb); l.appendChild(document.createTextNode(label)); tgWrap.appendChild(l);
+    });
+
+    const rPos = document.getElementById('r-pos'), rBed = document.getElementById('r-bed'),
+          rState = document.getElementById('r-state'), rFps = document.getElementById('r-fps');
+    let fps = 60, fpsAcc = 0, fpsN = 0, fpsT = 0;
+    function readout() {
+      const p = camera.position;
+      rPos.textContent = `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`;
+      const bed = zone.terrainHeight(p.x, p.z), depth = zone.WATER_Y - bed;
+      rBed.textContent = `${bed.toFixed(1)} (${depth > 0 ? depth.toFixed(1) + 'u water' : 'land'})`;
+      const below = p.y < zone.WATER_Y;
+      rState.innerHTML = below ? `<span class="below">BELOW · ${(zone.WATER_Y - p.y).toFixed(1)}u under</span>`
+                               : `<span class="above">ABOVE · ${(p.y - zone.WATER_Y).toFixed(1)}u up</span>`;
+      rFps.textContent = fps.toFixed(0);
+    }
+
+    addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+    const clock = new THREE.Clock();
+    function frame() {
+      requestAnimationFrame(frame);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      try {
+        fly(dt); highland.update(dt, camera); renderer.render(scene, camera);
+        fpsAcc += dt; fpsN++; if (fpsAcc - fpsT > 0.35) { fps = fpsN / (fpsAcc - fpsT); fpsT = fpsAcc; fpsN = 0; }
+        readout();
+      } catch (err) { showErr('frame: ' + err.message); }
+    }
+    frame();
+    window.__renderNow = () => { highland.update(1 / 60, camera); renderer.render(scene, camera); readout(); };
+    window.__highland = { zone, highland, camera, scene, renderer, setView };
+
+    function showErr(msg) { const h = document.getElementById('help'); if (h) h.innerHTML = '<b style="color:#c65">ERR</b> ' + msg; }
+    addEventListener('error', (e) => showErr(e.message + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno));
+    addEventListener('unhandledrejection', (e) => showErr('promise: ' + (e.reason && e.reason.message || e.reason)));
+  </script>
+</body>
+</html>

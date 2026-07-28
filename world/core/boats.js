@@ -37,7 +37,7 @@ export async function spawnBoatAt(scene, animated, name, x, z, rot, waterY) {
 // tune deckOffset up/down so feet sit on the visible floor for each boat.
 export const BOAT_DEFS = {
   'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.37,  seatUp: .39, faceOffset: 0,        turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
-  'ship-large':     { label: 'Board the galleon',      sitClip: 'idle',  seatAlong: -5.5,  seatUp: 4.5, faceOffset: Math.PI/2,        turn: 1, accel: 5.0, maxSpeed: 20, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  'ship-large':     { label: 'Board the galleon',      sitClip: 'sitRow',  seatAlong: -5.3,  seatUp: 2.95, faceOffset: Math.PI,        turn: 1, accel: 1.0, maxSpeed: 25, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
   'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
 };
 export const FISH_SMOKE = { along: 1.1, side: 0.45, up: 1.95 };
