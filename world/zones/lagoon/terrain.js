@@ -1,88 +1,18 @@
 // =============================================================================
 // Zone 2 — "The Shallows"  ·  a sunken archipelago
 // -----------------------------------------------------------------------------
-// Pure data + math. NO three imports (so terrainHeight() stays testable in Node,
-// same discipline as Grassland's world.js). Everything a rendering layer needs
-// is expressed as plain numbers / hex strings / arrays.
+// The heightfield is built from a hand-painted band map (map.png) via
+// core/terrain-from-map.js (see that file for the band->height/blur/noise
+// pipeline). That loader is browser-only (offscreen canvas image decode),
+// so — unlike the old procedural version — this module is no longer
+// Node-testable in isolation; terrainHeight/depthAt/terrainNormal are still
+// exported with the exact same signatures the zone contract expects, just
+// backed by a loaded grid instead of live fbm math.
 //
 // Coordinate convention: X east, Z south, Y up. Sea level is WATER_Y.
 // "depth" everywhere means (WATER_Y - terrainHeight): positive = underwater.
 // =============================================================================
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  MATH HELPERS  (private, pure)
-// ─────────────────────────────────────────────────────────────────────────────
-// clamp01/lerp deduped into core/math.js (this file, lagoon-fx.js, AND
-// grassland/world.js each had their own copy — see core/math.js's header for
-// what's NOT deduped and why: smoothstep/fbm/vnoise/raisedCos/hash2 below
-// have no real Grassland equivalent, so they stay put).
-import { clamp01, lerp } from '../../core/math.js';
-const PI = Math.PI;
-
-// smoothstep that also works "reversed" (e0 > e1) to invert the ramp
-function smoothstep(e0, e1, x) {
-  let t = (x - e0) / (e1 - e0);
-  t = clamp01(t);
-  return t * t * (3 - 2 * t);
-}
-
-// raised-cosine dome: 1 at t=0, 0 at t=1, ZERO slope at both ends.
-// This is what guarantees gentle beaches (no cliff-drop at the waterline).
-function raisedCos(t) {
-  t = clamp01(t);
-  return 0.5 * (1 + Math.cos(PI * t));
-}
-
-function angleDiff(a, b) {
-  let d = a - b;
-  while (d > PI) d -= 2 * PI;
-  while (d < -PI) d += 2 * PI;
-  return d;
-}
-
-// distance from point (px,pz) to segment (ax,az)->(bx,bz)
-function segDist(px, pz, ax, az, bx, bz) {
-  const abx = bx - ax, abz = bz - az;
-  const apx = px - ax, apz = pz - az;
-  const len2 = abx * abx + abz * abz || 1e-6;
-  let t = (apx * abx + apz * abz) / len2;
-  t = clamp01(t);
-  const cx = ax + abx * t, cz = az + abz * t;
-  return Math.hypot(px - cx, pz - cz);
-}
-
-// integer hash -> 0..1  (stable, no Math.sin drift)
-function hash2(ix, iz) {
-  let h = (ix | 0) * 374761393 + (iz | 0) * 668265263;
-  h = (h ^ (h >> 13)) >>> 0;
-  h = (h * 1274126177) >>> 0;
-  h = (h ^ (h >> 16)) >>> 0;
-  return h / 4294967295;
-}
-
-// smooth value noise, returns 0..1
-function vnoise(x, z) {
-  const ix = Math.floor(x), iz = Math.floor(z);
-  const fx = x - ix, fz = z - iz;
-  const u = fx * fx * (3 - 2 * fx);
-  const v = fz * fz * (3 - 2 * fz);
-  const a = hash2(ix, iz),     b = hash2(ix + 1, iz);
-  const c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
-  return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
-}
-
-// fractal brownian motion, returns roughly -1..1
-function fbm(x, z, oct = 4) {
-  let amp = 0.5, freq = 1, sum = 0, norm = 0;
-  for (let i = 0; i < oct; i++) {
-    sum += amp * (vnoise(x * freq, z * freq) * 2 - 1);
-    norm += amp;
-    amp *= 0.5;
-    freq *= 2;
-  }
-  return sum / norm;
-}
+import { loadTerrainMap } from '../../core/terrain-from-map.js';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,41 +21,16 @@ function fbm(x, z, oct = 4) {
 export const WORLD_EXTENT = 100;   // world spans [-100, 100] on X and Z (same as Grassland)
 export const WATER_Y = 0;   // sea level. Everything below is water — most of the map.
 
-// ── 1. Deep sea floor ─────────────────────────────────────────────────────────
-const DEEP_FLOOR_Y     = -16.0;  // base plane, well below the surface
-const DEEP_UNDULATION  = 1.7;    // gentle rolling amplitude of the deep floor
-const DEEP_SCALE       = 0.014;  // horizontal frequency of that rolling
+// LAGOON_CX/CZ, DROP_BEARING, REEF_RADIUS, ISLETS, SANDBARS below are the old
+// procedural model's landmark data — kept as plain literals (zone.js still
+// imports these names for its unused-downstream `landmarks` bundle) but no
+// longer fed into terrainHeight, which is now map-driven (see LEGEND below).
+export const LAGOON_CX     = 0;
+export const LAGOON_CZ     = -2;
+export const DROP_BEARING  = Math.PI * 0.5;
+export const REEF_RADIUS   = 78;
 
-// ── 2. Lagoon basin (the bright shallow shelf — where most swimming happens) ───
-export const LAGOON_CX        = 0;      // shelf centre X
-export const LAGOON_CZ        = -2;     // shelf centre Z
-const SHELF_Y          = -2.6;   // shelf floor depth (1.5–4 below surface -> reads shallow)
-const SHELF_RADIUS     = 46;     // broad shelf, roughly the middle third of the map
-const SHELF_EDGE       = 15;     // gentle blend width from shelf down to deep floor
-const SHELF_WOBBLE     = 9;      // organic wobble on the shelf outline
-const SHELF_WOBBLE_SCL = 0.03;
-const SHELF_NOISE      = 0.55;   // small ripples on the shelf floor
-const SHELF_NOISE_SCL  = 0.06;
-
-// ── 5. The Drop (signature drop-off from shelf into deep water) ────────────────
-// A sharp escarpment on ONE bearing of the shelf edge. A swimmer heading that way
-// meets it and feels the floor fall away.
-export const DROP_BEARING     = PI * 0.5; // +Z (south-ish per convention); atan2(dz,dx)
-const DROP_ARC         = 1.05;     // angular half-width of the sharp sector (radians)
-const DROP_EDGE        = 2.2;      // tiny blend width here = dramatic cliff
-
-// ── 6. Reef ring (partial, submerged, textures the far water & hints boundary) ─
-export const REEF_RADIUS      = 78;     // distance from shelf centre
-const REEF_WIDTH       = 13;     // radial thickness of the ring
-const REEF_TOP         = -1.0;   // crest depth (submerged 0.5–2)
-const REEF_NOISE       = 0.8;    // lumpiness of the crest
-const REEF_LUMPS       = 5.0;    // how many gaps/segments around the ring
-const REEF_GAP_LO      = 0.34;   // gap thresholds (a partial, broken ring)
-const REEF_GAP_HI      = 0.62;
-
-// ── 3. Islets (radial bumps breaking the surface) ─────────────────────────────
 // peak = height above WATER_Y at the centre; r = footprint radius; rough = noise amp.
-// At least one big (beach + prop dressing), at least two tiny.
 export const ISLETS = [
   { name: 'Longbeach',  x: -23, z: -37, r: 39, peak: 5.0, rough: 0.65 }, // BIG — broad, spacious beach + palms
   { name: 'Kiln',       x:  31, z:   9, r: 25, peak: -0.01, rough: 0.7 },
@@ -134,9 +39,6 @@ export const ISLETS = [
   { name: 'Gull',       x:  41, z: -23, r:  5, peak: 1.2, rough: 0.3 }, // tiny
   { name: 'Lone Stack', x:  -7, z:  31, r:  4.5, peak: 2.4, rough: 0.3 }, // tiny sea-stack by the Drop
 ];
-
-// ── 4. Sandbars (barely-breaking ridges — wadeable causeways between islets) ───
-// top ~ WATER_Y so they surface only just. Great readable traversal.
 export const SANDBARS = [
   { ax: -23, az: -37, bx: 14, bz:  -9, width: 20, top:  0.2, rough: 1 }, // Longbeach -> Pebble
   { ax:  14, az:  -9, bx: 31, bz:   9, width: 10, top: -0.05, rough: 0.30 }, // Pebble -> Kiln (just submerged)
@@ -145,58 +47,47 @@ export const SANDBARS = [
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  TERRAIN HEIGHT  —  pure math, the level itself
+//  TERRAIN HEIGHT  —  built from map.png (lunalaguna) via terrain-from-map.js.
+//  Band heights below are DERIVED, not guessed: they're the midpoint of each
+//  band's actual movement-behavior range read straight out of
+//  character/controller.js's footing thresholds (WADE_START=0.45,
+//  SWIM_DEPTH=1.2 — see that file's "swim tuning" constants). REEF/DEEP have
+//  no controller threshold of their own (both already read as "swim" once
+//  depth passes SWIM_DEPTH) — REEF reuses the old procedural shelf depth
+//  (-2.6, "most swimming happens, floor visible") and DEEP reuses the old
+//  procedural deep-floor depth (-16.0, "well below the surface") as the
+//  closest existing precedent for where this game already drew that line.
+//    LAND     height  0.8   comfortably dry (> STEP_UP=0.5, never reads wet)
+//    SHALLOW  height -0.22  mid(0, WADE_START=0.45)           -> runnable
+//    WADE     height -0.82  mid(WADE_START=0.45, SWIM_DEPTH=1.2) -> walk-only
+//    REEF     height -2.6   old SHELF_Y precedent              -> swim, floor visible
+//    DEEP     height -16.0  old DEEP_FLOOR_Y precedent          -> swim, high sea
 // ─────────────────────────────────────────────────────────────────────────────
-export function terrainHeight(x, z) {
-  // 1. deep sea floor -------------------------------------------------------
-  let h = DEEP_FLOOR_Y + fbm(x * DEEP_SCALE, z * DEEP_SCALE, 3) * DEEP_UNDULATION;
+const LEGEND = [
+  { id: 'LAND',    color: '#ff9100', height:  0.8 },
+  { id: 'SHALLOW', color: '#ffeb00', height: -0.22 },
+  { id: 'WADE',    color: '#00d6ff', height: -0.82 },
+  { id: 'REEF',    color: '#007dff', height: -2.6 },
+  { id: 'DEEP',    color: '#002b99', height: -16.0 },
+];
 
-  // 2. lagoon shelf ---------------------------------------------------------
-  const dx = x - LAGOON_CX, dz = z - LAGOON_CZ;
-  const r = Math.hypot(dx, dz);
-  const ang = Math.atan2(dz, dx);
-  const wobble = fbm(x * SHELF_WOBBLE_SCL, z * SHELF_WOBBLE_SCL, 2) * SHELF_WOBBLE;
-  const shelfR = SHELF_RADIUS + wobble;
-
-  // 5. the Drop: shrink the edge blend on the drop bearing -> sharp escarpment
-  const dropK = smoothstep(DROP_ARC, DROP_ARC * 0.4, Math.abs(angleDiff(ang, DROP_BEARING)));
-  const edge = lerp(SHELF_EDGE, DROP_EDGE, dropK);
-  const inside = smoothstep(shelfR + edge, shelfR - edge, r); // 1 on shelf, 0 in deep
-  const shelfLevel = SHELF_Y + fbm(x * SHELF_NOISE_SCL, z * SHELF_NOISE_SCL, 3) * SHELF_NOISE;
-  h = lerp(h, shelfLevel, inside);
-
-  // 6. reef ring (partial, only outside the shelf) --------------------------
-  const reefBand = raisedCos(Math.abs(r - REEF_RADIUS) / REEF_WIDTH);
-  const reefGap = smoothstep(REEF_GAP_LO, REEF_GAP_HI, vnoise(ang * REEF_LUMPS, r * 0.05));
-  const reefAmt = reefBand * reefGap * (1 - inside);
-  const reefLevel = REEF_TOP + fbm(x * 0.08, z * 0.08, 2) * REEF_NOISE;
-  h = lerp(h, Math.max(h, reefLevel), reefAmt);
-
-  // 3 + 4. islets and sandbars rise toward their target height from the floor
-  // (max of contributions, so overlaps don't stack; zero at footprint edge => gentle)
-  let contrib = 0;
-  for (let i = 0; i < ISLETS.length; i++) {
-    const is = ISLETS[i];
-    const d = Math.hypot(x - is.x, z - is.z);
-    if (d < is.r) {
-      const dome = raisedCos(d / is.r);
-      const target = is.peak + fbm(x * 0.09, z * 0.09, 3) * is.rough;
-      contrib = Math.max(contrib, (target - h) * dome);
-    }
+// blurRadius/blurPasses tuned so the transition band (~2.5 world units) reads
+// as a gentle slope without eroding the smallest painted landmark (the
+// "one single big rock" islet, ~3-unit footprint radius) — a wider/softer
+// blur would wash it flat. A future cliffy zone would want blurRadius:1,
+// blurPasses:1 (next to no smoothing) instead.
+export const { terrainHeight, bandAt } = await loadTerrainMap(
+  new URL('./map.png', import.meta.url).href,
+  LEGEND,
+  {
+    extent: WORLD_EXTENT,
+    tolerance: 60,
+    blurRadius: 4,
+    blurPasses: 3,
+    noiseAmp:   { LAND: 0.5, SHALLOW: 0, WADE: 0, REEF: 0.4, DEEP: 1.7 }, // land dunes / flat shallows·wade / reef floor texture / deep swell
+    noiseScale: { LAND: 0.09, REEF: 0.06, DEEP: 0.014 }, // matches the old dune / shelf / deep-floor noise frequencies
   }
-  for (let i = 0; i < SANDBARS.length; i++) {
-    const b = SANDBARS[i];
-    const d = segDist(x, z, b.ax, b.az, b.bx, b.bz);
-    if (d < b.width) {
-      const dome = raisedCos(d / b.width);
-      const target = b.top + fbm(x * 0.16, z * 0.16, 2) * b.rough;
-      contrib = Math.max(contrib, (target - h) * dome);
-    }
-  }
-  h += contrib;
-
-  return h;
-}
+);
 
 // Convenience (pure): depth below the surface, positive underwater.
 export function depthAt(x, z) {
@@ -421,26 +312,34 @@ export const catalogueBands = {
 // ─────────────────────────────────────────────────────────────────────────────
 //  SPAWN POINTS  &  PORTALS
 // ─────────────────────────────────────────────────────────────────────────────
-const SHORE_XZ = [-14, -22];  // on Longbeach's shallow beach
-const BOAT_XZ  = [6, -4];     // out on the bright lagoon shelf
+// RELOCATED for the new map (the old coordinates were tuned to the
+// procedural islets above and both landed in open DEEP water under
+// lunalaguna.png — checked via terrainHeight/bandAt against the actual
+// loaded grid, not eyeballed). New spots sit on/around the SW atoll cluster
+// (the map's biggest landmass + its lagoon interior):
+const SHORE_XZ = [-40, 52];  // on the SW atoll's main landmass, facing its lagoon (north)
+const BOAT_XZ  = [-15, 10];  // afloat in that atoll's open reef interior
 
 export const spawnPoints = {
-  // A shore spawn on the big islet's beach, looking out over the lagoon.
+  // A shore spawn on the SW atoll's beach, looking out over its lagoon.
   shore: {
     position: [SHORE_XZ[0], terrainHeight(SHORE_XZ[0], SHORE_XZ[1]) + 1.7, SHORE_XZ[1]],
-    lookAt: [10, WATER_Y - 1, 20],
+    lookAt: [-15, WATER_Y - 1, 10],
     eyeHeight: 1.7,
   },
-  // A boat spawn floating on the shelf, looking toward the Drop.
+  // A boat spawn floating in the atoll's lagoon, looking toward the drowned arch.
   boat: {
     position: [BOAT_XZ[0], WATER_Y + 1.1, BOAT_XZ[1]],
-    lookAt: [-7, WATER_Y - 2, 31],
+    lookAt: [6, WATER_Y - 2, 20],
     eyeHeight: 1.1,
   },
 };
 
 export const portals = [
-  // A ruin arch standing in shallow water near the Lone Stack, at the Drop's mouth.
+  // A ruin arch standing in reef water off the SW atoll cluster. UNCHANGED
+  // coordinates: checked against the new map (bandAt(6,20) === 'REEF', depth
+  // 2.6 — still solidly submerged, same as it was under the old procedural
+  // terrain), so no move was needed here.
   {
     id: 'drowned-arch',
     x: 6, z: 20,
@@ -453,5 +352,5 @@ export const portals = [
 // Note: this module used to have a default export bundling all of the above
 // into one "zone" object — that role now belongs to ./zone.js (the Zone
 // contract wrapper, which imports everything from here and adds
-// build(ctx)/update(dt,camera)/dispose() on top). This file stays pure data
-// + math only.
+// build(ctx)/update(dt,camera)/dispose() on top). This file stays data +
+// terrain-loading glue only.

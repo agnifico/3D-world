@@ -9,6 +9,7 @@ reflect current reality as of this session, not a full project history.)
 - Brief 10 — nature material normalization (metalness/roughness) + per-family
   scale correction (willows up, bushes down).
 - Catalogue integrity (Track A) — see detail below.
+- Terrain-from-map — Lagoon retrofit (2026-07-29) — see detail below.
 - Gallery v3 (2026-07-28) — paginated catalogue gallery, restored as a full
   zone (`world/zones/gallery/`) on the **K** hotkey (`G` still opens
   Grassland's own procedural-factory overlay, untouched). Groups all 131
@@ -72,6 +73,15 @@ reflect current reality as of this session, not a full project history.)
    session found it carries a real texture atlas (same class as NNK), but it
    was kept flat-matte to avoid changing the already-served PalmTree/Rock
    look without Agni eyeballing first. One-line edit either way.
+5. The in-engine PAINTER tool (terrain layer of the Track C world editor;
+   live 3D preview is its killer feature) — explicitly out of scope for the
+   terrain-from-map session, next tooling session's target.
+6. Same-map scatter masks (seaweed in WADE, corals in REEF, driven off
+   `bandAt()` instead of raw depth) — v2, explicitly deferred; huge win once
+   the gallery-driven recipe pass lands. `catalogueBands`/`scatterRecipe`'s
+   depth ranges in `terrain.js` were left untouched against the new
+   map-driven terrain (not a coverage/density audit this session — they'll
+   just naturally re-distribute against the new heightfield).
 
 ## RESOLVER-BINDING-SESSION — 2026-07-28/29 (asset reference layer)
 Built the promised "use any of my 1,903 models by name, anywhere, without
@@ -210,3 +220,100 @@ Not verified (needs a human): actually opening Grassland + Lagoon in a
 browser and confirming grass/shrubbery reads as expected visually — no
 regression in what's already there, since nothing in the currently-served
 131 files changed.
+
+## Terrain-from-map — 2026-07-29 (Lagoon retrofit)
+Built `world/core/terrain-from-map.js` (new, zone-agnostic, zero imports):
+loads a hand-painted band-map PNG via offscreen canvas, classifies every
+pixel to its nearest legend color (RGB distance, tolerance 60px-equivalent;
+unclassified label/anti-aliasing pixels inherit their nearest classified
+neighbor via a multi-source BFS flood-fill — same result as a per-pixel
+outward spiral search, O(N) instead of O(N * radius)), sliding-window
+box-blurs the resulting band-height grid (O(1)/pixel regardless of radius —
+~35x faster than a naive fixed-tap repeat at an equivalent soft-edge width),
+adds per-band low-frequency noise on top (selected by each cell's
+*pre-blur* band, so e.g. WADE/SHALLOW can stay flat while LAND/REEF/DEEP
+get texture), and returns `{ terrainHeight(x,z), bandAt(x,z) }` sampled
+bilinearly from the precomputed grid. Browser-only (image decode is
+inherently async) — no three import, but no Node-testability claim either;
+that's a real, deliberate trade against the old procedural terrain.js's
+"stays testable in Node" discipline, made because the session's own spec
+called for reading the map via canvas.
+
+Retrofitted `world/zones/lagoon/terrain.js` onto it from `lunalaguna.png`
+(now `zones/lagoon/map.png`, already in place at session start), deleting
+the old procedural fbm/islet/shelf/reef-ring math entirely rather than
+dual-pathing it (recoverable from git history, per the session brief).
+`WATER_Y` and the `terrainHeight`/`depthAt`/`terrainNormal` export
+signatures are unchanged, so the zone contract, height registry, collision,
+and water fx all keep working untouched. Loaded via a top-level `await`
+inside terrain.js (plain ESM feature, no bundler involved — already safe
+given this project's importmap-based module setup): every consumer still
+sees a plain synchronous `terrainHeight` by the time it's actually called,
+at the cost of the whole app's module graph waiting on one image load at
+boot (measured 637ms in headless Chromium for
+fetch+decode+classify+BFS+blur+noise over the 1000x1000 map — a one-time
+hit, since `main.js` statically imports all three zones up front; not a
+per-frame cost, and sampling itself is now a single bilinear lookup,
+cheaper than the old live fbm stack).
+
+Band heights are DERIVED from `character/controller.js`'s real footing
+constants (`WADE_START=0.45`, `SWIM_DEPTH=1.2`), not guessed:
+`LAND +0.8 | SHALLOW -0.22 | WADE -0.82 | REEF -2.6 | DEEP -16.0`. REEF/DEEP
+have no controller threshold of their own (both already read "swim" once
+depth passes `SWIM_DEPTH`) — they reuse the old procedural design's own
+`SHELF_Y` (-2.6) and `DEEP_FLOOR_Y` (-16.0) as the closest existing
+precedent for where this game already drew that line. Orientation
+convention (documented in `terrain-from-map.js`'s header, "one convention,
+forever"): image row 0/top = world north = -Z; image column 0/left = world
+west = -X. Blur tuned to `blurRadius:4, blurPasses:3` specifically so the
+resulting ~2.5-world-unit transition band stays narrower than the smallest
+painted landmark's footprint (the "one single big rock" islet, ~3-unit
+radius) — a wider/softer blur read fine everywhere else but started
+washing that islet flat.
+
+Spawn points MOVED: `SHORE_XZ`/`BOAT_XZ` were tuned to the old procedural
+islets and both landed in open DEEP water under the real lunalaguna map
+(confirmed via `terrainHeight`/`bandAt` against the actual loaded grid, not
+eyeballed) — would have spawned/floated the player mid-ocean with no shore
+in sight. Relocated to the SW atoll cluster (the map's largest landmass +
+its lagoon interior, found via connected-component analysis of the
+classified band grid): shore now `(-40,52)` on that atoll's beach, boat now
+`(-15,10)` afloat in its reef interior. Portal `drowned-arch` `(6,20)` did
+NOT need to move — checked under the new terrain too, still lands in REEF
+at ~2.7-2.8 units deep (noise-dependent), same "solidly submerged" reading
+as before, lucky coincidence rather than by design. Incidentally re-checked
+the still-open `mainShip` placement `(25,-25)` (Known bugs/OPEN, above)
+against the new terrain too: still open DEEP water (17.3u deep), so that
+placement is unaffected by this session even though its original
+"checked against terrain.js" note was checked against the terrain this
+session just deleted.
+
+`ISLETS`/`SANDBARS`/`LAGOON_CX`/`LAGOON_CZ`/`DROP_BEARING`/`REEF_RADIUS`
+are kept as plain literal exports in `terrain.js` (`zone.js` still imports
+these names into its `landmarks` field) but no longer feed `terrainHeight`
+— and, checked, `landmarks` itself isn't read anywhere downstream either
+(not in `lagoon-fx.js`, not elsewhere). Left alone rather than churned:
+genuinely inert data now, zero behavioral effect either way, not something
+this session was asked to touch.
+
+**Verified** (agent-checkable):
+- Band coverage over the real map (nearest-color classify, tolerance 60) ≈
+  58.6% DEEP / 21.9% REEF / 11.5% WADE / 2.9% SHALLOW / 5.1% LAND — matches
+  the session brief's own expected ≈58/21/11/3/5 split; the 0.96% of
+  pixels that were labels/anti-aliasing fringe are fully absorbed by the
+  BFS fill (checked pre- and post-fill counts), zero holes remain.
+- Ran the actual shipped code (not a model of it) in headless Chromium
+  against the real dev server: `world/index.html` loads end-to-end with
+  zero console/page errors, canvas + controller debug hooks present.
+  Direct `terrainHeight`/`bandAt` calls confirm LAND classifies dry, WADE
+  classifies wade (not run, not swim), REEF and DEEP both classify swim
+  (they're only visually distinguished — floor-visible vs high-sea — not a
+  movement-behavior difference, matching the legend's own design intent);
+  zero NaN across a 41x41 sanity grid spanning the whole map.
+- `node --check` clean on both new/edited modules.
+
+**Not verified** (needs Agni, eyeball-only): the actual visual read — flat
+Caribbean-cay feel, the three named clusters reading as painted (reef bar
+NW, atoll ring SW, long sandbars E), the tiny islet reading as a landmark
+and not just a bump; whether the new shore/boat spawn `lookAt` framing is
+actually a good view over the lagoon rather than just numerically-safe.
