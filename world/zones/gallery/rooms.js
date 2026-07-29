@@ -36,7 +36,12 @@ export function loadRooms() {
           // survives across served/shelf status (a promotion later just
           // adds a `served` path — the marks.js verdict keyed on the
           // source path carries over rather than resetting to unmarked).
-          room.slots.push({ name: displayName(entry, v.variant), family: key, used, loadUrl, marksKey: v.served || v.source });
+          // entryId/variant: added for the World Editor's catalogue picker
+          // (reuses this enumeration rather than re-deriving it) — a slot's
+          // full identity for core/catalogue.js's resolveAsset(manifest,
+          // entryId, variant). Purely additive: the gallery zone itself
+          // never reads these two fields.
+          room.slots.push({ name: displayName(entry, v.variant), family: key, used, loadUrl, marksKey: v.served || v.source, entryId: entry.id, variant: v.variant });
           if (used) room.servedCount++; else room.shelfCount++;
         }
       }

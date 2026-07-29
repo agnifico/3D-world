@@ -377,3 +377,75 @@ render-identical swap.
   function's old computation — confirmed equivalent (see above).
 - Not verified (needs Agni, eyeball-only, no browser available here): the
   ship still rendering identically in Lagoon via the new path.
+
+**Phase 2 — edit mode + transform gizmo.** New `core/world-editor.js` (the
+engine: raycasting, TransformControls, selection) + `core/world-editor-
+panel.js` (DOM: catalogue picker, toolbar, minimal status line — the full
+per-object property inspector is Phase 3). Backtick (`` ` ``) toggles,
+lazy-loaded via `import()` on first press (not a static top-level import),
+memory-stable across open/close (own AbortController dropped in one shot on
+close; the DOM panel is created once and just hides — see its own header
+comment for why that's equivalent, not a shortcut). Disabled inside any
+overlay or the catalogue-gallery zone (`` ` `` no-ops there — no edits.js
+concept to edit); `main.js`'s `loadZone()` force-closes it on every zone
+change so a stale selection never points at a just-disposed object.
+
+Click selects (raycast against `world-edits.js`'s live placed[] registry,
+skipping locked ones); **T/R/Y** set translate/rotate/scale; place-new
+walks the SAME catalogue enumeration the gallery uses (`gallery/rooms.js`'s
+`loadRooms()` — added `entryId`/`variant` per slot, purely additive, the
+gallery itself never reads them) via a room-then-variant `<select>` pair,
+armed by a "Place" button, dropped on the next canvas click (ray -> a
+horizontal plane, iterated 3x against `zone.terrainHeight` to converge on
+the real ground point under the cursor — no per-zone terrain-mesh
+raycasting needed). Duplicate (button or Ctrl/Cmd+D)/Delete (button or Del/
+Backspace)/Lock (checkbox, locked = unselectable) all live on
+`core/world-edits.js`'s extended API (`removePlacedObject`,
+`addPlacedObject`, `duplicatePlacedObject`, `serializePlaced`,
+`genPlacedId`). Ground-snap is a toggleable checkbox (default on) applied
+ONLY after a translate drag ends — a real bug caught during self-review:
+the first draft snapped Y after ANY drag including rotate/scale, which
+would've slammed a floating object (the ship) down to its seafloor
+`terrainHeight` the instant it was rotated. Save serializes every live
+placed object's CURRENT transform (position/rotation read straight off the
+object; scale divides the resolved pack's `policyScaleFactor` back out
+first, so save->reload never compounds it) plus whatever's currently in the
+zone's `familyOverrides`/`scatterEdits` (not hardcoded empty — reads the
+live editsModule via a new `getEditsModule()`, so Phase 4 can mutate those
+in place without Save silently dropping them) into `export const edits =
+{...}` text, downloaded as `<zone>-edits.js` + copied to clipboard (same
+Blob+anchor+clipboard pattern `gallery/zone.js`'s `exportMarks` already
+uses). "Load-back on entry" is Phase 1's `applyEdits` — already true,
+nothing new needed for the round trip.
+
+Two other bugs caught during self-review, before they shipped: (1) T/R/Y
+and Delete/Ctrl+D were on a window-level keydown listener with no focused-
+element guard — typing to search in the catalogue picker's native
+`<select>` would have hijacked the gizmo mode; both this listener and
+main.js's own Backquote toggle now skip while an INPUT/SELECT/TEXTAREA has
+focus. (2) A rapid double-press of Backquote could race the dynamic
+import (both calls seeing the module as "not yet loaded") and double-
+initialize the DOM panel; guarded with a `worldEditorLoading` flag.
+
+Known, accepted, out-of-scope overlap: grassland's OWN pre-existing Area
+Designer (`L` key, editor.js/editor-panel.js, a completely separate system
+keyed to `props.js`'s native/Kenney registry) can technically be open at
+the same time as this new editor — untouched per CLAUDE.md ("don't touch
+what you weren't asked to"), and their registries are disjoint (no object
+can be selected by both), so the only real collision is two independent
+TransformControls gizmos potentially visible at once if a user deliberately
+opens both. Not fixed — not asked for, and needs a human opening both
+deliberately to ever hit.
+- Verified: `node --check` clean on every new/edited file. Every field/
+  schema path traced by hand (id uniqueness across a zone revisit within
+  one session, scale round-trip through policyScaleFactor, variant:null
+  resolving correctly for shelf-only single-variant entries — checked
+  resolveAsset's own fallback logic against catalogue.json's actual stored
+  `variant: null` shape).
+- Not verified (needs Agni, eyeball-only, no browser available here): the
+  actual in-browser feel — gizmo dragging, click-to-place accuracy on
+  Highland's steeper terraces (the 3-iteration ray/terrain convergence is
+  reasoned, not measured), whether T/R/Y read as natural, whether 5+ open/
+  close cycles really hold at zero geometry growth (reasoned from following
+  grassland/editor.js's proven-stable pattern exactly, not independently
+  re-measured this session).

@@ -147,6 +147,11 @@ export function loadZone(zoneId, entryId) {
   const zoneModule = ZONES[zoneId];
   if (!zoneModule) { console.warn(`[world] unknown zone "${zoneId}"`); return; }
   if (currentZone) currentZone.dispose();
+  // The World Editor's selection/registry point at the OLD zone's soon-to-
+  // be-disposed objects — force it closed rather than leaving it pointing
+  // at freed content (see closeWorldEditor below for why this is safe to
+  // call even if the editor module was never loaded this session).
+  closeWorldEditor();
   overlayOpen = false;
   resetForNewZone();
 
@@ -236,6 +241,59 @@ addEventListener('keydown', e => {
     zoneBeforeGallery = currentZone?.id;
     loadZone('gallery');
   }
+});
+
+// ================= World Editor (Layer 4) — lazy-loaded, memory-stable =================
+// Dynamically imported on the FIRST Backquote press, not a static top-level
+// import — the tool (raycasting, TransformControls, a catalogue picker
+// walking the full 1,903-variant shelf) stays out of the normal game's load
+// path until actually invoked. Disabled inside any overlay (Grassland's own
+// gallery, etc.) and inside the catalogue gallery zone itself — neither has
+// an edits.js/placed[] concept to edit.
+let worldEditorMod = null, worldEditorPanelMod = null;
+let worldEditorOpen = false, worldEditorLoading = false;
+
+async function toggleWorldEditor() {
+  if (overlayOpen || currentZone?.id === 'gallery' || worldEditorLoading) return;
+  if (!worldEditorMod) {
+    // Guards a rapid double-press racing the dynamic import: without this,
+    // a second toggle arriving before the first import resolves would see
+    // worldEditorMod still null and kick off a second import + a second
+    // initEditorPanel() call, duplicating the DOM panel.
+    worldEditorLoading = true;
+    try {
+      [worldEditorMod, worldEditorPanelMod] = await Promise.all([
+        import('./core/world-editor.js'),
+        import('./core/world-editor-panel.js'),
+      ]);
+      await worldEditorPanelMod.initEditorPanel();
+    } finally {
+      worldEditorLoading = false;
+    }
+  }
+  if (worldEditorOpen) {
+    worldEditorMod.closeEditor();
+    worldEditorOpen = false;
+  } else {
+    await worldEditorMod.openEditor({
+      scene: currentZoneCtx.scene, camera, domElement: renderer.domElement,
+      animated: currentZoneCtx.animated, renderer,
+      zone: currentZone, getChar: () => controllerApi.char,
+    });
+    worldEditorOpen = true;
+  }
+}
+// Called from loadZone() on every zone change (including before the module
+// has ever been loaded — the `worldEditorMod &&` guard makes that a no-op,
+// not an error) so a stale selection never points at a just-disposed zone.
+function closeWorldEditor() {
+  if (worldEditorOpen && worldEditorMod) { worldEditorMod.closeEditor(); worldEditorOpen = false; }
+}
+addEventListener('keydown', e => {
+  if (!e.isTrusted || e.code !== 'Backquote') return;
+  const tag = document.activeElement?.tagName; // don't toggle while typing/searching in the editor panel's own <select>s
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  toggleWorldEditor().catch(err => console.error('[world-editor] toggle failed', err));
 });
 
 const _params = new URLSearchParams(location.search);
