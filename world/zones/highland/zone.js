@@ -11,6 +11,8 @@ import {
 import { createHighland } from './highland-fx.js';
 import { disposeGroup, registerPortals } from '../../core/zone.js';
 import { createStoneArch } from '../../core/portal-arch.js';
+import { applyEdits } from '../../core/world-edits.js';
+import { edits } from './edits.js';
 
 // The shell's generic spawn-placement expects {x,z}; terrain.js carries the
 // richer {position,lookAt,eyeHeight} the preview harness's view buttons need.
@@ -50,6 +52,9 @@ function build(ctx) {
     ctx.collisionRegistry.addCircle(portal.x + 3.2, portal.z, 0.7, gy, gy + 5, false);
   }
   registerPortals(ctx, portals);
+
+  // World Editor (Layer 4) — hand-placed catalogue props, empty for now (see edits.js).
+  applyEdits(ctx, ctx.scene, { id: 'highland', terrainHeight, WATER_Y }, edits).catch(e => console.error('[highland world-edits]', e));
 
   // Highland resolves its OWN keyframed day cycle internally (sky-dome gradient,
   // terrain grade, pool tint, sun angle), so it just wants the raw global t.

@@ -344,3 +344,36 @@ Phase 2, not by hand-editing bindings.js/edits.js).
   compatibility is exact by inspection, not just by test.
 - Not verified (needs Agni, eyeball-only, no browser available here): the
   ship actually rendering visibly tilted at (25,-25) in Lagoon.
+
+**Phase 1 — edits.js data layer + applyEdits.** New `core/world-edits.js`:
+`applyEdits(ctx, scene, zone, editsModule)`, the one place that understands
+the edits.js schema (full spec in the file's own header) — `placed[]` (id,
+catalogueId, variant, x/y/z with `y:null` terrain-snapping, `rot:[x,y,z]`,
+`scale` number-or-array multiplying onto the resolved pack's own
+policy.scaleFactor, optional tint/materialPolicy overrides, `locked`),
+`familyOverrides`/`scatterEdits` (schema defined, NOT consumed yet — that's
+Phase 4's "scatter reach" job; catalogue-flora.js doesn't read either one
+yet). Resolves ids via the existing `resolveAsset`/`loadCatalogue`, same
+served-or-shelf + per-pack-policy path every other consumer uses. Every
+zone (grassland/lagoon/highland) now has an `edits.js` and calls
+`applyEdits` from `build()`, fire-and-forget, same convention as
+`instantiateCatalogueFlora` — grassland/highland's are empty (`placed: []`)
+for now, structural uniformity only.
+
+Moved lagoon's `mainShip` out of `bindings.js` into `lagoon/edits.js`'s
+`placed[]`; `bindings.js` is back to pure family->pack scatter slots only,
+and `catalogue-flora.js`'s dedicated `placeMainShip()` is deleted (its job
+is now the generic `applyEdits` path). Checked field-by-field against the
+old call: same catalogueId, same resolved policy (pirates -> flat-matte,
+scaleFactor 1), same `rot:[0.3,0,0.2]`, and `y` is an EXPLICIT `-0.15`
+(WATER_Y-0.15, the boats.js floating-draft convention) rather than `null` —
+`null` would have terrain-snapped it to the seafloor (~-6.15u down there),
+sinking it instead of floating it. Same tint (null), same variant
+(undefined -> the entry's sole variant). This should be a byte-for-byte
+render-identical swap.
+- Verified: `node --check` clean on every new/edited file; no dangling
+  references to `placeMainShip`/`bindings.mainShip` anywhere (grepped).
+  Every field in the new `placed[]` row traced by hand against the deleted
+  function's old computation — confirmed equivalent (see above).
+- Not verified (needs Agni, eyeball-only, no browser available here): the
+  ship still rendering identically in Lagoon via the new path.

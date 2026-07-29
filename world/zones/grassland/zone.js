@@ -11,6 +11,8 @@ import { initMinimap, disposeMinimap } from './minimap.js';
 import { placeNativeProps, placeKenneyProps, registerBridge, resetRegistry } from './props.js';
 import { scatterWorld, resetScatter } from './scatter.js';
 import { placeCatalogueFloraSync, instantiateCatalogueFlora } from './catalogue-flora.js';
+import { applyEdits } from '../../core/world-edits.js';
+import { edits } from './edits.js';
 import * as Gallery from './gallery.js';
 import { initEditor, disposeEditor } from './editor.js';
 import { initEditorPanel, disposeEditorPanel } from './editor-panel.js';
@@ -59,6 +61,8 @@ function build(ctx) {
   const { groups: catalogueFloraGroups } = placeCatalogueFloraSync();
   const { applyGrassBlend, flowerMat } = scatterWorld(ctx.scene, ctx.animated, PALETTES);
   instantiateCatalogueFlora(ctx, ctx.scene, catalogueFloraGroups).catch(e => console.error('[catalogue-flora]', e));
+  // World Editor (Layer 4) — hand-placed catalogue props, empty for now (see edits.js).
+  applyEdits(ctx, ctx.scene, { id: 'grassland', terrainHeight, WATER_Y }, edits).catch(e => console.error('[grassland world-edits]', e));
 
   Gallery.buildGallery(ctx, ctx.scene, ctx.animated, open => ctx.onOverlayToggle?.(open));
 

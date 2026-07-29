@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../../core/math.js';
 import { WATER_Y, terrainHeight, terrainNormal, catalogueBands } from './terrain.js';
-import { loadCatalogue, findEntries, servedURL, sourceURL, weightedPick, parseCatalogueId, resolveAsset } from '../../core/catalogue.js';
+import { loadCatalogue, findEntries, servedURL, sourceURL, weightedPick, parseCatalogueId } from '../../core/catalogue.js';
 import { loadTintedTemplate } from '../../core/gltf-assets.js';
 import { makeInstanced, addWind, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
 import { reportMissingAsset } from '../../core/asset-diagnostics.js';
@@ -198,40 +198,4 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
   scene.add(palmGroup, seaweedGroup, rockGroup, bushGroup);
   summarizeInstancing('lagoon catalogue flora (palm+seaweed+rock+bush)', [palmGroup, seaweedGroup, rockGroup, bushGroup]);
   if (ctx.renderer) logDrawCallsNextFrame(ctx, ctx.renderer, 'lagoon (post catalogue-flora)');
-}
-
-// RESOLVER-BINDING-SESSION proof binding — mainShip isn't a scatter species
-// like the four above: one hand-placed prop, resolved straight through
-// Layer 1 (core/catalogue.js's resolveAsset) rather than findEntries, and
-// loaded with its pack's Layer 3 policy. No matrix-group batching — a
-// one-instance InstancedMesh would be pure overhead for a single prop. Not
-// part of the two-phase sync/async split above: no placement budget or
-// treePts-style ordering dependency to protect, same as the (now-retired)
-// NNK smoke test's own placement, which used this same direct-load shape.
-// Fire-and-forget from lagoon/zone.js, same convention as
-// instantiateCatalogueFlora above.
-export async function placeMainShip(scene) {
-  const b = bindings.mainShip;
-  const manifest = await loadCatalogue();
-  const resolved = resolveAsset(manifest, b.id);
-  if (!resolved) { reportMissingAsset(b.id, 'lagoon bindings: mainShip catalogue id not found'); return; }
-  let template;
-  try {
-    template = await loadTintedTemplate(resolved.url, null, resolved.policy);
-  } catch (e) {
-    reportMissingAsset(resolved.url, `lagoon bindings: mainShip failed to load (${e.message})`);
-    return;
-  }
-  const ship = template.clone(true);
-  const scale = (b.scale ?? 1) * resolved.policy.scaleFactor;
-  ship.scale.setScalar(scale);
-  // world-editor: full Euler now, not Y-only — b.rot is [x,y,z] radians.
-  const [rx, ry, rz] = b.rot || [0, 0, 0];
-  ship.rotation.set(rx, ry, rz);
-  // Floats at the waterline, same -0.15 draft convention core/boats.js uses
-  // for every actually-sailable boat spawn — this ship is a static prop,
-  // not a rideable one, but the same "just barely submerged" look applies.
-  ship.position.set(b.where.x, WATER_Y - 0.15, b.where.z);
-  ship.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  scene.add(ship);
 }
