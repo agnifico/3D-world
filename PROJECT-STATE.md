@@ -512,3 +512,75 @@ original completely untouched, never a half-applied state.
   ever looks obviously wrong against a wildly different replacement model's
   proportions (a deliberate choice — see rebuildPlacedObject's own comment
   — not a defect if so, just a starting point to then re-tune live).
+
+**Phase 4 — scatter reach.** New `core/scatter-registry.js`: maps a raycast
+hit on a scattered `InstancedMesh` (mesh + THREE's own per-hit
+`instanceId`) to a deterministic `Family#NNNN` id and back. Both
+`catalogue-flora.js` files now assign these ids inside their sync
+placement loop, in true placement order — the id counter (one per family,
+shared across every season/state/moss group of that family) advances for
+EVERY candidate that clears the rejection-sampling checks, hidden or not,
+so hiding an instance can never renumber anything after it. `core/world-
+editor.js`'s click-to-select now does ONE combined raycast against placed
+objects AND every registered scatter mesh, so whichever is actually closer
+under the cursor wins (not "placed always beats scatter"); a scattered hit
+gets a lightweight inspector (no gizmo — an `InstancedMesh` instance isn't
+its own `Object3D`, see the code's own comment on why a proxy-object
+mechanism was scoped out) with a **Hide this instance** action and an
+**apply to whole family** section (retint, material-policy).
+
+A serious bug caught and fixed DURING this phase's own build, before it
+ever ran: the first draft checked `scatterEdits[id]?.hidden` and skipped
+the REST of that placement's own scale/rotation/variant RNG draws when
+hidden. Since every zone uses ONE seeded generator advancing through the
+entire placement pass, skipping draws for a hidden instance would shift
+every subsequent RNG call — meaning hiding one tree would silently
+re-shuffle the position/species/scale of every tree placed after it on the
+next rebuild, not just remove the hidden one. Fixed by making every RNG
+draw for a candidate unconditional (variant, scale, rotation all computed
+whether or not it ends up hidden) and gating ONLY the final `addToGroup`
+call (what actually renders) on the hidden check.
+
+A second bug caught the same way: a multi-part template (a tree's separate
+trunk/leaves meshes) registers several `InstancedMesh`es sharing one id
+list, but DIFFERENT groups of the same family (e.g. `Rock:normal` vs.
+`Rock:snow`) are separate meshes with their OWN independent index space.
+Hiding "index N in every mesh of this family" would have zeroed out an
+unrelated instance in a different group that happened to share that
+number. Fixed with `getSiblingMeshes(mesh, index)`, which only matches
+meshes where the SAME id (not just the same index) appears at that index —
+safe because ids are family-global, so an id match can only ever mean a
+true sibling part-mesh of one specific placement.
+
+**Scoped out this phase** (the 15-minute-budget allowance, applied
+surgically to specific sub-features rather than the whole phase):
+- Per-instance position/rotation/scale editing beyond hide — would need a
+  proxy-Object3D-plus-`setMatrixAt` mechanism (no native gizmo support for
+  one `InstancedMesh` instance); hide (matrix -> zero scale) needed no such
+  proxy.
+- `familyOverrides[family].catalogueId` (whole-family model swap) and
+  `.scale` (whole-family scale multiplier) — the schema already documents
+  both (Phase 1) and nothing rejects them if hand-authored into edits.js,
+  but catalogue-flora.js doesn't consult either this session. Tint and
+  materialPolicy were prioritized since neither touches phase 1's placement
+  math at all (pure phase-2 concerns), unlike catalogueId/scale which would
+  ripple into the sync pass.
+- `familyOverrides[family].materialPolicy` is PERSISTED (written, and
+  consumed on the next zone build) but not LIVE-applied — doing that live
+  would mean rebuilding every group of the family (same reason a single
+  placed object's policy toggle needs `rebuildPlacedObject`, just fanned
+  out across N groups instead of one object). Reload the zone to see it.
+- Live hide doesn't retract the ORIGINAL collision circle grassland
+  registered for that tree/rock at build time (lagoon has no collision
+  system at all, so this only affects grassland) — walking through a
+  hidden-but-not-yet-rebuilt tree/rock will still collide with it until the
+  next full zone build. Noted, not fixed.
+- Verified: `node --check` clean on every new/edited file. RNG-determinism
+  fix confirmed by re-reading every placement loop in both files line by
+  line to check EVERY draw happens outside the hidden-conditional. Id
+  uniqueness confirmed by construction (one counter per family, incremented
+  once per accepted candidate, never reset mid-pass).
+- Not verified (needs Agni, eyeball-only, no browser available here): that
+  a click actually resolves to the right scattered instance, that hiding
+  reads as "gone" rather than glitchy, that a family-wide retint applies
+  cleanly across every currently-visible group of that family.

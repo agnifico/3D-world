@@ -191,6 +191,64 @@ function buildInspector(sel) {
   return wrap;
 }
 
+// World Editor Phase 4 ("scatter reach") — a scattered instance (a tree/
+// rock/bush from the catalogue-flora scatter pass, not a hand-placed
+// prop). No gizmo, no position/rotation/scale fields (see world-editor.js's
+// selectScatter comment for why) — just its id, a hide action, and a
+// family-wide override (every instance of this family, every season/state/
+// variant group currently on screen).
+function buildScatterInspector(hit) {
+  const wrap = document.createElement('div');
+  const head = document.createElement('div');
+  head.innerHTML = `<b>${hit.id}</b> <small style="opacity:.6">(scatter instance)</small>`;
+  wrap.appendChild(head);
+
+  const hideBtn = mkButton('Hide this instance');
+  hideBtn.style.cssText += 'width:100%; margin-top:8px; color:#a33; border-color:#a33;';
+  hideBtn.onclick = () => Editor.hideSelectedScatter();
+  wrap.appendChild(hideBtn);
+
+  const famWrap = document.createElement('div');
+  famWrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(80,80,90,.2); padding-top:6px;';
+  const famLabel = document.createElement('small');
+  famLabel.textContent = `Apply to whole "${hit.family}" family`;
+  famWrap.appendChild(famLabel);
+
+  const partsRow = mkRow();
+  partsRow.style.flexWrap = 'wrap';
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.style.cssText = 'margin-top:6px; width:100%;';
+  picker.disabled = true;
+  let activePart = null;
+  for (const { name, hex } of Editor.getFamilyParts(hit.family)) {
+    const s = swatch(hex);
+    s.title = name;
+    s.onclick = () => {
+      activePart = name;
+      for (const c of partsRow.children) c.style.borderColor = 'rgba(0,0,0,.25)';
+      s.style.borderColor = '#222';
+      picker.disabled = false;
+      picker.value = hex;
+    };
+    partsRow.appendChild(s);
+  }
+  picker.oninput = () => { if (activePart) Editor.recolorFamily(hit.family, activePart, picker.value); };
+  famWrap.append(partsRow, picker);
+
+  const polSel = document.createElement('select');
+  polSel.style.cssText = 'width:100%; font:inherit; margin-top:6px;';
+  polSel.append(new Option('Pack default', ''), new Option('Authored', 'authored'), new Option('Flat-matte', 'flat-matte'));
+  polSel.onchange = () => Editor.setFamilyMaterialPolicy(hit.family, polSel.value || null);
+  const polNote = document.createElement('small');
+  polNote.style.cssText = 'display:block; opacity:.6; margin-top:4px;';
+  polNote.textContent = 'Material policy applies on next zone reload, not live.';
+  famWrap.append(polSel, polNote);
+
+  wrap.appendChild(famWrap);
+  return wrap;
+}
+
 export async function initEditorPanel() {
   root = document.createElement('div');
   root.id = 'worldEditorPanel';
@@ -202,7 +260,7 @@ export async function initEditorPanel() {
   document.body.appendChild(root);
 
   const title = document.createElement('div');
-  title.innerHTML = '<b>World Editor</b><br><small style="opacity:.65">click select · T/R/Y gizmo · Del remove · Ctrl/Cmd+D duplicate · Esc cancel · ` close</small>';
+  title.innerHTML = '<b>World Editor</b><br><small style="opacity:.65">click select (placed OR scattered) · T/R/Y gizmo · Del remove/hide · Ctrl/Cmd+D duplicate · Esc cancel · ` close</small>';
   root.appendChild(title);
 
   // --- catalogue picker: room -> variant -> Place (armed, next canvas click drops it) ---
@@ -283,6 +341,7 @@ export async function initEditorPanel() {
     root.style.display = isOpen ? '' : 'none';
     if (!isOpen) return;
     const sel = Editor.getSelected();
+    const scatterSel = Editor.getSelectedScatter();
     const armed = Editor.getArmedPlacement();
     lockCb.checked = sel ? !!sel.row.locked : false;
     lockCb.disabled = !sel;
@@ -297,6 +356,8 @@ export async function initEditorPanel() {
       statusEl.appendChild(hint);
     } else if (sel) {
       statusEl.appendChild(buildInspector(sel));
+    } else if (scatterSel) {
+      statusEl.appendChild(buildScatterInspector(scatterSel));
     } else {
       const hint = document.createElement('small');
       hint.style.opacity = '.6';

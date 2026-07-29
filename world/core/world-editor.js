@@ -29,12 +29,14 @@ import {
   getPlacedRegistry, removePlacedObject, addPlacedObject, duplicatePlacedObject,
   rebuildPlacedObject, serializePlaced, genPlacedId, getEditsModule,
 } from './world-edits.js';
+import { getScatterMeshes, resolveScatterHit, getSiblingMeshes, getScatterMeshesForFamily } from './scatter-registry.js';
 
 let deps = null; // { scene, camera, domElement, animated, renderer, zone, getChar }
 let open = false;
 let abortCtl = null;
 let raycaster = null, transform = null;
 let selected = null; // a getPlacedRegistry() record, or null
+let selectedScatter = null; // { id, family, mesh, index } or null — mutually exclusive with `selected`
 let groundSnap = true;
 let armedPlacement = null; // { catalogueId, variant } while a catalogue-picker "Place" is waiting for the next canvas click
 let onChange = null; // world-editor-panel.js subscribes here to re-render on any state change
@@ -56,12 +58,25 @@ function findRegistryEntry(hitObject) {
 }
 
 function select(rec) {
+  selectedScatter = null;
   selected = rec;
   transform.attach(rec.obj);
   notify();
 }
+// Scatter instances (World Editor Phase 4, "scatter reach") get no
+// TransformControls gizmo — an InstancedMesh instance isn't its own
+// Object3D, so dragging one would need a proxy-object mechanism this
+// session scoped out (see PROJECT-STATE.md). Selecting one still gets you
+// its Family#NNNN id, a hide action, and a family-wide override section.
+function selectScatter(hit) {
+  selected = null;
+  transform.detach();
+  selectedScatter = hit;
+  notify();
+}
 function deselect() {
   selected = null;
+  selectedScatter = null;
   transform.detach();
   notify();
 }
@@ -119,10 +134,23 @@ function onPointerDown(e) {
   const rect = deps.domElement.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, deps.camera);
-  const hits = raycaster.intersectObjects(selectableObjects(), true);
+  // One combined raycast (not two separate ones) so a placed object and a
+  // scattered instance compete on actual distance — whichever is visually
+  // closer under the cursor wins, not "placed always beats scatter".
+  const hits = raycaster.intersectObjects([...selectableObjects(), ...getScatterMeshes()], true);
   if (!hits.length) { deselect(); return; }
-  const rec = findRegistryEntry(hits[0].object);
-  if (rec) select(rec); else deselect();
+  const hit = hits[0];
+  const placedRec = findRegistryEntry(hit.object);
+  if (placedRec) { select(placedRec); return; }
+  // hit.instanceId is only ever set by THREE for a hit against an
+  // InstancedMesh — a plain Mesh hit (that isn't under a placed-registry
+  // root either, e.g. terrain/water/other zone content the raycast can
+  // still technically reach) leaves it undefined.
+  if (hit.instanceId !== undefined) {
+    const resolved = resolveScatterHit(hit.object, hit.instanceId);
+    if (resolved) { selectScatter({ ...resolved, mesh: hit.object, index: hit.instanceId }); return; }
+  }
+  deselect();
 }
 
 async function duplicateSelected() {
@@ -136,6 +164,81 @@ function deleteSelected() {
   deselect();
   removePlacedObject(deps.scene, id);
   notify();
+}
+
+// Records a per-instance scatterEdits[id] override on the CURRENT zone's
+// live editsModule (getEditsModule() — populated by applyEdits at zone
+// build time, always resolved by the time the editor could possibly be
+// open) so Save picks it up, merging over anything already there rather
+// than replacing the row outright.
+function patchScatterEdit(id, patch) {
+  const editsModule = getEditsModule();
+  if (!editsModule) return;
+  editsModule.scatterEdits ||= {};
+  editsModule.scatterEdits[id] = { ...(editsModule.scatterEdits[id] || {}), ...patch };
+}
+function patchFamilyOverride(family, patch) {
+  const editsModule = getEditsModule();
+  if (!editsModule) return;
+  editsModule.familyOverrides ||= {};
+  editsModule.familyOverrides[family] = { ...(editsModule.familyOverrides[family] || {}), ...patch };
+}
+
+// Hides ONE scattered instance: persists scatterEdits[id]={hidden:true} for
+// next build, AND hides it live right now by collapsing its matrix to zero
+// scale across every sibling part-mesh of the SAME placement (trunk+leaves
+// together) — getSiblingMeshes (not getScatterMeshesForFamily) is what
+// keeps this scoped to the one placement instead of every instance sharing
+// that numeric index across unrelated groups of the same family.
+function hideSelectedScatterInstance() {
+  if (!selectedScatter) return;
+  const { id, mesh, index } = selectedScatter;
+  patchScatterEdit(id, { hidden: true });
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (const m of getSiblingMeshes(mesh, index)) {
+    m.setMatrixAt(index, zero);
+    m.instanceMatrix.needsUpdate = true;
+  }
+  deselect();
+}
+
+// Family-wide recolor — same clone-then-set-color technique as
+// recolorSelectedPart (see its own comment), applied across EVERY currently
+// registered mesh of the family (every season/state/variant group), not
+// just the instance that happened to be selected. Live + persisted.
+function recolorFamily(family, materialName, hex) {
+  let changed = false;
+  for (const mesh of getScatterMeshesForFamily(family)) {
+    if (mesh.material?.name !== materialName) continue;
+    const clone = mesh.material.clone();
+    clone.color.set(hex);
+    mesh.material = clone;
+    changed = true;
+  }
+  if (changed) patchFamilyOverride(family, { tint: { ...(getEditsModule()?.familyOverrides?.[family]?.tint || {}), [materialName]: hex } });
+  return changed;
+}
+
+// Family-wide material-policy override: PERSISTED (scatterEdits/
+// familyOverrides.materialPolicy is picked up on the next zone build via
+// catalogue-flora.js's own familyOverrides check) but NOT live-applied this
+// session — reapplying a policy correctly would mean rebuilding every group
+// of the family (re-resolve, re-load, re-instance), the same rebuild
+// core/world-edits.js's rebuildPlacedObject does for a single placed
+// object; scoped out here for time (see PROJECT-STATE.md). Reload the zone
+// (or Save + refresh) to see it take effect.
+function setFamilyMaterialPolicy(family, mode) {
+  patchFamilyOverride(family, { materialPolicy: mode });
+}
+
+// Every material part visible on the CURRENTLY selected scatter instance's
+// own mesh — the family-override recolor row's swatches.
+function getFamilyParts(family) {
+  const parts = new Map();
+  for (const mesh of getScatterMeshesForFamily(family)) {
+    if (mesh.material?.name && mesh.material?.color) parts.set(mesh.material.name, '#' + mesh.material.color.getHexString());
+  }
+  return [...parts.entries()].map(([name, hex]) => ({ name, hex }));
 }
 
 // Model swap / material-policy toggle both rebuild the object under the
@@ -206,6 +309,7 @@ function onKeyDown(e) {
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (MODE_KEYS[e.code]) { transform.mode = MODE_KEYS[e.code]; notify(); return; }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selected) { e.preventDefault(); deleteSelected(); return; }
+  if ((e.code === 'Delete' || e.code === 'Backspace') && selectedScatter) { e.preventDefault(); hideSelectedScatterInstance(); return; }
   if (e.code === 'KeyD' && (e.ctrlKey || e.metaKey) && selected) { e.preventDefault(); duplicateSelected(); return; }
   if (e.code === 'Escape') { if (armedPlacement) { armedPlacement = null; notify(); } else deselect(); }
 }
@@ -215,6 +319,9 @@ function onKeyDown(e) {
 export function isOpen() { return open; }
 export function getZoneId() { return deps?.zone?.id; }
 export function getSelected() { return selected; }
+export function getSelectedScatter() { return selectedScatter; }
+export function hideSelectedScatter() { return hideSelectedScatterInstance(); }
+export { recolorFamily, setFamilyMaterialPolicy, getFamilyParts };
 export function getMode() { return transform?.mode; }
 export function setMode(m) { if (transform && ['translate', 'rotate', 'scale'].includes(m)) { transform.mode = m; notify(); } }
 export function getGroundSnap() { return groundSnap; }

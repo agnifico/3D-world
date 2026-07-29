@@ -20,7 +20,9 @@ import { loadTintedTemplate } from '../../core/gltf-assets.js';
 import { makeInstanced, addWind, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
 import { reportMissingAsset } from '../../core/asset-diagnostics.js';
 import { getPackPolicy } from '../../core/asset-policy.js';
+import { resetScatterRegistry, registerScatterMesh } from '../../core/scatter-registry.js';
 import { bindings } from './bindings.js';
+import { edits } from './edits.js';
 
 const AREA = { min: -95, max: 95 };
 
@@ -80,24 +82,48 @@ function placeBand(rng, band) {
 }
 
 function groupKey(spec) { return [spec.set, spec.category || '', spec.family, spec.season, spec.state, spec.variant].join('|'); }
-function addToGroup(groups, spec, matrix) {
+function addToGroup(groups, spec, matrix, id) {
   const key = groupKey(spec);
   let g = groups.get(key);
-  if (!g) { g = { ...spec, matrices: [] }; groups.set(key, g); }
+  if (!g) { g = { ...spec, matrices: [], ids: [] }; groups.set(key, g); }
   g.matrices.push(matrix);
+  g.ids.push(id);
+}
+
+// World Editor Phase 4 ("scatter reach") — see grassland/catalogue-flora.js's
+// identical makeInstanceIdGen for the full reasoning (deterministic
+// Family#NNNN in placement order, stable across rebuilds since the counter
+// advances whether or not an instance ends up hidden).
+function makeInstanceIdGen() {
+  const counters = {};
+  return family => {
+    const n = counters[family] ?? 0;
+    counters[family] = n + 1;
+    return `${family}#${String(n).padStart(4, '0')}`;
+  };
 }
 
 export function placeCatalogueFloraSync() {
   const rng = mulberry32(77331);
   const groups = new Map();
+  const genId = makeInstanceIdGen();
 
   // Palms — real Pirates models, land band (above water, same footprint the
   // old placeholder/temp-swap palms used).
   for (const p of placeBand(rng, catalogueBands.palm)) {
     const pack = PACK.palmTree;
+    // Every rng() draw below is unconditional (variant, scale, rotation) —
+    // only the final addToGroup (what renders) is gated on hidden. Skipping
+    // a draw for a hidden instance would shift the rng stream for every
+    // placement after it in this band, breaking id stability across
+    // rebuilds for everything downstream, not just the hidden one.
+    const variant = pickVariant(rng, VARIANT_COUNT.palmTree);
     const s = (0.8 + rng() * 0.6) * pack.policy.scaleFactor;
-    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.palmTree) },
-      mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
+    const rot = rng() * Math.PI * 2;
+    const id = genId(pack.family); // pack.family (the RESOLVED catalogue family, e.g. 'PalmTree'), NOT the slot name — matches what familyOverrides/the scatter registry key on below
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant }, mtx(p.x, p.y, p.z, rot, s, s, s), id);
+    }
   }
 
   // Seaweed — Simple_Nature grass, stretched tall + thin, reef depth band
@@ -106,17 +132,25 @@ export function placeCatalogueFloraSync() {
   // flat grass tufts sitting on the seabed.
   for (const p of placeBand(rng, catalogueBands.seaweed)) {
     const pack = PACK.seaweed;
+    const variant = pickVariant(rng, VARIANT_COUNT.seaweed);
     const sxz = (3 + rng() * 0.22) * pack.policy.scaleFactor, sy = (3.4 + rng() * 2.2) * pack.policy.scaleFactor;
-    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.seaweed) },
-      mtx(p.x, p.y, p.z, rng() * Math.PI * 2, sxz, sy, sxz));
+    const rot = rng() * Math.PI * 2;
+    const id = genId(pack.family); // 'Grass' — the resolved catalogue family, not the 'seaweed' slot name
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant }, mtx(p.x, p.y, p.z, rot, sxz, sy, sxz), id);
+    }
   }
 
   // Reef rocks — Pirates rocks, shallow band.
   for (const p of placeBand(rng, catalogueBands.reefRock)) {
     const pack = PACK.reefRock;
+    const variant = pickVariant(rng, VARIANT_COUNT.reefRock);
     const s = (0.5 + rng() * 0.9) * pack.policy.scaleFactor;
-    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.reefRock) },
-      mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
+    const rot = rng() * Math.PI * 2;
+    const id = genId(pack.family); // 'Rock' — the resolved catalogue family, not the 'reefRock' slot name
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant }, mtx(p.x, p.y, p.z, rot, s, s, s), id);
+    }
   }
 
   // Shore bushes — NNK Style Bush_Common (RESOLVER-BINDING-SESSION fix, see
@@ -130,15 +164,20 @@ export function placeCatalogueFloraSync() {
   // reads wrong.
   for (const p of placeBand(rng, catalogueBands.shoreBush)) {
     const pack = PACK.shoreBush;
+    const variant = pickVariant(rng, VARIANT_COUNT.shoreBush);
     const s = (0.85 + rng() * 0.3) * pack.policy.scaleFactor;
-    addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant: pickVariant(rng, VARIANT_COUNT.shoreBush) },
-      mtx(p.x, p.y, p.z, rng() * Math.PI * 2, s, s, s));
+    const rot = rng() * Math.PI * 2;
+    const id = genId(pack.family); // 'Bush_Common' — the resolved catalogue family, not the 'shoreBush' slot name
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: pack.set, category: pack.category, family: pack.family, season: 'normal', state: 'alive', variant }, mtx(p.x, p.y, p.z, rot, s, s, s), id);
+    }
   }
 
   return { groups };
 }
 
 export async function instantiateCatalogueFlora(ctx, scene, groups) {
+  resetScatterRegistry(); // World Editor Phase 4 — fresh per zone build, same discipline as height/collision registries
   const manifest = await loadCatalogue();
   const palmGroup = new THREE.Group(), seaweedGroup = new THREE.Group(), rockGroup = new THREE.Group(), bushGroup = new THREE.Group();
 
@@ -151,12 +190,19 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
     if (!entry) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no catalogue entry'); continue; }
     const variantRec = entry.variants.find(v => v.variant === g.variant) || entry.variants[0];
     if (!variantRec) { reportMissingAsset(`${g.set}/${g.family}`, 'lagoon catalogue-flora: no variant record'); continue; }
-    const tint = g.family === 'Grass' ? SEAWEED_TINT : null;
+    // World Editor Phase 4 ("scatter reach") — a family-wide override can
+    // retint or force a material-policy mode for EVERY instance of that
+    // family (see grassland/catalogue-flora.js's identical comment for why
+    // catalogueId/scale overrides are scoped out this session).
+    const famOverride = edits.familyOverrides?.[g.family];
+    const baseTint = g.family === 'Grass' ? SEAWEED_TINT : null;
+    const tint = famOverride?.tint ? { ...(baseTint || {}), ...famOverride.tint } : baseTint;
+    const policy = famOverride?.materialPolicy ? { ...getPackPolicy(g.set), material: famOverride.materialPolicy } : getPackPolicy(g.set);
     // RESOLVER-BINDING-SESSION — served-or-shelf, same fallback core/
     // catalogue.js's resolveAsset uses: a binding can now point at a
     // shelf-only (never-served) entry, like shoreBush's NNK Style bush.
     const url = variantRec.served ? servedURL(variantRec.served) : sourceURL(variantRec.source);
-    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint, getPackPolicy(g.set)) });
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint, policy) });
   }
 
   const swayMaterials = new Set();
@@ -183,6 +229,7 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
       });
     }
     const instanced = makeInstanced(template, g.matrices);
+    for (const part of instanced.children) registerScatterMesh(part, g.family, g.ids); // World Editor Phase 4
     if (g.family === 'PalmTree') palmGroup.add(instanced);
     else if (g.family === 'Grass') seaweedGroup.add(instanced);
     else if (g.family === 'Rock') rockGroup.add(instanced);

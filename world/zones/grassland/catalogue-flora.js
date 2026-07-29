@@ -21,7 +21,9 @@ import { loadTintedTemplate, measureTrunkRadius, measureFootprint } from '../../
 import { makeInstanced, summarizeInstancing, logDrawCallsNextFrame } from '../../core/instancing.js';
 import { reportMissingAsset } from '../../core/asset-diagnostics.js';
 import { getPackPolicy } from '../../core/asset-policy.js';
+import { resetScatterRegistry, registerScatterMesh } from '../../core/scatter-registry.js';
 import { bindings } from './bindings.js';
+import { edits } from './edits.js';
 
 // RESOLVER-BINDING-SESSION Layer 2 — resolves each binding's id once, pure
 // sync string parse (core/catalogue.js's parseCatalogueId), no manifest
@@ -106,11 +108,28 @@ function pickTreeFamily(R) {
 }
 
 function groupKey(spec) { return [spec.set, spec.category || '', spec.family, spec.season, spec.state, spec.variant, spec.moss ? 'moss' : ''].join('|'); }
-function addToGroup(groups, spec, matrix) {
+function addToGroup(groups, spec, matrix, id) {
   const key = groupKey(spec);
   let g = groups.get(key);
-  if (!g) { g = { ...spec, matrices: [] }; groups.set(key, g); }
+  if (!g) { g = { ...spec, matrices: [], ids: [] }; groups.set(key, g); }
   g.matrices.push(matrix);
+  g.ids.push(id);
+}
+
+// World Editor Phase 4 ("scatter reach") — deterministic Family#NNNN ids in
+// PLACEMENT order. The counter advances for EVERY candidate that clears the
+// rejection-sampling checks below, whether or not it ends up hidden (see the
+// `edits.scatterEdits[id]?.hidden` check at each call site) — hiding must
+// never renumber everything after it, or a saved scatterEdit would silently
+// start pointing at a different physical placement on the next reload.
+// Local to one placeCatalogueFloraSync() call (reset every zone build).
+function makeInstanceIdGen() {
+  const counters = {};
+  return family => {
+    const n = counters[family] ?? 0;
+    counters[family] = n + 1;
+    return `${family}#${String(n).padStart(4, '0')}`;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +142,7 @@ function addToGroup(groups, spec, matrix) {
 export function placeCatalogueFloraSync() {
   const R = A.rng(4321);
   const groups = new Map();
+  const genId = makeInstanceIdGen();
 
   // --- trees (same budget as the old procedural pass: 115) ---
   let placed = 0, guard = 0;
@@ -144,16 +164,26 @@ export function placeCatalogueFloraSync() {
     }
     const season = seasonAt(p.x, p.z);
     const variant = pickVariant(R, family);
+    const id = genId(family); // consumed even if hidden below — see makeInstanceIdGen's own comment
 
+    // Every RNG draw below happens UNCONDITIONALLY, hidden or not — only the
+    // final addToGroup (what actually renders) is gated. Skipping any of
+    // these draws for a hidden instance would shift the RNG stream for
+    // every placement after it, breaking the "stable across rebuilds"
+    // guarantee for the WHOLE rest of the pass, not just the hidden one.
     let s = 0.85 + R() * 0.45;
     s *= FAMILY_SCALE[family] || 1;
     s *= PACK[family].policy.scaleFactor;
     const sy = s * (0.95 + R() * 0.1);
-    addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family, season, state, variant },
-      mtx(p.x, p.h - 0.05, p.z, R() * Math.PI * 2, s, sy));
+    const rot = R() * Math.PI * 2;
+
     treePts.push(p);
     scatterFootprints.push({ kind: 'tree', x: p.x, z: p.z, r: s * 1.3 }); // canopy proxy — spacing/avoidance only, NOT the collider (see instantiateCatalogueFlora)
     placed++;
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family: PACK[family].family, season, state, variant },
+        mtx(p.x, p.h - 0.05, p.z, rot, s, sy), id);
+    }
   }
 
   // --- rocks: mostly plain, a moss fraction everywhere, snow variant inside the snow patch ---
@@ -165,13 +195,22 @@ export function placeCatalogueFloraSync() {
     const state = 'alive';
     const rockSeason = season === 'snow' ? 'snow' : (R() < 0.2 ? 'mossy' : 'normal'); // 'mossy' resolved to the Rock+moss entry below
     const variant = pickVariant(R, 'Rock');
+    const id = genId('Rock');
+
+    // See the tree loop's identical comment: every draw unconditional, only
+    // addToGroup gated, so hiding one instance never shifts the RNG stream
+    // for anything placed after it.
     let s = 0.5 + R() * 1.2;
     s *= PACK.Rock.policy.scaleFactor;
     const sy = s * (0.8 + R() * 0.5);
-    addToGroup(groups, { set: PACK.Rock.set, category: PACK.Rock.category, family: 'Rock', season: rockSeason === 'mossy' ? 'normal' : rockSeason, state, variant, moss: rockSeason === 'mossy' },
-      mtx(p.x, p.h, p.z, R() * Math.PI * 2, s, sy));
+    const rot = R() * Math.PI * 2;
+
     scatterFootprints.push({ kind: 'rock', x: p.x, z: p.z, r: s * 0.6 });
     placed++;
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: PACK.Rock.set, category: PACK.Rock.category, family: PACK.Rock.family, season: rockSeason === 'mossy' ? 'normal' : rockSeason, state, variant, moss: rockSeason === 'mossy' },
+        mtx(p.x, p.h, p.z, rot, s, sy), id);
+    }
   }
 
   // --- bushes: plain + a BushBerries fraction (harvestable, placed not wired) ---
@@ -186,13 +225,19 @@ export function placeCatalogueFloraSync() {
     // (no seasonal variants at all) — never request a combo that can't exist.
     const bushSeason = isBerries ? 'normal' : (season === 'snow' ? 'snow' : 'normal');
     const variant = pickVariant(R, family);
+    const id = genId(family);
+
     let s = 0.7 + R() * 0.8;
     s *= FAMILY_SCALE[family] || 1;
     s *= PACK[family].policy.scaleFactor;
-    addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family, season: bushSeason, state: 'alive', variant },
-      mtx(p.x, p.h, p.z, R() * Math.PI * 2, s));
+    const rot = R() * Math.PI * 2; // unconditional — see the tree/rock loops' identical comment
+
     scatterFootprints.push({ kind: 'bush', x: p.x, z: p.z, r: s * 0.7 }); // decorative — walk-through
     placed++;
+    if (!edits.scatterEdits?.[id]?.hidden) {
+      addToGroup(groups, { set: PACK[family].set, category: PACK[family].category, family: PACK[family].family, season: bushSeason, state: 'alive', variant },
+        mtx(p.x, p.h, p.z, rot, s), id);
+    }
   }
 
   return { groups };
@@ -207,6 +252,7 @@ export function placeCatalogueFloraSync() {
 // summary the brief's verification step asks for.
 // ---------------------------------------------------------------------------
 export async function instantiateCatalogueFlora(ctx, scene, groups) {
+  resetScatterRegistry(); // World Editor Phase 4 — fresh per zone build, same discipline as height/collision registries
   const manifest = await loadCatalogue();
   const treeGroup = new THREE.Group(), rockGroup = new THREE.Group(), bushGroup = new THREE.Group();
   const _pos = new THREE.Vector3(), _quat = new THREE.Quaternion(), _scale = new THREE.Vector3();
@@ -229,7 +275,16 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
     // catalogue.js's resolveAsset uses: a binding can point at a shelf-only
     // (never-served) entry, not just BIGNature's currently-all-served set.
     const url = variantRec.served ? servedURL(variantRec.served) : sourceURL(variantRec.source);
-    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, GRASSLAND_TINT, getPackPolicy(g.set)) });
+    // World Editor Phase 4 ("scatter reach") — a family-wide override can
+    // retint or force a material-policy mode for EVERY instance of that
+    // family. Scoped to tint/materialPolicy only this session (NOT a
+    // catalogueId/scale override — see PROJECT-STATE.md's own note on why
+    // that's cut): those two don't affect phase 1's placement math at all,
+    // so applying them here needs no changes anywhere else.
+    const famOverride = edits.familyOverrides?.[g.family];
+    const tint = famOverride?.tint ? { ...GRASSLAND_TINT, ...famOverride.tint } : GRASSLAND_TINT;
+    const policy = famOverride?.materialPolicy ? { ...getPackPolicy(g.set), material: famOverride.materialPolicy } : getPackPolicy(g.set);
+    resolved.push({ g, url, templatePromise: loadTintedTemplate(url, tint, policy) });
   }
 
   for (const { g, url, templatePromise } of resolved) {
@@ -244,6 +299,11 @@ export async function instantiateCatalogueFlora(ctx, scene, groups) {
       continue;
     }
     const instanced = makeInstanced(template, g.matrices);
+    // World Editor Phase 4 — every InstancedMesh part shares the SAME id
+    // list (makeInstanced applies g.matrices, in order, to every mesh part
+    // of the template), so a raycast hit on ANY part resolves to the right
+    // Family#NNNN regardless of which part (trunk vs. leaves, say) it hit.
+    for (const part of instanced.children) registerScatterMesh(part, g.family, g.ids);
 
     if (g.family === 'Rock') {
       rockGroup.add(instanced);
