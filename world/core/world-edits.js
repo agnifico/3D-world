@@ -156,6 +156,32 @@ export async function duplicatePlacedObject(scene, zone, id) {
   return addPlacedObject(scene, zone, newRow);
 }
 
+// Rebuilds an EXISTING placed object in place under the SAME id, applying
+// `patch` on top of its current live state (position/rotation/scale carry
+// over from serializeRows, same "pick up any gizmo drag since" reasoning
+// duplicatePlacedObject uses) — the inspector's live model-swap
+// (`patch: {catalogueId, variant, tint:null}` — a different model's material
+// names likely don't match the old tint, so it's dropped rather than
+// silently mismatched) and material-policy toggle (`patch:
+// {materialPolicy}`) both just want "reload with these fields changed."
+// On failure (bad id, load error) the OLD object is left completely
+// untouched — only swapped out once the replacement has actually loaded.
+export async function rebuildPlacedObject(scene, zone, id, patch) {
+  const idx = _registry.findIndex(r => r.id === id);
+  if (idx === -1) return null;
+  const old = _registry[idx];
+  const [row] = serializeRows([old]);
+  const newRow = { ...row, ...patch };
+  const manifest = await loadCatalogue();
+  const built = await buildPlacedObject(zone, manifest, newRow);
+  if (!built) return null;
+  scene.remove(old.obj);
+  scene.add(built.obj);
+  const rec = { id, obj: built.obj, row: { ...newRow, id }, zoneId: old.zoneId, policyScaleFactor: built.policyScaleFactor };
+  _registry[idx] = rec;
+  return rec;
+}
+
 // Reads each record's LIVE transform (position/rotation set directly, no
 // policy involved, so read straight off the object) back into placed[]
 // row shape — scale divides `policyScaleFactor` back out first, since

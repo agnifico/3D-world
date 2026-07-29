@@ -27,7 +27,7 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {
   getPlacedRegistry, removePlacedObject, addPlacedObject, duplicatePlacedObject,
-  serializePlaced, genPlacedId, getEditsModule,
+  rebuildPlacedObject, serializePlaced, genPlacedId, getEditsModule,
 } from './world-edits.js';
 
 let deps = null; // { scene, camera, domElement, animated, renderer, zone, getChar }
@@ -138,6 +138,64 @@ function deleteSelected() {
   notify();
 }
 
+// Model swap / material-policy toggle both rebuild the object under the
+// same id (core/world-edits.js's rebuildPlacedObject) — the OLD object is
+// gone (removed from the scene) once this resolves, so the gizmo has to
+// re-attach to the NEW one; re-selecting does both (select() re-attaches).
+async function rebuildSelected(patch) {
+  if (!selected) return false;
+  const rec = await rebuildPlacedObject(deps.scene, deps.zone, selected.id, patch);
+  if (!rec) return false;
+  select(rec);
+  return true;
+}
+
+// Per-material-name swatches for the CURRENTLY selected object's live
+// materials — the inspector's recolor row reads this to know what's there
+// to click on and what it currently looks like.
+function getSelectedParts() {
+  if (!selected) return [];
+  const parts = new Map(); // material name -> current hex (last one wins if somehow duplicated — cosmetic only)
+  selected.obj.traverse(o => {
+    if (!o.isMesh) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (m?.name && m.color) parts.set(m.name, '#' + m.color.getHexString());
+    }
+  });
+  return [...parts.entries()].map(([name, hex]) => ({ name, hex }));
+}
+
+// Recolors ONE named material part on the selected object: clones it first
+// (never mutates the material object in place) then sets .color on the
+// clone — cloning preserves the original's map/roughness/metalness/etc., so
+// a textured (authored) material keeps its texture and just gets tinted,
+// rather than being replaced by a flat solid-color material and rendering
+// washed-out/greyscale (the exact mistake this technique avoids — see
+// core/gltf-assets.js's loadTintedTemplate, which uses the identical clone-
+// then-set-color technique for the same reason). Persists into
+// selected.row.tint so Save/serialize picks it up. Deliberately does NOT
+// notify() — same reasoning as the transform setters above: a native
+// <input type=color> fires oninput continuously while its picker is being
+// dragged, and rebuilding the panel (which would recreate that same input)
+// mid-drag would be at best disruptive and at worst close the picker.
+function recolorSelectedPart(materialName, hex) {
+  if (!selected) return false;
+  let changed = false;
+  selected.obj.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (let i = 0; i < mats.length; i++) {
+      if (mats[i].name !== materialName) continue;
+      const clone = mats[i].clone();
+      clone.color.set(hex);
+      if (Array.isArray(o.material)) o.material[i] = clone; else o.material = clone;
+      changed = true;
+    }
+  });
+  if (changed) selected.row.tint = { ...(selected.row.tint || {}), [materialName]: hex };
+  return changed;
+}
+
 function onKeyDown(e) {
   if (!e.isTrusted || !open) return;
   // Don't hijack T/R/Y/Delete/Ctrl+D while the user is typing/searching in
@@ -171,6 +229,51 @@ export function toggleSelectedLock() {
   if (!selected) return;
   selected.row.locked = !selected.row.locked;
   if (selected.row.locked) deselect(); else notify();
+}
+export { getSelectedParts, recolorSelectedPart };
+// Position/rotation (degrees)/uniform-vs-per-axis scale — the inspector
+// sets these directly on the live object for instant visual feedback.
+// Deliberately does NOT call notify(): the panel rebuilds its numeric
+// <input>s from scratch on every notify (same as grassland/editor-panel.js's
+// own numField/render pattern), which would steal focus/cursor position out
+// from under the user on every keystroke. grassland's own numField sidesteps
+// this the identical way — its `set()` callbacks mutate the object directly
+// without routing through editor.js's notify-calling functions. The 3D view
+// still updates instantly regardless (the render loop runs every frame,
+// with or without a DOM re-render) — only the *panel's own* redraw is
+// skipped, and nothing in the panel needs to reflect a value the user is
+// still actively typing into. Save's serializePlaced() reads the live
+// object's transform at export time, so this needs no `row` bookkeeping.
+export function setSelectedPosition(x, y, z) {
+  if (!selected) return;
+  selected.obj.position.set(x, y, z);
+}
+export function setSelectedRotationDeg(xDeg, yDeg, zDeg) {
+  if (!selected) return;
+  const d = Math.PI / 180;
+  selected.obj.rotation.set(xDeg * d, yDeg * d, zDeg * d);
+}
+// scale is stored/edited as the USER-FACING (pre-policy) number, matching
+// what Save writes — multiplies policyScaleFactor back in before touching
+// the live object, mirroring core/world-edits.js's own applyScale.
+export function setSelectedScale(sx, sy, sz) {
+  if (!selected) return;
+  const f = selected.policyScaleFactor;
+  selected.obj.scale.set(sx * f, sy * f, sz * f);
+}
+export function getSelectedUserScale() {
+  if (!selected) return [1, 1, 1];
+  const f = selected.policyScaleFactor;
+  const s = selected.obj.scale;
+  return [s.x / f, s.y / f, s.z / f];
+}
+export function swapSelectedModel(catalogueId, variant) {
+  return rebuildSelected({ catalogueId, variant, tint: null });
+}
+export function setSelectedMaterialPolicy(mode) {
+  // mode: 'authored' | 'flat-matte' | null (null clears the override, back
+  // to the resolved pack's own default policy)
+  return rebuildSelected({ materialPolicy: mode });
 }
 export function exportEditsText(zoneId) {
   const placed = serializePlaced();

@@ -449,3 +449,66 @@ deliberately to ever hit.
   close cycles really hold at zero geometry growth (reasoned from following
   grassland/editor.js's proven-stable pattern exactly, not independently
   re-measured this session).
+
+**Phase 3 — object inspector panel.** Extends the selected-object status
+line into a full property panel: position/rotation(°)/scale (uniform-or-
+per-axis toggle) numeric fields, recolor (click a material-name swatch,
+then a native `<input type=color>`), a material-policy select (pack
+default / authored / flat-matte), and a model-swap picker (same room-then-
+variant catalogue enumeration as place-new). Live preview — every field
+mutates the selected THREE object directly; Save reads the live transform
+at export time (already true since Phase 2).
+
+A real correctness fix, caught during this phase's own design rather than
+after the fact: `core/gltf-assets.js`'s template caches (`_templateCache`/
+`_tintedCache`) were keyed by URL alone, on the RESOLVER-BINDING-SESSION
+invariant "policy is a pure function of the pack, so one url only ever
+needs one policy." Phase 3's per-object material-policy override breaks
+that invariant outright — the SAME url can now legitimately be requested
+under two different policies (one placed object's inspector override vs.
+everything else still on the pack default) — so both cache keys now fold
+in `policy.material` too. Transparent to every existing caller (their
+policy is still a pure function of pack, so they still get exactly one
+cache entry per url); only a policy-overridden object gets a second,
+correctly-isolated entry.
+
+Two more bugs caught during this phase's self-review, before shipping:
+(1) the first draft's numeric position/rotation/scale fields called
+`notify()` on every keystroke, which rebuilds the whole inspector (matching
+grassland/editor-panel.js's own render pattern) — recreating a focused
+`<input>` on every character would have stolen focus/cursor position out
+from under the user mid-type. Fixed by NOT calling notify() from those
+setters (grassland's own numField sidesteps the identical issue the same
+way — its `set()` callbacks mutate the object directly, bypassing editor.js
+entirely); the 3D view still updates live regardless, since the render
+loop runs every frame independent of any DOM re-render. The recolor
+color-picker has the same fix for the same reason (dragging a native color
+wheel fires `oninput` continuously). (2) The per-axis scale fields
+originally captured the other two axes' values once at panel-build time —
+editing X after having already edited Y would have silently reverted Y
+back to its stale build-time value. Fixed by re-reading all three axes
+fresh (`Editor.getSelectedUserScale()`) at the moment each field's own
+setter actually fires, not once when the fields were built.
+
+Model swap and the material-policy toggle both route through one new
+`core/world-edits.js` primitive, `rebuildPlacedObject(scene, zone, id,
+patch)`: reads the object's CURRENT live transform (not the stale row
+captured at build/last-rebuild time), merges `patch` over it, loads the
+replacement, and only swaps it into the scene/registry once the new one
+has actually loaded — a failed swap (bad id, load error) leaves the
+original completely untouched, never a half-applied state.
+- Verified: `node --check` clean on every edited file. Cache-key fix
+  confirmed transparent by inspection (every existing caller's policy is
+  still 1:1 with its pack, so the widened key can only ever produce
+  additional cache entries, never fewer/different ones for existing code
+  paths). The recolor clone-then-set-color technique matches core/gltf-
+  assets.js's own loadTintedTemplate remap exactly, so it inherits that
+  code's already-established "don't mutate a shared cached material"
+  correctness rather than re-deriving it.
+- Not verified (needs Agni, eyeball-only, no browser available here): the
+  actual in-browser feel of the inspector fields, whether the recolor
+  swatches read as expected across a textured (authored) vs. solid-color
+  (flat-matte) material, whether a model swap's carried-over scale/rotation
+  ever looks obviously wrong against a wildly different replacement model's
+  proportions (a deliberate choice — see rebuildPlacedObject's own comment
+  — not a defect if so, just a starting point to then re-tune live).

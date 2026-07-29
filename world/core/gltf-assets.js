@@ -42,16 +42,22 @@ function applyMaterialPolicy(mat, materialMode) {
 const DEFAULT_POLICY = { material: 'authored', scaleFactor: 1 }; // pass-through fallback for a caller that doesn't (yet) pass one
 
 let _loader = null;
-const _templateCache = new Map(); // url -> Promise<THREE.Group>
+const _templateCache = new Map(); // "url::materialMode" -> Promise<THREE.Group>
 
-// policy is a pure function of the url's pack (core/asset-policy.js), and a
-// given url only ever belongs to one pack, so caching by url alone (not
-// url+policy) is safe — no caller can ever request the same url under two
-// different policies.
+// Cache key includes policy.material (NOT the whole policy — scaleFactor is
+// applied per-instance by callers, never baked into the template) because
+// this invariant broke once the World Editor (Phase 3) added PER-OBJECT
+// materialPolicy overrides: a url's policy used to be a pure function of its
+// pack (one url -> one pack -> one policy), so keying by url alone was safe.
+// Now the SAME url can legitimately be requested under two different material
+// modes (a placed object's inspector override vs. everything else still
+// using the pack default) — url-only caching would have silently returned
+// whichever mode was cached first for every subsequent request.
 function loadRaw(url, policy) {
-  if (!_templateCache.has(url)) {
+  const key = `${url}::${policy.material}`;
+  if (!_templateCache.has(key)) {
     _loader = _loader || new GLTFLoader();
-    _templateCache.set(url, _loader.loadAsync(url).then(gltf => {
+    _templateCache.set(key, _loader.loadAsync(url).then(gltf => {
       const scene = gltf.scene;
       scene.updateMatrixWorld(true);
       // Quaternius exports don't guarantee the pivot sits at the model's own
@@ -69,7 +75,7 @@ function loadRaw(url, policy) {
       return scene;
     }));
   }
-  return _templateCache.get(url);
+  return _templateCache.get(key);
 }
 
 // Measures a real per-species trunk radius from the template's OWN geometry
@@ -113,7 +119,11 @@ export function measureFootprint(template) {
 // to different palettes never share (or fight over) one mutated material.
 const _tintedCache = new Map();
 export function loadTintedTemplate(url, remap, policy = DEFAULT_POLICY) {
-  const key = url + '::' + JSON.stringify(remap || {});
+  // policy.material folded in for the same reason loadRaw's own cache key
+  // needs it now (see that function's comment) — remap alone isn't enough
+  // to disambiguate two requests for the same url+remap under different
+  // material-policy overrides.
+  const key = url + '::' + JSON.stringify(remap || {}) + '::' + policy.material;
   if (!_tintedCache.has(key)) {
     _tintedCache.set(key, loadRaw(url, policy).then(rawTemplate => {
       if (!remap) return rawTemplate;

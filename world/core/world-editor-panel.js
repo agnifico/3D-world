@@ -1,9 +1,10 @@
 // World Shell — World Editor (Layer 4) DOM: catalogue picker + toolbar +
-// a minimal status line (the full per-object property inspector is Phase
-// 3 — this phase only needs enough UI to select/place/duplicate/delete/
-// lock/save). Talks to core/world-editor.js only through its exported
-// functions/callback, never reaches into its internals — same discipline
-// grassland/editor-panel.js already established against grassland/editor.js.
+// a per-object property inspector (position/rotation/scale fields, recolor,
+// material-policy toggle, model swap — Phase 3; select/place/duplicate/
+// delete/lock/save are Phase 2). Talks to core/world-editor.js only through
+// its exported functions/callback, never reaches into its internals — same
+// discipline grassland/editor-panel.js already established against
+// grassland/editor.js.
 //
 // initEditorPanel() is called ONCE ever (main.js guards it behind "have I
 // already dynamically imported this module"), not once per open/close
@@ -41,6 +42,153 @@ function populateVariantSelect(sel, room) {
   sel.innerHTML = '';
   if (!room) return;
   for (const slot of room.slots) sel.appendChild(new Option(`${slot.name}${slot.used ? '' : ' (shelf)'}`, JSON.stringify({ id: slot.entryId, variant: slot.variant })));
+}
+
+// Same numeric-field shape grassland/editor-panel.js's own numField uses —
+// `set` mutates the live object directly and does NOT trigger a panel
+// re-render (see world-editor.js's setSelectedPosition/Rotation/Scale — a
+// rebuild-on-every-keystroke would steal focus out from under the user).
+function numField(grid, label, get, set, step = 0.1) {
+  const l = document.createElement('span'); l.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.step = step; inp.value = +get().toFixed(3);
+  inp.style.cssText = 'width:100%; font:inherit;';
+  inp.oninput = () => { const v = parseFloat(inp.value); if (!Number.isNaN(v)) set(v); };
+  grid.append(l, inp);
+}
+function fieldGrid() {
+  const g = document.createElement('div');
+  g.style.cssText = 'display:grid; grid-template-columns:auto 1fr; gap:4px 6px; align-items:center; margin-top:6px;';
+  return g;
+}
+function swatch(hex) {
+  const s = document.createElement('div');
+  s.style.cssText = `width:20px; height:20px; border-radius:50%; background:${hex}; cursor:pointer; border:2px solid rgba(0,0,0,.25); flex:0 0 auto;`;
+  return s;
+}
+
+function buildScaleSection(sel) {
+  const wrap = document.createElement('div');
+  const [sx0, sy0, sz0] = Editor.getSelectedUserScale();
+  const uniformRow = document.createElement('label');
+  uniformRow.style.cssText = 'display:flex; align-items:center; gap:6px; font-size:12px; margin-top:6px;';
+  const cb = document.createElement('input'); cb.type = 'checkbox';
+  cb.checked = Math.abs(sx0 - sy0) < 1e-4 && Math.abs(sy0 - sz0) < 1e-4;
+  uniformRow.append(cb, document.createTextNode('Uniform scale'));
+  wrap.appendChild(uniformRow);
+  const grid = fieldGrid();
+  wrap.appendChild(grid);
+  function renderFields() {
+    grid.innerHTML = '';
+    if (cb.checked) {
+      numField(grid, 'Scale', () => Editor.getSelectedUserScale()[0], v => Editor.setSelectedScale(v, v, v), 0.05);
+    } else {
+      // Each setter re-reads the OTHER two axes fresh at edit time (not
+      // captured once at build time) — otherwise editing X after having
+      // already edited Y would silently revert Y back to its build-time
+      // value, since these callbacks never rebuild between keystrokes.
+      numField(grid, 'Scale X', () => Editor.getSelectedUserScale()[0], v => { const [, y, z] = Editor.getSelectedUserScale(); Editor.setSelectedScale(v, y, z); }, 0.05);
+      numField(grid, 'Scale Y', () => Editor.getSelectedUserScale()[1], v => { const [x, , z] = Editor.getSelectedUserScale(); Editor.setSelectedScale(x, v, z); }, 0.05);
+      numField(grid, 'Scale Z', () => Editor.getSelectedUserScale()[2], v => { const [x, y] = Editor.getSelectedUserScale(); Editor.setSelectedScale(x, y, v); }, 0.05);
+    }
+  }
+  cb.onchange = renderFields;
+  renderFields();
+  return wrap;
+}
+
+function buildRecolorSection(sel) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(80,80,90,.2); padding-top:6px;';
+  const label = document.createElement('small');
+  label.textContent = 'Recolor — click a part, then pick a color';
+  wrap.appendChild(label);
+  const partsRow = mkRow();
+  partsRow.style.flexWrap = 'wrap';
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.style.cssText = 'margin-top:6px; width:100%;';
+  picker.disabled = true;
+  let activePart = null;
+  for (const { name, hex } of Editor.getSelectedParts()) {
+    const s = swatch(hex);
+    s.title = name;
+    s.onclick = () => {
+      activePart = name;
+      for (const c of partsRow.children) c.style.borderColor = 'rgba(0,0,0,.25)';
+      s.style.borderColor = '#222';
+      picker.disabled = false;
+      picker.value = hex;
+    };
+    partsRow.appendChild(s);
+  }
+  if (!partsRow.children.length) { const n = document.createElement('small'); n.style.opacity = '.6'; n.textContent = 'No named material parts.'; partsRow.appendChild(n); }
+  picker.oninput = () => { if (activePart) Editor.recolorSelectedPart(activePart, picker.value); };
+  wrap.append(partsRow, picker);
+  return wrap;
+}
+
+function buildPolicySection(sel) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(80,80,90,.2); padding-top:6px;';
+  const label = document.createElement('small'); label.textContent = 'Material policy';
+  const sel2 = document.createElement('select');
+  sel2.style.cssText = 'width:100%; font:inherit; margin-top:4px;';
+  sel2.append(new Option('Pack default', ''), new Option('Authored (keep textures/materials as exported)', 'authored'), new Option('Flat-matte (Quaternius nature look)', 'flat-matte'));
+  sel2.value = sel.row.materialPolicy || '';
+  sel2.onchange = () => Editor.setSelectedMaterialPolicy(sel2.value || null).catch(err => console.error('[world-editor] material policy change failed', err));
+  wrap.append(label, sel2);
+  return wrap;
+}
+
+function buildSwapSection(sel) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(80,80,90,.2); padding-top:6px;';
+  const label = document.createElement('small'); label.textContent = 'Swap model';
+  const roomSel = document.createElement('select');
+  roomSel.style.cssText = 'width:100%; font:inherit; margin-top:4px;';
+  const variantSel = document.createElement('select');
+  variantSel.style.cssText = 'width:100%; font:inherit; margin-top:4px;';
+  const btn = mkButton('Swap'); btn.style.cssText += 'width:100%; margin-top:4px;';
+  btn.onclick = () => {
+    if (!variantSel.value) return;
+    const { id, variant } = JSON.parse(variantSel.value);
+    Editor.swapSelectedModel(id, variant).catch(err => console.error('[world-editor] model swap failed', err));
+  };
+  ensureRooms().then(loaded => {
+    for (const room of loaded) roomSel.appendChild(new Option(`${room.key} (${room.slots.length})`, room.key));
+    populateVariantSelect(variantSel, loaded[0]);
+    roomSel.onchange = () => populateVariantSelect(variantSel, loaded.find(r => r.key === roomSel.value));
+  });
+  wrap.append(label, roomSel, variantSel, btn);
+  return wrap;
+}
+
+function buildInspector(sel) {
+  const wrap = document.createElement('div');
+  const obj = sel.obj;
+  const head = document.createElement('div');
+  head.innerHTML = `<b>${sel.id}</b>${sel.row.locked ? ' <small style="opacity:.6">(locked)</small>' : ''}`;
+  wrap.appendChild(head);
+
+  const posGrid = fieldGrid();
+  numField(posGrid, 'X', () => obj.position.x, v => Editor.setSelectedPosition(v, obj.position.y, obj.position.z));
+  numField(posGrid, 'Y', () => obj.position.y, v => Editor.setSelectedPosition(obj.position.x, v, obj.position.z));
+  numField(posGrid, 'Z', () => obj.position.z, v => Editor.setSelectedPosition(obj.position.x, obj.position.y, v));
+  wrap.appendChild(posGrid);
+
+  const toDeg = r => r * 180 / Math.PI;
+  const rotGrid = fieldGrid();
+  numField(rotGrid, 'Rot X°', () => toDeg(obj.rotation.x), v => Editor.setSelectedRotationDeg(v, toDeg(obj.rotation.y), toDeg(obj.rotation.z)), 1);
+  numField(rotGrid, 'Rot Y°', () => toDeg(obj.rotation.y), v => Editor.setSelectedRotationDeg(toDeg(obj.rotation.x), v, toDeg(obj.rotation.z)), 1);
+  numField(rotGrid, 'Rot Z°', () => toDeg(obj.rotation.z), v => Editor.setSelectedRotationDeg(toDeg(obj.rotation.x), toDeg(obj.rotation.y), v), 1);
+  wrap.appendChild(rotGrid);
+
+  wrap.appendChild(buildScaleSection(sel));
+  wrap.appendChild(buildRecolorSection(sel));
+  wrap.appendChild(buildPolicySection(sel));
+  wrap.appendChild(buildSwapSection(sel));
+  return wrap;
 }
 
 export async function initEditorPanel() {
@@ -142,11 +290,19 @@ export async function initEditorPanel() {
     delBtn.disabled = !sel;
     const mode = Editor.getMode();
     for (const b of modeRow.children) b.style.opacity = b.dataset.mode === mode ? '1' : '.55';
-    statusEl.innerHTML = armed
-      ? `<b>Click terrain to place…</b> <small style="opacity:.6">(Esc cancels)</small>`
-      : sel
-        ? `<b>Selected:</b> ${sel.id}${sel.row.locked ? ' <small style="opacity:.6">(locked)</small>' : ''}`
-        : `<small style="opacity:.6">Nothing selected</small>`;
+    statusEl.innerHTML = '';
+    if (armed) {
+      const hint = document.createElement('div');
+      hint.innerHTML = `<b>Click terrain to place…</b> <small style="opacity:.6">(Esc cancels)</small>`;
+      statusEl.appendChild(hint);
+    } else if (sel) {
+      statusEl.appendChild(buildInspector(sel));
+    } else {
+      const hint = document.createElement('small');
+      hint.style.opacity = '.6';
+      hint.textContent = 'Nothing selected';
+      statusEl.appendChild(hint);
+    }
   }
   Editor.onSelectionChange(render);
   render();
