@@ -20,6 +20,7 @@ export const edits = {
       tint: null,
       materialPolicy: null,
       locked: false,
+      collide: 'auto', // data only — no collider is actually generated from this yet, see core/world-edits.js's header
     },
   ],
   familyOverrides: {},

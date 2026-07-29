@@ -40,6 +40,13 @@ let selectedScatter = null; // { id, family, mesh, index } or null — mutually 
 let groundSnap = true;
 let armedPlacement = null; // { catalogueId, variant } while a catalogue-picker "Place" is waiting for the next canvas click
 let onChange = null; // world-editor-panel.js subscribes here to re-render on any state change
+let dirty = false; // any live edit since open() or the last Save — the top bar's unsaved dot
+let onDirtyChange = null; // separate from onChange: typed numeric edits (position/rotation/scale) mutate the
+// live object WITHOUT calling notify() (see setSelectedPosition et al.'s own comment — a full panel
+// rebuild on every keystroke would steal focus), so the dot needs its own lightweight signal that
+// doesn't imply "rebuild the whole inspector".
+
+function markDirty() { if (!dirty) { dirty = true; onDirtyChange?.(true); } }
 
 const MODE_KEYS = { KeyT: 'translate', KeyR: 'rotate', KeyY: 'scale' };
 
@@ -122,10 +129,10 @@ async function placeArmed(e) {
     id: genPlacedId(armed.catalogueId),
     catalogueId: armed.catalogueId, variant: armed.variant,
     x: +point.x.toFixed(3), y: +point.y.toFixed(3), z: +point.z.toFixed(3),
-    rot: [0, 0, 0], scale: 1, tint: null, materialPolicy: null, locked: false,
+    rot: [0, 0, 0], scale: 1, tint: null, materialPolicy: null, locked: false, collide: 'auto',
   };
   const rec = await addPlacedObject(deps.scene, deps.zone, row);
-  if (rec) select(rec); else notify();
+  if (rec) { markDirty(); select(rec); } else notify();
 }
 
 function onPointerDown(e) {
@@ -156,13 +163,14 @@ function onPointerDown(e) {
 async function duplicateSelected() {
   if (!selected) return;
   const rec = await duplicatePlacedObject(deps.scene, deps.zone, selected.id);
-  if (rec) select(rec);
+  if (rec) { markDirty(); select(rec); }
 }
 function deleteSelected() {
   if (!selected) return;
   const id = selected.id;
   deselect();
   removePlacedObject(deps.scene, id);
+  markDirty();
   notify();
 }
 
@@ -170,18 +178,22 @@ function deleteSelected() {
 // live editsModule (getEditsModule() — populated by applyEdits at zone
 // build time, always resolved by the time the editor could possibly be
 // open) so Save picks it up, merging over anything already there rather
-// than replacing the row outright.
+// than replacing the row outright. Both this and patchFamilyOverride below
+// are the ONLY two ways a scatter-related edit is recorded, so marking
+// dirty here covers hide/recolor-family/material-policy in one place.
 function patchScatterEdit(id, patch) {
   const editsModule = getEditsModule();
   if (!editsModule) return;
   editsModule.scatterEdits ||= {};
   editsModule.scatterEdits[id] = { ...(editsModule.scatterEdits[id] || {}), ...patch };
+  markDirty();
 }
 function patchFamilyOverride(family, patch) {
   const editsModule = getEditsModule();
   if (!editsModule) return;
   editsModule.familyOverrides ||= {};
   editsModule.familyOverrides[family] = { ...(editsModule.familyOverrides[family] || {}), ...patch };
+  markDirty();
 }
 
 // Hides ONE scattered instance: persists scatterEdits[id]={hidden:true} for
@@ -249,6 +261,7 @@ async function rebuildSelected(patch) {
   if (!selected) return false;
   const rec = await rebuildPlacedObject(deps.scene, deps.zone, selected.id, patch);
   if (!rec) return false;
+  markDirty();
   select(rec);
   return true;
 }
@@ -295,7 +308,7 @@ function recolorSelectedPart(materialName, hex) {
       changed = true;
     }
   });
-  if (changed) selected.row.tint = { ...(selected.row.tint || {}), [materialName]: hex };
+  if (changed) { selected.row.tint = { ...(selected.row.tint || {}), [materialName]: hex }; markDirty(); }
   return changed;
 }
 
@@ -330,6 +343,9 @@ export function getArmedPlacement() { return armedPlacement; }
 export function armPlacement(catalogueId, variant) { armedPlacement = { catalogueId, variant }; deselect(); notify(); }
 export function cancelArmedPlacement() { armedPlacement = null; notify(); }
 export function onSelectionChange(cb) { onChange = cb; }
+export function onDirty(cb) { onDirtyChange = cb; }
+export function isDirty() { return dirty; }
+export function clearDirty() { dirty = false; onDirtyChange?.(false); }
 export function duplicateSelectedObject() { return duplicateSelected(); }
 export function deleteSelectedObject() { return deleteSelected(); }
 export function toggleSelectedLock() {
@@ -354,17 +370,20 @@ export { getSelectedParts, recolorSelectedPart };
 export function setSelectedPosition(x, y, z) {
   if (!selected) return;
   selected.obj.position.set(x, y, z);
+  markDirty(); // cheap: only ever fires onDirtyChange once (see markDirty's own `if (!dirty)` guard), never per-keystroke
 }
 export function setSelectedRotationDeg(xDeg, yDeg, zDeg) {
   if (!selected) return;
   const d = Math.PI / 180;
   selected.obj.rotation.set(xDeg * d, yDeg * d, zDeg * d);
+  markDirty();
 }
 // scale is stored/edited as the USER-FACING (pre-policy) number, matching
 // what Save writes — multiplies policyScaleFactor back in before touching
 // the live object, mirroring core/world-edits.js's own applyScale.
 export function setSelectedScale(sx, sy, sz) {
   if (!selected) return;
+  markDirty();
   const f = selected.policyScaleFactor;
   selected.obj.scale.set(sx * f, sy * f, sz * f);
 }
@@ -393,14 +412,37 @@ export function exportEditsText(zoneId) {
     + `export const edits = ${JSON.stringify(body, null, 2)};\n`;
 }
 
+// "Copy selection as JSON" (Phase 5) — a quick single-object export, not
+// the whole zone: the current placed[] row (read live off the object, same
+// as Save) for a placed selection, or {id, family, scatterEdit} for a
+// scattered one (there's no per-instance transform data to show beyond
+// that in this session's scoped-down scatter model — see PROJECT-STATE.md).
+export function copySelectionAsJSON() {
+  let data = null;
+  if (selected) data = serializePlaced().find(r => r.id === selected.id) || null;
+  else if (selectedScatter) data = { id: selectedScatter.id, family: selectedScatter.family, scatterEdit: getEditsModule()?.scatterEdits?.[selectedScatter.id] || null };
+  if (!data) return null;
+  const text = JSON.stringify(data, null, 2);
+  navigator.clipboard?.writeText(text).catch(() => {});
+  return text;
+}
+
 export async function openEditor(d) {
   if (open) return;
   deps = d;
+  // Resets on every open, not just on a fresh zone build — "unsaved dot" is
+  // scoped to "since I opened the panel just now", not "since edits.js was
+  // last actually saved across a close/reopen with no zone change in
+  // between" (a real but small gap: close the editor dirty, reopen, the dot
+  // reads clean even though nothing was saved). Accepted for a "minimal"
+  // top-bar indicator (Phase 5's own brief) rather than threading a zone-
+  // build generation token through just for this.
+  dirty = false;
   abortCtl = new AbortController();
   raycaster = new THREE.Raycaster();
   transform = new TransformControls(deps.camera, deps.domElement);
   deps.scene.add(transform.getHelper());
-  transform.addEventListener('objectChange', notify);
+  transform.addEventListener('objectChange', () => { markDirty(); notify(); });
   transform.addEventListener('dragging-changed', e => { if (!e.value) { snapSelectedY(); notify(); } });
   deps.domElement.addEventListener('pointerdown', onPointerDown, { signal: abortCtl.signal });
   addEventListener('keydown', onKeyDown, { signal: abortCtl.signal });

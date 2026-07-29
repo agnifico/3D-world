@@ -21,6 +21,7 @@
 //     materialPolicy, // optional 'authored'|'flat-matte' override; null/undefined = the resolved
 //                     // pack's own default policy
 //     locked,         // editor-only: true blocks selection/transform via the gizmo
+//     collide,        // 'auto' | 'none' | { type, r, h } — DATA ONLY this session, see below
 //   }],
 //   familyOverrides: { [family]: { catalogueId?, scale?, tint?, materialPolicy? } },
 //   scatterEdits: { [instanceId]: { hidden?, scale?, rot?, tint?, catalogueId? } },
@@ -28,6 +29,17 @@
 // Override precedence (most-specific wins): scatterEdits[id] > familyOverrides[family] > the zone's
 // own bindings.js default — enforced where these are actually consumed (catalogue-flora.js, Phase 4),
 // not here.
+//
+// `collide` is deliberately a clean, unwired seam: 'auto' (the default —
+// meant to eventually mean "measure a collider from the loaded geometry,
+// same idea as this file's own measureTrunkRadius/measureFootprint sibling
+// functions in gltf-assets.js"), 'none' (no collider), or an explicit
+// `{ type: 'circle', r, h }`-shaped override. No code anywhere reads this
+// field yet — placed[] objects register no collider at all this session,
+// same as before World Editor existed. Building the actual parametric
+// collider generator is out of scope (a separate future session); this
+// field exists now purely so edits.js's schema doesn't need a breaking
+// change later to add it.
 import { loadCatalogue, resolveAsset, parseCatalogueId } from './catalogue.js';
 import { loadTintedTemplate } from './gltf-assets.js';
 

@@ -252,12 +252,45 @@ function buildScatterInspector(hit) {
 export async function initEditorPanel() {
   root = document.createElement('div');
   root.id = 'worldEditorPanel';
-  root.style.cssText = `position:fixed; left:14px; top:14px; z-index:6; display:none;
+  root.style.cssText = `position:fixed; left:14px; top:44px; z-index:6; display:none;
     font:13px/1.4 ui-sans-serif, system-ui, sans-serif; color:#22222a;
     background:rgba(240,239,246,.94); border:1px solid rgba(80,80,90,.35);
-    border-radius:8px; padding:10px 12px; width:280px; max-height:82vh; overflow:auto;
+    border-radius:8px; padding:10px 12px; width:280px; max-height:calc(82vh - 30px); overflow:auto;
     box-shadow:0 6px 22px rgba(20,20,30,.22);`;
   document.body.appendChild(root);
+
+  // --- top bar (Phase 5): zone, selection, gizmo mode, unsaved dot, Save/Export — always
+  // visible while the editor is open, independent of (and above) the property panel below.
+  const topBar = document.createElement('div');
+  topBar.id = 'worldEditorTopBar';
+  topBar.style.cssText = `position:fixed; top:0; left:0; right:0; z-index:6;
+    font:12px ui-sans-serif, system-ui, sans-serif; color:#22222a;
+    background:rgba(240,239,246,.96); border-bottom:1px solid rgba(80,80,90,.35);
+    padding:6px 14px; align-items:center; gap:14px; display:none;`;
+  const zoneEl = document.createElement('b');
+  const selEl = document.createElement('span');
+  const modeEl = document.createElement('span');
+  const dotEl = document.createElement('span');
+  dotEl.title = 'No unsaved changes';
+  dotEl.style.cssText = 'width:8px; height:8px; border-radius:50%; background:#3a3; flex:0 0 auto;';
+  const copyBtn = mkButton('Copy selection JSON');
+  copyBtn.onclick = () => {
+    const text = Editor.copySelectionAsJSON();
+    if (!text) return;
+    const old = copyBtn.textContent;
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = old; }, 1200);
+  };
+  const saveBtnTop = mkButton('Save');
+  saveBtnTop.onclick = () => exportEdits();
+  const spacer = document.createElement('span');
+  spacer.style.flex = '1';
+  topBar.append(zoneEl, selEl, modeEl, dotEl, spacer, copyBtn, saveBtnTop);
+  document.body.appendChild(topBar);
+  Editor.onDirty(isDirty => {
+    dotEl.style.background = isDirty ? '#c33' : '#3a3';
+    dotEl.title = isDirty ? 'Unsaved changes' : 'No unsaved changes';
+  });
 
   const title = document.createElement('div');
   title.innerHTML = '<b>World Editor</b><br><small style="opacity:.65">click select (placed OR scattered) · T/R/Y gizmo · Del remove/hide · Ctrl/Cmd+D duplicate · Esc cancel · ` close</small>';
@@ -339,10 +372,16 @@ export async function initEditorPanel() {
   function render() {
     const isOpen = Editor.isOpen();
     root.style.display = isOpen ? '' : 'none';
+    topBar.style.display = isOpen ? 'flex' : 'none';
     if (!isOpen) return;
     const sel = Editor.getSelected();
     const scatterSel = Editor.getSelectedScatter();
     const armed = Editor.getArmedPlacement();
+    zoneEl.textContent = Editor.getZoneId() || '';
+    selEl.textContent = sel ? `selected: ${sel.id}` : scatterSel ? `selected: ${scatterSel.id}` : armed ? 'placing…' : 'nothing selected';
+    modeEl.textContent = sel ? `[${Editor.getMode()}]` : '';
+    dotEl.style.background = Editor.isDirty() ? '#c33' : '#3a3';
+    dotEl.title = Editor.isDirty() ? 'Unsaved changes' : 'No unsaved changes';
     lockCb.checked = sel ? !!sel.row.locked : false;
     lockCb.disabled = !sel;
     dupBtn.disabled = !sel;
@@ -379,5 +418,6 @@ function exportEdits() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   navigator.clipboard?.writeText(text).catch(() => {});
+  Editor.clearDirty();
   console.log(`[world-editor] exported ${zoneId}/edits.js (${text.length} chars) — download + clipboard`);
 }

@@ -10,6 +10,15 @@ reflect current reality as of this session, not a full project history.)
   scale correction (willows up, bushes down).
 - Catalogue integrity (Track A) — see detail below.
 - Terrain-from-map — Lagoon retrofit (2026-07-29) — see detail below.
+- RESOLVER-BINDING-SESSION (2026-07-28/29) — asset resolver + per-zone
+  binding tables + per-pack material/scale policy — see detail below.
+- World Editor, Phases 0-5 (2026-07-29) — Layer-4 finetune tool: 3-axis
+  rotation, edits.js data layer, edit mode + gizmo, object inspector,
+  scatter reach, HUD + `WORLD-EDITOR-GUIDE.md` — see detail below. Built
+  entirely from a compressed order-of-operations in the session prompt
+  (`WORLD-EDITOR-BRIEF.md` doesn't exist in the repo); not eyeballed in a
+  browser this session — see the Phase 5 entry's closing note for the
+  concrete first thing to check next.
 - Gallery v3 (2026-07-28) — paginated catalogue gallery, restored as a full
   zone (`world/zones/gallery/`) on the **K** hotkey (`G` still opens
   Grassland's own procedural-factory overlay, untouched). Groups all 131
@@ -584,3 +593,46 @@ surgically to specific sub-features rather than the whole phase):
   a click actually resolves to the right scattered instance, that hiding
   reads as "gone" rather than glitchy, that a family-wide retint applies
   cleanly across every currently-visible group of that family.
+
+**Phase 5 — HUD + Design handoff.** A top bar (`core/world-editor-panel.js`,
+separate from the left-side property panel, always visible while the
+editor is open): zone id, current selection, gizmo mode, an unsaved-changes
+dot, "Copy selection JSON", and a Save button. New `core/world-editor.js`
+dirty-tracking (`markDirty`/`isDirty`/`onDirty`/`clearDirty`) — since typed
+numeric edits deliberately don't call the heavy `notify()` (Phase 3's own
+focus-preserving fix), the dot needed its OWN lightweight signal wired into
+every mutating function separately (place/duplicate/delete/rebuild/recolor/
+transform/hide/family-override), not just the ones that already notify.
+`copySelectionAsJSON()`: the live `placed[]` row for a placed selection, or
+`{id, family, scatterEdit}` for a scattered one.
+
+The `collide` field this phase adds is explicitly DATA ONLY, per the
+session brief's own instruction: `'auto' | 'none' | {type, r, h}`,
+documented in `core/world-edits.js`'s schema header and present on every
+placed[] row (defaulted to `'auto'` for new placements), but nothing reads
+it — no collider is generated from it. The parametric bell-collider itself
+is explicitly out of scope this session (a separate future one); this just
+keeps the schema seam ready so that session doesn't need a breaking schema
+change to add the field.
+
+New `WORLD-EDITOR-GUIDE.md` (repo root): hotkeys, the full data model
+(`bindings.js` + `edits.js` schemas, catalogue id shape, `Family#NNNN`
+scatter-id stability), the end-to-end workflow, and explicit rules for
+Claude Design (or any future automated editor): edit `edits.js`/
+`bindings.js` only, catalogue ids only (never hardcode a served/shelf file
+path), never bypass the policy system, `collide` is inert data not a
+feature yet, ids are assigned by the tool and never hand-invented, and the
+same schema shape applies to every zone (Highland's near-empty files are a
+scope choice, not a gap to fill in).
+
+**This closes out the World Editor session (Phases 0-5).** Everything
+above is `node --check`-clean and reasoned through by hand at every step
+(RNG-determinism, id-uniqueness, cache-key correctness, focus-preservation,
+shared-material safety) — but NONE of it has been eyeballed in an actual
+browser this session (no headless/Playwright driver was used, per the
+session's own explicit instruction: "eyeball-only verification"). The
+concrete first thing to do next session: open Grassland/Lagoon, press
+`` ` ``, and walk through the guide's own workflow section once — place
+something, drag it, recolor it, hide a scattered tree, Save, and paste the
+result back over the real `edits.js` to confirm the whole loop actually
+closes.
