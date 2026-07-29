@@ -29,10 +29,21 @@ export function samplePoint(R, opts = {}) {
   }
   return null;
 }
+// world-editor: rotation engine fix — `rot` is either a plain number (the
+// original convention: a Y-only heading, radians) or a full Euler [x,y,z]
+// (radians) for objects that aren't upright by design (e.g. a placed prop
+// tilted via the World Editor's rotate gizmo). Backward-compatible: every
+// existing call site in this file still passes a plain number and gets
+// byte-identical output.
+function rotQuat(rot) {
+  return Array.isArray(rot)
+    ? new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2]))
+    : new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+}
 export const mtx = (x, y, z, rotY, s, sy = s) =>
   new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
-    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+    rotQuat(rotY),
     new THREE.Vector3(s, sy, s));
 
 // --- trees: 2 seeded template variants per species, instanced ---

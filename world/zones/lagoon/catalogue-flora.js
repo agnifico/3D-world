@@ -47,9 +47,17 @@ function pickVariant(rng, n) {
   return weightedPick(items, rng);
 }
 
+// world-editor: rotation engine fix — see grassland/scatter.js's identical
+// rotQuat for why (`rot` is a plain Y-heading number OR a full Euler
+// [x,y,z]) — every existing call site below still passes a plain number.
+function rotQuat(rot) {
+  return Array.isArray(rot)
+    ? new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2]))
+    : new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+}
 const mtx = (x, y, z, rotY, sx, sy, sz) => new THREE.Matrix4().compose(
   new THREE.Vector3(x, y, z),
-  new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+  rotQuat(rotY),
   new THREE.Vector3(sx, sy, sz));
 
 // Same depth/slope rejection-sampling shape buildFlora uses internally in
@@ -217,7 +225,9 @@ export async function placeMainShip(scene) {
   const ship = template.clone(true);
   const scale = (b.scale ?? 1) * resolved.policy.scaleFactor;
   ship.scale.setScalar(scale);
-  ship.rotation.y = b.rotation ?? 0;
+  // world-editor: full Euler now, not Y-only — b.rot is [x,y,z] radians.
+  const [rx, ry, rz] = b.rot || [0, 0, 0];
+  ship.rotation.set(rx, ry, rz);
   // Floats at the waterline, same -0.15 draft convention core/boats.js uses
   // for every actually-sailable boat spawn — this ship is a static prop,
   // not a rideable one, but the same "just barely submerged" look applies.

@@ -24,7 +24,7 @@ export const bindings = {
   palmTree:  { family: 'PalmTree',    id: 'pirates:Environment:PalmTree:normal:alive:' },
   seaweed:   { family: 'Grass',       id: 'Simple_Nature::Grass:normal:alive:' },
   reefRock:  { family: 'Rock',        id: 'pirates:Environment:Rock:normal:alive:' },
-  shoreBush: { family: 'Bush_Common', id: 'NNK Style::Bush_Common:normal:alive:' },
+  shoreBush: { family: 'Bush_Common', id: 'BIGNature::Plant:normal:alive:' },
 
   // Proof binding (RESOLVER-BINDING-SESSION) — a single hand-placed prop,
   // not a scatter species. (25,-25) numerically checked against terrain.js's
@@ -33,5 +33,12 @@ export const bindings = {
   // portal-arch placements already use for their own coordinates. Native
   // bbox measured directly off the GLB (15.4 x 11.5 x 5.3u) reads as a
   // sane "Large" ship size at policy scale 1 — no override needed.
-  mainShip: { family: 'Large', id: 'pirates:Ship:Large:normal:alive:', where: { x: 25, z: -25 }, rotation: 0.4 },
+  // `rot` is world-editor session's 3-axis proof value ([0.3,0,0.2], the
+  // session's own prescribed test vector) — a visible list/pitch, standing
+  // in for the previous Y=0.4 heading (dropped, not preserved: the exact
+  // prescribed vector was used as-is rather than blended with it). This row
+  // moves into lagoon/edits.js's placed[] in the very next phase — tune the
+  // tilt for real (or re-add a heading) via the World Editor once it lands,
+  // not by hand-editing this file.
+  mainShip: { family: 'Large', id: 'pirates:Ship:Large:normal:alive:', where: { x: 25, z: -25 }, rot: [0.3, 0, 0.2] },
 };

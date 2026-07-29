@@ -317,3 +317,30 @@ Caribbean-cay feel, the three named clusters reading as painted (reef bar
 NW, atoll ring SW, long sandbars E), the tiny islet reading as a landmark
 and not just a bump; whether the new shore/boat spawn `lookAt` framing is
 actually a good view over the lagoon rather than just numerically-safe.
+
+## WORLD EDITOR SESSION — 2026-07-29 (in progress, autonomous, phase commits)
+No `WORLD-EDITOR-BRIEF.md` exists in the repo (checked: not on disk, never
+committed in git history) — worked from the compressed order-of-operations
+given directly in the session prompt instead, same adaptation as the
+missing `docs/brief.md` in RESOLVER-BINDING-SESSION.
+
+**Phase 0 — 3-axis rotation engine fix.** `grassland/scatter.js`'s and
+lagoon `catalogue-flora.js`'s own local `mtx()` helpers both only ever built
+a Y-axis quaternion (`setFromAxisAngle`), even though a genuinely
+free-standing placed prop (not upright flora) needs full pitch/roll too.
+Both now route through a small `rotQuat(rot)`: a plain number still gets the
+exact original Y-only path (byte-identical for every existing scatter call
+site — trees/rocks/bushes/palms/seaweed/reef all still pass a scalar,
+zero behavior change), an `[x,y,z]` array gets a full `THREE.Euler` quaternion
+instead. `lagoon/catalogue-flora.js`'s `placeMainShip` and its binding row
+switched from a Y-only `rotation` scalar to a `rot:[x,y,z]` array — using
+this session's own prescribed proof vector `[0.3,0,0.2]` exactly, which
+**drops the previous Y=0.4 heading** rather than blending it in (a real,
+flagged tradeoff: the ship now visibly lists/pitches instead of just facing
+a chosen heading — re-tune both once the World Editor's gizmo lands in
+Phase 2, not by hand-editing bindings.js/edits.js).
+- Verified: `node --check` clean; the scalar branch of `rotQuat` is the
+  original expression verbatim (not just equivalent), so backward
+  compatibility is exact by inspection, not just by test.
+- Not verified (needs Agni, eyeball-only, no browser available here): the
+  ship actually rendering visibly tilted at (25,-25) in Lagoon.
