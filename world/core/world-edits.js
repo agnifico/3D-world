@@ -21,7 +21,8 @@
 //     materialPolicy, // optional 'authored'|'flat-matte' override; null/undefined = the resolved
 //                     // pack's own default policy
 //     locked,         // editor-only: true blocks selection/transform via the gizmo
-//     collide,        // 'auto' | 'none' | { type, r, h } — DATA ONLY this session, see below
+//     collide,        // 'auto' | 'none' | { static, shapes:[...] } — see below; REAL as of
+//                     // COLLISION-FOUNDATION-SESSION (core/colliders.js registers it)
 //   }],
 //   familyOverrides: { [family]: { catalogueId?, scale?, tint?, materialPolicy? } },
 //   scatterEdits: { [instanceId]: { hidden?, scale?, rot?, tint?, catalogueId? } },
@@ -30,18 +31,24 @@
 // own bindings.js default — enforced where these are actually consumed (catalogue-flora.js, Phase 4),
 // not here.
 //
-// `collide` is deliberately a clean, unwired seam: 'auto' (the default —
-// meant to eventually mean "measure a collider from the loaded geometry,
-// same idea as this file's own measureTrunkRadius/measureFootprint sibling
-// functions in gltf-assets.js"), 'none' (no collider), or an explicit
-// `{ type: 'circle', r, h }`-shaped override. No code anywhere reads this
-// field yet — placed[] objects register no collider at all this session,
-// same as before World Editor existed. Building the actual parametric
-// collider generator is out of scope (a separate future session); this
-// field exists now purely so edits.js's schema doesn't need a breaking
-// change later to add it.
+// `collide` (COLLISION-FOUNDATION-SESSION): 'none' (no collider), an explicit
+// `{ static, shapes:[...] }` spec object (a one-off, per-placement override —
+// see core/colliders.js's header for the full shape vocabulary: box/sphere/
+// capsule/cone blockers + a height-only 'deck' shape), or 'auto'/missing (the
+// default) — looks up core/collider-catalogue.js's table by this row's
+// catalogueId, so authoring ONE spec there propagates to every placement of
+// that model. A catalogueId with no entry in that table stays exactly as
+// walk-through as it was before this session — 'auto' is a lookup, not a
+// live geometry guess. core/colliders.js's registerColliders() is what
+// actually turns a resolved spec into live colliders/height-registry
+// entries; applyEdits (below) is its only caller today, and only ever in
+// static (bake-once) mode — a genuinely moving placed object (a boat) needs
+// `static: false` wired up from wherever THAT object's live transform lives
+// (core/boats.js), not from here; see colliders.js's own header.
 import { loadCatalogue, resolveAsset, parseCatalogueId } from './catalogue.js';
 import { loadTintedTemplate } from './gltf-assets.js';
+import { registerBoat, BOAT_DEFS, boats, registerFleetBoat, spawnFleetForZone } from './boats.js';
+import { registerColliders, resolveCollideSpec } from './colliders.js';
 
 // This zone's currently-live placed[] objects:
 // [{ id, obj, row, zoneId, policyScaleFactor }]. `policyScaleFactor` is the
@@ -113,12 +120,25 @@ export async function applyEdits(ctx, scene, zone, editsModule) {
   const pending = placed.map(row => buildPlacedObject(zone, manifest, row));
   const built = await Promise.all(pending);
   for (let i = 0; i < placed.length; i++) {
+    const row = placed[i];
+    if (row.boardable) { registerBoardable(zone, row); continue; }  // fleet, not decor
     const b = built[i];
     if (!b) continue;
     scene.add(b.obj);
-    _registry.push({ id: placed[i].id, obj: b.obj, row: { ...placed[i] }, zoneId: zone.id, policyScaleFactor: b.policyScaleFactor });
-    _issuedIds.add(placed[i].id);
+    // COLLISION-FOUNDATION-SESSION — static bake only (this loop never runs
+    // again for this object; a rebuild via rebuildPlacedObject or the World
+    // Editor's live place/duplicate doesn't re-run it either, see colliders.js's
+    // header for why that's an accepted gap this session, not an oversight).
+    // The disposer is kept on the registry record (colliderDispose) — COLLISION-
+    // PAINTER-SESSION's Collision tab needs it to retract THIS zone-load
+    // collider before installing a live-edited replacement on the same object.
+    const spec = resolveCollideSpec(row.collide, row.catalogueId);
+    const colliderDispose = spec ? registerColliders(b.obj, spec, null, ctx) : null;
+    _registry.push({ id: row.id, obj: b.obj, row: { ...row }, zoneId: zone.id, policyScaleFactor: b.policyScaleFactor, colliderDispose });
+    _issuedIds.add(row.id);
   }
+  // Spawn every fleet boat currently in this zone (home moorings + sailed-in).
+  await spawnFleetForZone(scene, ctx.animated, zone.id, zone.WATER_Y);
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +160,14 @@ export function genPlacedId(catalogueId) {
 export function removePlacedObject(scene, id) {
   const idx = _registry.findIndex(r => r.id === id);
   if (idx === -1) return false;
-  scene.remove(_registry[idx].obj);
+  const rec = _registry[idx];
+  // A real bug this would otherwise cause now that placed objects can carry
+  // live colliders (COLLISION-PAINTER-SESSION): without this, deleting an
+  // object left its collider/height contributor registered forever — an
+  // invisible wall (or floating stand-on surface) exactly where the
+  // now-gone object used to be, until the next full zone reload.
+  rec.colliderDispose?.(); rec.colliderLiveDispose?.();
+  scene.remove(rec.obj);
   _registry.splice(idx, 1);
   return true;
 }
@@ -187,6 +214,11 @@ export async function rebuildPlacedObject(scene, zone, id, patch) {
   const manifest = await loadCatalogue();
   const built = await buildPlacedObject(zone, manifest, newRow);
   if (!built) return null;
+  // Same leak removePlacedObject fixes, same reason: the OLD object's
+  // collider (if any) is about to be orphaned — its Object3D removed from
+  // the scene, but the collider it registered would keep pointing at that
+  // now-detached transform forever otherwise.
+  old.colliderDispose?.(); old.colliderLiveDispose?.();
   scene.remove(old.obj);
   scene.add(built.obj);
   const rec = { id, obj: built.obj, row: { ...newRow, id }, zoneId: old.zoneId, policyScaleFactor: built.policyScaleFactor };
@@ -214,3 +246,16 @@ function serializeRows(records) {
   });
 }
 export function serializePlaced() { return serializeRows(_registry); }
+
+
+// A placed[] row with `boardable: <class>` is a persistent fleet instance, not
+// static decor. We register it (once, at its home zone) but DON'T spawn it
+// here — spawnFleetForZone (below, after the placed loop) spawns exactly the
+// boats currently located in this zone, so home moorings and sailed-in boats
+// share one path and nothing ever doubles.
+function registerBoardable(zone, row) {
+  const cls = row.boardable;
+  if (!BOAT_DEFS[cls]) { console.warn(`[world-edits] "${row.id}": unknown boat class "${cls}" — ignored`); return; }
+  const heading = Array.isArray(row.rot) ? row.rot[1] : 0;
+  registerFleetBoat(row.id, cls, zone.id, row.x, row.z, heading, row.scale);
+}
