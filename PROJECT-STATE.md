@@ -4,6 +4,18 @@
 reflect current reality as of this session, not a full project history.)
 
 ## Done
+- COLLISION-PAINTER-SESSION (2026-07-31) — Editor v2 phase 1: a "Collision"
+  tab in the backtick World Editor to SEE (translucent shape overlays),
+  EDIT (same T/R/Y gizmo, model-local coordinate space), ADD/DELETE, and
+  EXPORT (per-model `collider-catalogue.js` or per-instance `edits.js`)
+  colliders visually instead of authoring them blind. Fixes the grassland
+  dock's floating-deck bug as its own built-in proof. See detail below.
+- COLLISION-FOUNDATION-SESSION (2026-07-31) — `collide` on a `placed[]` row
+  goes from inert schema to real colliders: `core/colliders.js` (the
+  box/sphere/capsule/cone/deck primitive registrar, static-bake vs
+  dynamic-live) + `core/collider-catalogue.js` (per-catalogueId spec table)
+  + `core/world-edits.js`'s `applyEdits` wiring. Proved on the grassland
+  dock (Dock/Dock_Broken/Dock_Pole) — see detail below.
 - Brief 9 — asset cataloguer + tagged manifest + catalogue-driven variant
   instancing (Grassland trees/rocks/bushes, Lagoon palms/seaweed/reef).
 - Brief 10 — nature material normalization (metalness/roughness) + per-family
@@ -54,6 +66,18 @@ reflect current reality as of this session, not a full project history.)
     showroom, not a placement rehearsal).
 
 ## Known bugs / OPEN
+- Grassland dock collider (`world/core/collider-catalogue.js`'s three Dock
+  entries) is REASONED, not eyeballed: the footprint/height numbers come
+  from real measured GLB bounds (a one-off Node script parsing each .glb's
+  accessor min/max directly, no browser needed), but WHERE inside that
+  measured envelope the walkable plank surface actually sits is a
+  first-pass estimate (deck at local y=1.0 of a ~3.0-tall model) — this was
+  this session's OWN motivating bug report ("the dock's walkable surface
+  floats above the planks"). Now fixable BY EYE instead of by more guessing:
+  select the dock in the World Editor (backtick), press **X** for the
+  Collision tab, drag the green deck box down onto the visible planks,
+  Export, paste over `collider-catalogue.js`. See this session's own
+  write-up below.
 - Lagoon `shoreBush` scale (`world/zones/lagoon/catalogue-flora.js`'s
   shoreBush loop) is UNVERIFIED in-browser: re-tuned this session against
   NNK Bush_Common's measured native bbox (the old 2-2.6 range was tuned for
@@ -91,6 +115,32 @@ reflect current reality as of this session, not a full project history.)
    depth ranges in `terrain.js` were left untouched against the new
    map-driven terrain (not a coverage/density audit this session — they'll
    just naturally re-distribute against the new heightfield).
+7. Ship hookup (COLLISION-FOUNDATION-SESSION's own explicit follow-up, not a
+   blocker): once the Jackdaw/mainShip is a composite of named parts (the
+   parallel Design brief), author a `static: false` collider spec for it —
+   a `deck` box over the walkable surface, `box` blockers along the rails, a
+   step/wedge for stairs — wired from wherever the boat's live transform
+   lives (`core/boats.js`), replacing the current `deckOffset`/`deckInset`
+   single-rectangle approximation. `core/colliders.js` already supports
+   `static: false`; nothing consumes it yet.
+8. Extend `world/core/collider-catalogue.js` to more placed catalogue
+   models as they come up (buildings, other dock pieces) — the seam is
+   ready, each new entry is a data-only addition, no code change.
+9. ~~The in-editor collision PAINTER UI~~ — done, COLLISION-PAINTER-SESSION
+   (2026-07-31), see below.
+10. Editor v2 later phases (COLLISION-PAINTER-SESSION's own explicit
+    out-of-scope list, logged not built): batch collider ops across many
+    models at once, a collider shape "preset library" (common shapes
+    ready to drop in), the parametric bell/taper/skew primitive shaping,
+    a standalone (out-of-game) version of the editor.
+11. Collision tab family-target edits only live-update the ONE object being
+    edited — a sibling placement of the same model already in the scene
+    keeps its old collider until it's individually reopened in the tab or
+    the zone reloads (see WORLD-EDITOR-GUIDE.md's Known gaps). Worth a
+    "reregister every live sibling too" pass if this friction shows up in
+    practice; skipped this session since Export+reload already fully
+    resolves it and touching every sibling live adds real complexity for a
+    workflow (batch multi-instance retuning) nobody's hit yet.
 
 ## RESOLVER-BINDING-SESSION — 2026-07-28/29 (asset reference layer)
 Built the promised "use any of my 1,903 models by name, anywhere, without
@@ -636,3 +686,273 @@ concrete first thing to do next session: open Grassland/Lagoon, press
 something, drag it, recolor it, hide a scattered tree, Save, and paste the
 result back over the real `edits.js` to confirm the whole loop actually
 closes.
+
+## COLLISION-FOUNDATION-SESSION — 2026-07-31 (collide: data -> real colliders)
+
+World Editor Phase 5 left `collide` on every `placed[]` row as pure schema —
+`'auto' | 'none' | {type,r,h}`, nothing read it, so a placed dock or building
+was walk-through and the ship's deck-walking still used the old
+`deckOffset`/`deckInset` single-rectangle hack. This session wires it up for
+real, split along the perf line the brief made non-negotiable: STATIC
+colliders (buildings, docks, decor) bake once at zone-load; DYNAMIC colliders
+(ships — moving, walked-on) would be compound primitives only, never a mesh
+collider — no caller actually needs the dynamic path yet (see Queue item 7),
+but the primitive itself supports it now.
+
+**The spec** (full header comment in `core/colliders.js`; schema doc also
+updated in `core/world-edits.js`'s header): a resolved `collide` value is
+`null` (no collider), an explicit `{ static, shapes:[...] }` object (a
+per-placement override), or `'auto'`/missing, which looks up
+`core/collider-catalogue.js`'s table by the row's `catalogueId` — a spec
+authored once there propagates to every placement of that model, in every
+zone, matching the "keyed per catalogue model" instruction. A deliberate,
+flagged choice: unmapped catalogue ids stay exactly as walk-through as they
+already were before this session (`resolveCollideSpec` returns `null`, not a
+measured guess) — no live geometry-measurement fallback was built. This
+keeps the change strictly additive (every already-placed prop that ISN'T the
+dock — including Lagoon's `mainShip`, which has no collision system around
+it at all today — renders identically to before), at the cost of leaving
+"measure a footprint from geometry" (the schema comment's original,
+never-implemented aspiration for `'auto'`) unbuilt; extending coverage is
+now a pure data addition (a new `collider-catalogue.js` entry), not a code
+change, so this isn't a dead end, just a narrower first cut than the literal
+brief text technically asked for.
+
+Each shape (`box`/`sphere`/`capsule`/`cone` = blockers; `deck` = a
+height-only stand-on surface, never a `collisionRegistry` entry) has its
+own local `pos`/`rot` composed with the placement's world transform once
+(static) or on every query via a `live()` getter re-reading the object's
+`matrixWorld` (dynamic) — same live-collider convention
+`grassland/props.js`'s area-designer colliders already use for a movable
+prop. `box`/`sphere`/`capsule` map onto `core/collision.js`'s existing
+circle/OBB primitives (that engine is 2D-XZ + a vertical band, not true 3D —
+a shape's pitch/roll only shapes itself before projecting to a Y-axis-only
+`yaw`, flagged in `colliders.js`'s own header as a real limitation, not
+silently wrong); `cone` is approximated as a vertical cylinder of its base
+radius (no taper — the parametric taper/skew shaping is explicitly future
+work per the brief). Two more limitations inherited from riding on top of
+`collision.js` rather than extending it, both documented in `colliders.js`'s
+header: a live collider's vertical band is fixed at registration time (fine
+for anything that stays near-constant in Y while moving, like a floating
+boat — the same assumption `boats.js`'s own `boatHeight` already makes), and
+`collision.js`'s spatial hash buckets a collider into cells once at
+registration and never re-buckets it as a dynamic `live()` position drifts
+far away — a real gap for whoever wires up a ship that actually sails long
+distances, not something this session's actual use (a static dock) can hit.
+
+**Proved on the dock**: `pirates:Environment:Dock`/`Dock_Broken`/`Dock_Pole`
+(the three catalogue models grassland's `edits.js` already has five `placed[]`
+rows for, all `collide:'auto'`, previously inert) each got a hand-authored
+static spec in `collider-catalogue.js` — a `deck` box for the two walkway
+pieces, a `capsule` for the pole. The numbers come from the REAL GLB
+geometry, not a guess: wrote a one-off Node script (scratchpad, not
+committed) that parses each `.glb`'s JSON chunk directly and walks its node
+hierarchy composing accessor `min`/`max` bounds through each node's TRS —
+pure glTF-spec bounds reading, no three.js/DOM/WebGL needed, so real numbers
+were available without a browser. Measured (post the runtime base-pivot
+shift `core/gltf-assets.js`'s `loadRaw` already applies): Dock ~2.18×3.01×2.66
+(x/y/z), Dock_Broken ~2.39×3.01×2.66, Dock_Pole ~0.37×3.01×0.38 — all three
+share the same ~3.0 height, base at local y=0. Where the WALKABLE PLANK
+SURFACE sits within that measured envelope isn't something bounds alone can
+answer, so the deck's `y` (1.0, of ~3.0) is a first-pass estimate, flagged
+in Known bugs/OPEN above as the concrete thing to eyeball first; the pole's
+capsule deliberately spans almost the FULL measured height instead
+(`h:2.4, r:0.22` centered at `y:1.5` → local band ≈[0.08, 2.92] against the
+measured [0, 3.01]) specifically so "can't walk through the poles" doesn't
+depend on guessing the same precise number — a wrong deck height just reads
+as a visibly-floating-or-sunk character (an obvious, cheap-to-fix bug); a
+too-short pole collider would have silently let the proof fail.
+
+**Wired into `applyEdits`** (`core/world-edits.js`): after adding each
+successfully-built, non-boardable placed object to the scene,
+`resolveCollideSpec(row.collide, row.catalogueId)` -> `registerColliders`
+runs in static mode against the live object. Boat rows (`row.boardable`)
+`continue` past this entirely, same as before — they're spawned later via
+`spawnFleetForZone`/`boats.js`, outside `applyEdits`'s own per-row loop, so
+this session's static-only wiring structurally cannot touch them (nothing
+new needed to keep the dynamic ship case out of scope). Colliders registered
+this way are cleaned up "for free" by the shell's own existing
+per-zone-build reset (`main.js`'s `resetForNewZone` calls
+`collisionRegistry.reset()`/`heightRegistry.reset()` before every
+`build(ctx)`, already relied on by every other collider source in this
+codebase) — no new disposal path needed. A deliberate, flagged gap
+(consistent with Phase 4's own "live hide doesn't retract the original
+collision circle" precedent): placing/duplicating/rebuilding an object LIVE
+via the World Editor does not register a collider — only `applyEdits`
+(zone build/reload) does, since the session brief scoped wiring to
+`applyEdits` specifically. Save + reload picks it up.
+
+**Verified** (agent-checkable, no browser needed): `node --check` clean on
+every new/edited file (`core/colliders.js`, `core/collider-catalogue.js`,
+`core/world-edits.js`). The dock/pole vertical-band arithmetic was hand-
+traced against the actual placed rows' world Y (grassland `WATER_Y=-0.9`,
+Dock/Dock_Pole placements ~-0.4 to -0.5) and the character controller's own
+`CHAR_HEIGHT=1.7`/`STEP_UP=0.5` constants (`character/controller.js`) to
+confirm the pole's registered `[yLow,yHigh]` band actually overlaps a
+standing character's `[feetY,headY]` band at that location — the specific
+failure mode ("collider registered but never actually intersects the
+player") a bounds-only check wouldn't catch on its own.
+
+**Not verified** (needs Agni, eyeball-only, no browser available here): the
+whole point of this session — stand on the grassland dock, confirm the
+character actually rests ON the visible planks (not floating above or
+sinking into them; retune `collider-catalogue.js`'s deck `y` if not) and is
+blocked by the `Dock_Pole` poles rather than walking through them; confirm
+FPS is unchanged (the static bake is one-time per zone-load, so it should
+be, but only an eyeball/profiler check actually confirms it).
+
+## COLLISION-PAINTER-SESSION — 2026-07-31 (Editor v2 phase 1 — see/edit colliders)
+
+COLLISION-FOUNDATION-SESSION (same day, above) made `collide` real but left
+every collider spec hand-authored blind against measured GLB bounds — the
+grassland dock's own walkable-surface height was a reasoned guess, flagged
+in that session's own Known-bugs entry as needing an eyeball pass. This
+session builds the tool to DO that eyeball pass, as a new "Collision" tab
+inside the existing backtick World Editor, then uses the grassland dock as
+its own built-in proof.
+
+**Storage model unchanged, per the brief's own explicit instruction**: this
+session only ever READS/WRITES `core/collider-catalogue.js`'s
+`COLLIDER_SPECS` table and a `placed[]` row's own `collide` field — the same
+two places COLLISION-FOUNDATION-SESSION built. No change to
+`core/colliders.js`'s engine (the box/sphere/capsule/cone/deck shape
+vocabulary, `registerColliders`'s static/dynamic split) or to
+`core/collision.js` underneath it. GLBs are never touched — colliders stay
+separate data keyed by catalogue id, exactly as before.
+
+**The coordinate-space trick** (the brief called this "critical," and it's
+the part most likely to silently go wrong): a shape's `pos`/`rot`/size
+fields are model-local, but `core/world-editor.js`'s existing gizmo
+naturally manipulates whatever it's `attach()`ed to in THAT object's own
+local space already (see `setSelectedPosition` et al. — for a placed object
+parented directly under the zone's identity-transformed content group,
+local numbers already equal world numbers, which is why those functions
+never needed a conversion either). So every collider-shape overlay is added
+as a literal THREE child of `selected.obj` — never the scene root — with its
+own `.position`/`.rotation`/`.scale` set straight from the shape's fields.
+THREE's own parent-child matrix composition then places it in the correct
+WORLD spot for free, and — the actual payoff — `TransformControls`
+dragging it mutates exactly the local numbers the spec wants. Verified by
+hand, not just by inspection: derived the exact composition formula THREE
+produces for a child's world position/rotation/scale under this parenting
+(`worldPos = basePos + baseQuat.rotate(baseScale ⊙ shape.pos)`,
+`worldQuat = baseQuat * shapeQuat`, `worldScale = baseScale ⊙ shape.scale`)
+and confirmed it's IDENTICAL, term for term, to `core/colliders.js`'s own
+`composeShape` function — meaning the overlay isn't just "close enough,"
+it renders at the exact position/orientation/size the real registered
+collider will occupy. This is also why editing one dock's collider and
+setting the "family" export target correctly repositions on every OTHER
+placement of the same model at a different position/rotation (the session
+brief's own "place a second dock elsewhere" verify check) — the edited
+numbers are genuinely model-local, not accidentally baked against the one
+instance being dragged.
+
+**Engine additions** (`core/world-editor.js`, ~350 new lines; no change to
+its existing placement/scatter selection logic except two `O(1)` guards —
+see below): a `SHAPE_KIND` table (one entry per box/sphere/capsule/cone/deck
+— how to build a unit placeholder overlay mesh, how to read/write the
+shape's own size fields as a 3-axis scale so resizing is just a scale-mode
+gizmo drag) drives `buildShapeOverlay`/`refreshColliderOverlay`
+(translucent orange for blockers, green for `deck`, a brighter yellow
+wireframe highlight on whichever shape is selected) and the bidirectional
+`syncColliderShapeFromGizmo`/`syncOverlayFromShape` pair (gizmo-drag ->
+shape data, and back, respectively — the only two places this session's
+code touches transforms at all). `loadColliderSpecForSelection` resolves
+precedence (an existing per-instance `collide` override, else the
+per-catalogueId `COLLIDER_SPECS` entry, else empty) into a deep-copied
+WORKING array, so edits never touch the source of truth until an explicit
+Export. `liveReregisterCollider` is the "see AND test in the real renderer"
+half (Phase 2's own explicit ask): retracts whatever collider is currently
+live for the selected object — the original zone-load one the FIRST time
+(consuming a new `colliderDispose` field `core/world-edits.js`'s
+`applyEdits` now stores per registry record, since it previously discarded
+`registerColliders`'s own returned disposer entirely — nothing before this
+session ever needed to retract a specific object's collider without a full
+zone rebuild) — then this editor's own previous live version every time
+after (`colliderLiveDispose`, same record) — then registers a fresh one
+from the current working shapes. Both disposer slots live ON THE REGISTRY
+RECORD, not a module-level variable, so switching selection between
+objects (or between several dock pieces) never mixes up whose collider is
+whose and needs no manual reset. Deliberately never runs just from opening
+the tab or selecting a shape — only from an actual edit (drag-end, a
+numeric field, add/delete, the static toggle) — so Phase 1's "SEE" really
+is read-only, nothing about the live game world changes until you touch
+something.
+
+**Two real bugs caught during this session's own build, before shipping**,
+both matching a class of bug this codebase has hit and fixed before in
+adjacent code:
+1. The overlay meshes, being real children of `selected.obj`, would also
+   get swept up by the EXISTING `getSelectedParts`/`recolorSelectedPart`
+   (`selected.obj.traverse(...)`, the Properties tab's recolor swatches) —
+   without a guard, opening the Collision tab would pollute the recolor
+   panel with bogus empty-named "material parts." Fixed by tagging every
+   overlay mesh's `userData.__colliderOverlay = true` at creation and
+   skipping it in both traversal call sites — an `O(1)` check per mesh, no
+   ancestor walk needed.
+2. The numeric position/rotation/size fields, closing over a `disp`
+   snapshot captured when the panel was last built, would silently revert
+   a sibling field's just-typed value the moment a DIFFERENT field on the
+   same shape was edited next — the exact bug this file's own Phase 3
+   write-up (World Editor session) already documented and fixed for
+   `buildScaleSection`'s per-axis scale fields, recurring here one level
+   down (collider shapes instead of placed objects) because it's a new,
+   separate set of fields with the same "don't re-render every keystroke"
+   discipline. Fixed the same way: every setter re-reads the CURRENT shape
+   fresh via `Editor.getColliderShapeDisplay(idx)` at the moment it fires,
+   never the stale build-time snapshot.
+   - (A third, syntax-level slip caught immediately by re-running the
+     syntax check after every edit, not left for review: a stray `#`
+     character typo'd in place of `//` at the start of a comment line,
+     which `node --check` on a plain `.js` file did NOT catch — only
+     re-checking a `.mjs`-renamed copy, forcing strict ESM parsing,
+     surfaced it. `.js` files in this project ARE loaded as ESM by the
+     browser's own importmap, so a `.mjs` copy is the accurate check going
+     forward for this codebase, not plain `node --check <file>.js`.)
+
+**UI** (`core/world-editor-panel.js`, ~180 new lines): a Properties/
+Collision tab switcher with NO local "which tab" state of its own —
+`Editor.isColliderTabOpen()` is the single source of truth, so clicking a
+tab button and pressing X (the hotkey) can never drift out of sync. The
+Collision view: catalogue id, a static checkbox, a target `<select>`
+("ALL placements of `<model>`" / "Just this instance"), a scrollable shape
+list (click to select, matching a 3D click), Add (a type picker + button)
+/ Delete, the selected shape's numeric fields (pos/rot always; size fields
+switch on shape type — box gets X/Y/Z, sphere gets Radius, capsule/cone get
+Radius+Height, deck gets Size X/Z; rotation is hidden entirely for sphere
+since it's a genuine no-op there in `core/colliders.js`'s own math, not
+shown-but-inert), and an Export button + its own small dirty dot in the top
+bar — deliberately separate from the existing placement Save dot, since the
+two write to different files depending on target.
+
+**Verified** (agent-checkable, no browser needed): `.mjs`-forced strict ESM
+syntax check clean on every new/edited file (see the syntax-slip bug above
+for why plain `node --check` on `.js` wasn't trusted alone this session).
+Hand-traced the full dock workflow end to end against the actual code (not
+a model of it): select Dock-1 -> open Collision tab -> resolves
+`COLLIDER_SPECS['pirates:Environment:Dock:...']` (family target, since
+Dock-1's own `collide` is still `'auto'`) -> overlay renders the `deck` box
+at exactly `core/colliders.js`'s own registered position (confirmed via the
+composeShape-equivalence proof above) -> drag it down -> `objectChange`
+syncs the shape, drag-end retracts the ORIGINAL zone-load collider
+(`selected.colliderDispose`, set by `applyEdits` at zone build) and
+registers the edited one live -> Export (family target) applies the
+working spec into `COLLIDER_SPECS` and downloads `collider-catalogue.js` ->
+pasted over the real file and reloaded, the SAME edit now applies to EVERY
+Dock-family row (Dock-1 AND Dock-2), each correctly composed against its
+own distinct world position — confirming the model-local design propagates
+correctly, not just for the one instance that was dragged. Also traced the
+`Dock_Pole` capsule case by hand against the character controller's actual
+`CHAR_HEIGHT`/`STEP_UP` constants to confirm a plausible edited collider
+band still overlaps a standing character (same discipline
+COLLISION-FOUNDATION-SESSION used to verify the original hand-authored
+numbers).
+
+**Not verified** (needs Agni, eyeball-only, no browser available here): the
+actual in-browser feel — does the overlay read clearly against the model,
+is dragging the gizmo on a small shape (the pole capsule especially)
+comfortable at typical camera distances, does the tab switch feel
+responsive, and the concrete payoff this whole session was built for:
+opening the dock's Collision tab, seeing the deck box floating above the
+planks, dragging it down, and confirming the character now stands exactly
+on the visible surface.

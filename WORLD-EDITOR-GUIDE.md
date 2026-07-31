@@ -25,9 +25,11 @@ it's an overlay on top of the normal controller, not a separate mode.
 | `` ` `` | Toggle the editor |
 | Left click | Select (placed prop or scattered instance — whichever is closer under the cursor) |
 | `T` / `R` / `Y` | Gizmo mode: translate / rotate / scale (placed objects only) |
-| `Delete` / `Backspace` | Delete selected placed object, or hide selected scattered instance |
+| `Delete` / `Backspace` | Delete selected placed object, hide selected scattered instance, or (Collision tab open, a shape selected) delete that shape |
 | `Ctrl`/`Cmd` + `D` | Duplicate selected placed object |
-| `Esc` | Cancel an armed placement, or deselect |
+| `X` | Toggle the Collision tab for the selected placed object |
+| `[` / `]` | Cycle the selected collider shape (Collision tab only) |
+| `Esc` | Cancel an armed placement, deselect a collider shape, or deselect |
 
 T/R/Y and Delete/Ctrl+D are suppressed while a `<select>`/`<input>` in the
 panel has focus (so typing to search the catalogue picker doesn't hijack
@@ -106,6 +108,54 @@ generated are meaningful.
    the live placed[] row, or `{id, family, scatterEdit}` for a scattered
    selection — for pasting into a chat/issue, not for the Save workflow.
 
+## Collision tab (Editor v2 phase 1 — COLLISION-PAINTER-SESSION)
+
+With a placed object selected, click **Collision** (next to **Properties**)
+or press **X** to see and edit its collider — the same box/sphere/capsule/
+cone/deck vocabulary `core/colliders.js` runs at zone-load, now visible and
+draggable instead of authored blind. Shapes render as translucent overlays
+on the model: orange for a blocker (box/sphere/capsule/cone), green for a
+`deck` (walkable surface, not a wall).
+
+1. **See**: opening the tab alone changes nothing live — it's read-only
+   until you actually edit something. A misplaced collider (the grassland
+   dock's deck box floating above its planks was the bug this tool exists
+   to fix) is visible immediately.
+2. **Edit**: click a shape (in 3D or the panel's shape list) to gizmo-attach
+   it — T/R/Y cycle the SAME translate/rotate/scale modes as placement.
+   Scale drags resize it directly (a box's size, a sphere/capsule/cone's
+   radius/height, a deck's footprint). The numeric fields below do the same
+   thing by typing. The FIRST edit on an object retracts whatever collider
+   it already had (from zone-load or a prior edit this session) and
+   registers the updated one immediately — walk onto/into it right away to
+   check, no reload needed.
+3. **Add / Delete**: pick a shape type, click "Add shape" — drops a
+   default-sized one at the model's own origin, immediately selected.
+   "Delete selected shape" (or `Delete`/`Backspace`) removes it.
+4. **Static**: the whole spec's bake-once flag (buildings/docks/decor —
+   everything today) vs. attached-and-tracked-live (a moving object — no
+   real caller yet, see PROJECT-STATE.md's ship-hookup follow-up).
+5. **Target**: "ALL placements of this model" (the default) writes
+   `core/collider-catalogue.js`'s entry for this `catalogueId` — every
+   placement of that model, in every zone, inherits it. "Just this
+   instance" writes an explicit `collide` override onto this ONE
+   `placed[]` row instead (`edits.js`).
+6. **Export**: same idea as the top-bar Save, a separate button/dot because
+   it can write a DIFFERENT file. Family target downloads
+   `collider-catalogue.js` (paste over `world/core/collider-catalogue.js`).
+   Instance target downloads this zone's `edits.js` (identical to clicking
+   the top-bar Save — the data now lives in the row's own `collide` field).
+   Either way: paste over the real file, reload to make it stick for good —
+   the live edit already works in THIS session without that, same as every
+   other live edit in this editor.
+
+The model-local coordinate math (why a shape dragged on one placement of a
+model also lands correctly on every OTHER placement, at a different
+position/rotation) is documented in `core/world-editor.js`'s own header
+comment above its `SHAPE_KIND` table — read that before touching this
+tool's internals; getting it wrong silently breaks every collider the
+moment a model is placed anywhere but the world origin.
+
 ## Rules for Claude Design (or any future automated editor)
 
 1. **Edit data files only.** `edits.js` and `bindings.js` are the entire
@@ -125,11 +175,20 @@ generated are meaningful.
    keyed by pack. An `edits.js` row's `materialPolicy` overrides it for
    that one object/family — that's the sanctioned escape hatch. Don't add
    a second, competing place that decides material treatment.
-4. **`collide` is inert data, not a feature.** `'auto' | 'none' | {type,
-   r, h}` is a documented schema field on every `placed[]` row — nothing
-   reads it yet. Don't wire up ad hoc collision logic against it; the
-   parametric collider generator is an intentionally separate, future
-   session (see PROJECT-STATE.md).
+4. **`collide` is real — at zone-load, AND live via the Collision tab.**
+   `'auto' | 'none' | { static, shapes:[...] }` on every `placed[]` row is
+   registered into real colliders/height contributors by
+   `core/colliders.js`, called from `core/world-edits.js`'s `applyEdits`
+   (see that file's own header for the full shape vocabulary and
+   `core/collider-catalogue.js` for the per-model spec table `'auto'` looks
+   up) AND from this editor's own Collision tab (X, or the tab button) once
+   you actually edit a shape. Plain placing/duplicating/rebuilding an
+   object — without opening the Collision tab on it — still does NOT
+   register a collider until the zone next reloads. Don't add a second,
+   competing place that decides collision; extend `collider-catalogue.js`
+   (by hand, or through the Collision tab) instead. The parametric
+   taper/skew primitive shaping is still separate, future work (see
+   PROJECT-STATE.md).
 5. **Never reuse or hand-author an id.** `placed[]` ids and `Family#NNNN`
    scatter ids are both assigned by the editor (`genPlacedId` /
    catalogue-flora.js's placement-order counter). Hand-editing an
@@ -152,7 +211,21 @@ generated are meaningful.
 - `familyOverrides[family].materialPolicy` applies on the next zone build,
   not live.
 - Live-hiding a scattered instance doesn't retract its original collision
-  circle in Grassland (Lagoon has no collision system at all) until the
-  zone is rebuilt.
-- The parametric `collide` bell-collider itself: not built, by design —
-  a separate future session.
+  circle in Grassland (Lagoon has no collision system at all until this
+  session's dock spec adds its first entry) until the zone is rebuilt.
+- Placing/duplicating a placed object, or swapping its model, live in this
+  editor does NOT register a fresh collider for it on its own — open the
+  Collision tab on it (even with zero edits, then Add a shape) to give it
+  one live, or Save + reload to pick up whatever `collider-catalogue.js`
+  already has for its `catalogueId`. Rebuild (model swap) DOES correctly
+  retract whatever collider the OLD object had before replacing it, so this
+  is "doesn't gain one automatically," not "leaks the old one" — see
+  `core/world-edits.js`'s `rebuildPlacedObject`/`removePlacedObject`.
+- The Collision tab's overlay/gizmo only edits ONE object's colliders at a
+  time — even under "apply to ALL placements" target, a SIBLING placement
+  of the same model that's already built into the scene keeps its OLD live
+  collider (if it was ever live-edited itself) until that sibling is
+  individually opened in the tab, or the zone reloads. Export + reload is
+  the reliable way to see a family-wide edit everywhere at once.
+- The parametric taper/skew primitive shaping (a tilted/curved collider):
+  not built, by design — separate future work.
