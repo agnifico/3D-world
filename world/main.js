@@ -199,23 +199,44 @@ export async function crossPortal(portal) {
   if (crossing) return;
   crossing = true;
   try {
-    const crossState = controllerApi.getCrossingState(); // { riding, boatType, heading } | { riding: false }
+    const crossState = controllerApi.getCrossingState(); // { riding, boatType, instanceId, heading } | { riding: false }
     await fadeTo(1, 0.6);
-    loadZone(portal.targetZone, portal.targetPortal);
-    if (crossState.riding) {
-      // Into the NEW zone's own private content group (currentZoneCtx.scene,
-      // set by loadZone() just above) — NOT the real top-level `scene`. A
-      // boat added straight to the real scene would never be reachable by
-      // disposeGroup() on the next crossing and would leak forever (caught
-      // by the 10x round-trip check: textures grew every single crossing
-      // until this was fixed).
-      const boat = await Boats.spawnBoatAt(currentZoneCtx.scene, currentZoneCtx.animated, crossState.boatType, char.position.x, char.position.z, crossState.heading, currentZone.WATER_Y);
-      if (boat) controllerApi.mountBoat(boat);
+
+    // Persistent-fleet crossing: move the ridden boat's instance to the
+    // destination (at the target portal) BEFORE the build, so the destination's
+    // own spawnFleetForZone pass (inside applyEdits) re-creates that exact
+    // instance in its private content group — no clone, no leftover at home.
+    if (crossState.riding && crossState.instanceId) {
+      const destPortal = ZONES[portal.targetZone]?.portals?.find(p => p.id === portal.targetPortal);
+      Boats.setFleetLocation(crossState.instanceId, portal.targetZone, destPortal?.x ?? 0, destPortal?.z ?? 0, crossState.heading);
     }
+
+    loadZone(portal.targetZone, portal.targetPortal);
+
+    if (crossState.riding && crossState.instanceId) {
+      // spawnFleetForZone runs fire-and-forget during loadZone's build, so the
+      // boat appears in Boats.boats a few frames later — poll briefly, then
+      // mount that instance. Arriving on foot is the graceful fallback.
+      const boat = await waitForFleetBoat(crossState.instanceId);
+      if (boat) controllerApi.mountBoat(boat);
+      else console.warn('[crossPortal] fleet boat did not appear, arriving on foot:', crossState.instanceId);
+    }
+
     await fadeTo(0, 0.6);
   } finally {
     crossing = false;
   }
+}
+
+// applyEdits (→ spawnFleetForZone) is async during loadZone; poll ~1s for the
+// boat instance to appear in the new zone's boats[] before giving up.
+async function waitForFleetBoat(instanceId, tries = 60) {
+  for (let i = 0; i < tries; i++) {
+    const b = Boats.boats.find(x => x.instanceId === instanceId);
+    if (b) return b;
+    await new Promise(r => setTimeout(r, 16));
+  }
+  return null;
 }
 window.__crossPortal = crossPortal; // dev hook — e.g. __crossPortal(__portal())
 window.__portal = () => currentZone?.portals?.[0]; // dev hook — the active zone's first portal
@@ -279,6 +300,11 @@ async function toggleWorldEditor() {
       scene: currentZoneCtx.scene, camera, domElement: renderer.domElement,
       animated: currentZoneCtx.animated, renderer,
       zone: currentZone, getChar: () => controllerApi.char,
+      // COLLISION-PAINTER-SESSION — the Collision tab's live re-register
+      // needs the same shell-level registries every zone's build(ctx) gets;
+      // currentZoneCtx already carries both, just not previously threaded
+      // into the editor's own dependency surface.
+      collisionRegistry: currentZoneCtx.collisionRegistry, heightRegistry: currentZoneCtx.heightRegistry,
     });
     worldEditorOpen = true;
   }

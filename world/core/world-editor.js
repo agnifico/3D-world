@@ -30,8 +30,10 @@ import {
   rebuildPlacedObject, serializePlaced, genPlacedId, getEditsModule,
 } from './world-edits.js';
 import { getScatterMeshes, resolveScatterHit, getSiblingMeshes, getScatterMeshesForFamily } from './scatter-registry.js';
+import { registerColliders } from './colliders.js';
+import { COLLIDER_SPECS } from './collider-catalogue.js';
 
-let deps = null; // { scene, camera, domElement, animated, renderer, zone, getChar }
+let deps = null; // { scene, camera, domElement, animated, renderer, zone, getChar, collisionRegistry, heightRegistry }
 let open = false;
 let abortCtl = null;
 let raycaster = null, transform = null;
@@ -47,6 +49,249 @@ let onDirtyChange = null; // separate from onChange: typed numeric edits (positi
 // doesn't imply "rebuild the whole inspector".
 
 function markDirty() { if (!dirty) { dirty = true; onDirtyChange?.(true); } }
+
+// =============================================================================
+// COLLISION-PAINTER-SESSION — Editor v2 phase 1: a "Collision" tab over the
+// SAME selection/gizmo plumbing above, for SEEING and EDITING a placed
+// object's collider spec (core/colliders.js's box/sphere/capsule/cone/deck
+// vocabulary — see collider-catalogue.js's header for the storage model,
+// which this file reads/writes but never redesigns).
+//
+// Coordinate space (the part the session brief calls "critical"): a shape's
+// `pos`/`rot`/size fields are MODEL-LOCAL, not world space — exactly what a
+// THREE child Object3D's own .position/.rotation/.scale already mean when
+// parented under the selected object. So every overlay mesh below is added
+// as a literal child of `selected.obj` (never the scene root) — THREE's own
+// parent-child matrix composition places it in the right WORLD spot for
+// free, and — the actual payoff — dragging it with TransformControls
+// mutates exactly the local numbers the spec wants, with no manual
+// world<->local matrix inversion anywhere in this file. Get this wrong (add
+// overlays to the scene root, or read/write world coordinates) and every
+// collider silently lands in the wrong place the moment the model is placed
+// anywhere but the world origin — the "place a second dock elsewhere" check
+// in the session brief's own Verify section exists specifically to catch
+// that class of bug.
+let colliderTabOpen = false;
+let colliderShapes = null;       // working array of shape objects, or null when the tab is closed/nothing selected
+let colliderIsStatic = true;     // the WHOLE spec's static flag (schema is spec-level, not per-shape)
+let colliderShapeSelected = null; // index into colliderShapes currently gizmo-attached, or null
+let colliderTarget = 'family';   // 'family' (-> collider-catalogue.js) | 'instance' (-> this row's own `collide`)
+let colliderCatalogueId = null;
+let colliderOverlayGroup = null; // THREE.Group, child of selected.obj, holds one child-Group per shape
+let colliderDirty = false;       // separate from the placement `dirty` dot — a different export target
+let onColliderChange = null;
+let onColliderDirtyChange = null;
+
+function colliderNotify() { onColliderChange?.(); }
+function markColliderDirty() { if (!colliderDirty) { colliderDirty = true; onColliderDirtyChange?.(true); } }
+function clearColliderDirtyFlag() { colliderDirty = false; onColliderDirtyChange?.(false); }
+function round3(n) { return Math.round(n * 1000) / 1000; }
+
+// A 'deck' shape has historically accepted its walkable height as EITHER a
+// top-level `y` or `pos[1]` (core/colliders.js's registerDeck merges both —
+// `y` wins — since collider-catalogue.js's hand-authored dock spec used the
+// separate `y` spelling). This editor always READS via that same merge and
+// always WRITES back consolidated into `pos` only, dropping any stray `y` —
+// one canonical on-disk shape going forward, without requiring colliders.js
+// (the engine — not to be touched this session) to stop accepting the old one.
+function getEffectivePos(shape) {
+  const p = shape.pos || [0, 0, 0];
+  const y = shape.type === 'deck' ? (shape.y ?? p[1] ?? 0) : (p[1] ?? 0);
+  return [p[0] ?? 0, y, p[2] ?? 0];
+}
+function setPos(shape, [x, y, z]) {
+  shape.pos = [round3(x), round3(y), round3(z)];
+  if (shape.type === 'deck') delete shape.y;
+}
+function getRot(shape) { return shape.rot || [0, 0, 0]; }
+function setRot(shape, [x, y, z]) { shape.rot = [round3(x), round3(y), round3(z)]; }
+
+// One entry per shape TYPE the picker offers: how to build a placeholder
+// overlay mesh (unit-sized — actual dimensions come from the overlay
+// Group's own .scale, so a size/radius/height edit is just a scale edit,
+// including via the SAME scale-mode gizmo T/R/Y already cycles through),
+// how to read the spec's own size fields as a [sx,sy,sz] scale triple, and
+// the inverse. `role` picks the overlay's color (blocker vs deck) — see
+// buildShapeOverlay. Coarse on purpose (box/sphere/capsule/cone, per the
+// session brief — no taper/skew shaping here).
+const DECK_VIS_THICKNESS = 0.08; // cosmetic only — decks have no real "thickness" spec field
+const SHAPE_KIND = {
+  box: {
+    role: 'blocker',
+    makeGeometry: () => new THREE.BoxGeometry(1, 1, 1),
+    getScale: s => [s.size?.[0] ?? 1, s.size?.[1] ?? 1, s.size?.[2] ?? 1],
+    setScale: (s, [x, y, z]) => { s.size = [round3(x), round3(y), round3(z)]; },
+    defaults: () => ({ type: 'box', size: [1, 1, 1], pos: [0, 0, 0], rot: [0, 0, 0] }),
+  },
+  sphere: {
+    role: 'blocker',
+    makeGeometry: () => new THREE.SphereGeometry(1, 16, 12),
+    getScale: s => [s.r ?? 0.5, s.r ?? 0.5, s.r ?? 0.5],
+    setScale: (s, [x]) => { s.r = round3(x); },
+    defaults: () => ({ type: 'sphere', r: 0.5, pos: [0, 0, 0] }),
+  },
+  capsule: {
+    role: 'blocker',
+    makeGeometry: () => new THREE.CapsuleGeometry(1, 1, 4, 8),
+    getScale: s => [s.r ?? 0.3, s.h ?? 1, s.r ?? 0.3],
+    setScale: (s, [x, y]) => { s.r = round3(x); s.h = round3(y); },
+    defaults: () => ({ type: 'capsule', r: 0.3, h: 1, pos: [0, 0, 0], rot: [0, 0, 0] }),
+  },
+  cone: {
+    role: 'blocker',
+    makeGeometry: () => new THREE.ConeGeometry(1, 1, 12),
+    getScale: s => [s.r ?? 0.5, s.h ?? 1, s.r ?? 0.5],
+    setScale: (s, [x, y]) => { s.r = round3(x); s.h = round3(y); },
+    defaults: () => ({ type: 'cone', r: 0.5, h: 1, pos: [0, 0, 0], rot: [0, 0, 0] }),
+  },
+  deck: {
+    role: 'deck',
+    makeGeometry: () => new THREE.BoxGeometry(1, DECK_VIS_THICKNESS, 1),
+    getScale: s => [s.size?.[0] ?? 1, 1, s.size?.[1] ?? 1],
+    setScale: (s, [x, , z]) => { s.size = [round3(x), round3(z)]; },
+    defaults: () => ({ type: 'deck', size: [1, 1], pos: [0, 0, 0] }),
+  },
+};
+
+// Unlit + translucent (MeshBasicMaterial, depthWrite:false) so overlays read
+// clearly regardless of scene lighting and don't fully occlude the model
+// underneath or fight z-order with each other. Module-scope, created once,
+// never disposed — same discipline as this file's own scratch `_plane`/
+// `_hit` (editor-only, lives for the process lifetime once first opened).
+const _matBlockerFill = new THREE.MeshBasicMaterial({ color: 0xff6a3d, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
+const _matBlockerWire = new THREE.MeshBasicMaterial({ color: 0xff6a3d, wireframe: true, transparent: true, opacity: 0.85 });
+const _matDeckFill = new THREE.MeshBasicMaterial({ color: 0x46d17a, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide });
+const _matDeckWire = new THREE.MeshBasicMaterial({ color: 0x46d17a, wireframe: true, transparent: true, opacity: 0.85 });
+const _matSelectedWire = new THREE.MeshBasicMaterial({ color: 0xffe14d, wireframe: true, transparent: true, opacity: 1, depthTest: false });
+
+// One shape -> one Group(fill mesh, wire mesh[, selection-highlight mesh]),
+// local pos/rot/scale set straight from the shape's own fields — see this
+// section's header comment on why "child of selected.obj, local transform"
+// is the whole coordinate-space trick. `fill`/`wire` share ONE geometry
+// (disposing it twice in clearColliderOverlay is harmless — THREE's
+// dispose() is idempotent) since they're always the same unit shape.
+function buildShapeOverlay(shape, index) {
+  const kind = SHAPE_KIND[shape.type];
+  if (!kind) { console.warn(`[world-editor] collider: unknown shape type "${shape.type}"`); return null; }
+  const geo = kind.makeGeometry();
+  const [matFill, matWire] = kind.role === 'deck' ? [_matDeckFill, _matDeckWire] : [_matBlockerFill, _matBlockerWire];
+  const fill = new THREE.Mesh(geo, matFill), wire = new THREE.Mesh(geo, matWire);
+  const group = new THREE.Group();
+  group.add(fill, wire);
+  group.userData.__colliderShapeIndex = index;
+  group.position.set(...getEffectivePos(shape));
+  group.rotation.set(...getRot(shape));
+  group.scale.set(...kind.getScale(shape));
+  if (index === colliderShapeSelected) {
+    const hi = new THREE.Mesh(geo, _matSelectedWire);
+    hi.scale.setScalar(1.03); // a hair larger so the highlight wire reads over the base wire, not z-fighting it
+    group.add(hi);
+  }
+  // Tagged directly on every mesh (not just the parent Group) so a flat
+  // `selected.obj.traverse(o => ...)` elsewhere — getSelectedParts/
+  // recolorSelectedPart, the Properties tab's recolor swatches — can skip
+  // these with an O(1) check instead of an ancestor walk. These overlays are
+  // added as real children of `selected.obj` (see this section's header on
+  // why), so without this tag they'd otherwise show up as bogus, empty-
+  // named "material parts" to recolor.
+  for (const m of group.children) m.userData.__colliderOverlay = true;
+  return group;
+}
+
+function clearColliderOverlay() {
+  if (colliderOverlayGroup) {
+    colliderOverlayGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    colliderOverlayGroup.parent?.remove(colliderOverlayGroup);
+  }
+  colliderOverlayGroup = null;
+}
+function refreshColliderOverlay() {
+  clearColliderOverlay();
+  if (!colliderTabOpen || !selected || !colliderShapes) return;
+  colliderOverlayGroup = new THREE.Group();
+  colliderOverlayGroup.name = '__colliderOverlay';
+  for (let i = 0; i < colliderShapes.length; i++) {
+    const g = buildShapeOverlay(colliderShapes[i], i);
+    if (g) colliderOverlayGroup.add(g);
+  }
+  selected.obj.add(colliderOverlayGroup);
+}
+function syncOverlayFromShape(index) {
+  const shape = colliderShapes?.[index];
+  const group = colliderOverlayGroup?.children[index];
+  const kind = shape && SHAPE_KIND[shape.type];
+  if (!shape || !group || !kind) return;
+  group.position.set(...getEffectivePos(shape));
+  group.rotation.set(...getRot(shape));
+  group.scale.set(...kind.getScale(shape));
+}
+// Inverse: reads the (just-dragged) overlay Group's CURRENT local transform
+// back into the working shape — the only place world-editor.js converts a
+// gizmo drag into spec data. Nothing here touches world space at all
+// (`group.position`/`.rotation`/`.scale` are already local-to-`selected.obj`
+// by construction — see this section's header), which is what makes this
+// correct regardless of the selected object's own position/rotation/scale.
+function syncColliderShapeFromGizmo() {
+  if (colliderShapeSelected === null || !colliderOverlayGroup) return;
+  const group = colliderOverlayGroup.children[colliderShapeSelected];
+  const shape = colliderShapes[colliderShapeSelected];
+  const kind = shape && SHAPE_KIND[shape.type];
+  if (!group || !kind) return;
+  setPos(shape, [group.position.x, group.position.y, group.position.z]);
+  setRot(shape, [group.rotation.x, group.rotation.y, group.rotation.z]);
+  kind.setScale(shape, [group.scale.x, group.scale.y, group.scale.z]);
+  markColliderDirty();
+}
+
+function colliderCtx() { return { collisionRegistry: deps.collisionRegistry, heightRegistry: deps.heightRegistry }; }
+// The live-preview half of "see AND test in the real renderer" (session
+// brief, Phase 2): retracts whatever collider is CURRENTLY registered for
+// `selected` — the original zone-load one the first time this runs for this
+// object (selected.colliderDispose, set by core/world-edits.js's applyEdits;
+// consumed exactly once), this editor's own previous live version every
+// time after (selected.colliderLiveDispose) — then registers a fresh one
+// from the current working `colliderShapes`. Both disposer slots live ON
+// THE REGISTRY RECORD (not a module-level variable here), so switching
+// selection to a different placed object never mixes up whose collider is
+// whose, and needs no manual reset when selection changes. Never runs
+// during Phase 1 (read-only viewing) — only ever called from an actual edit
+// (drag-end, a numeric field, add/delete, static toggle) — so just opening
+// the tab to look never touches the object's real collider.
+function liveReregisterCollider() {
+  if (!selected || !deps.collisionRegistry || !deps.heightRegistry) return;
+  if (selected.colliderDispose) { selected.colliderDispose(); selected.colliderDispose = null; }
+  selected.colliderLiveDispose?.();
+  selected.colliderLiveDispose = null;
+  if (!colliderShapes?.length) return; // every shape deleted — object now has zero colliders, intentional
+  selected.colliderLiveDispose = registerColliders(selected.obj, { static: colliderIsStatic, shapes: colliderShapes }, null, colliderCtx());
+}
+
+// Loads the working copy for whatever's currently `selected` — precedence:
+// an existing per-INSTANCE override (selected.row.collide, an explicit
+// {static,shapes} object) if present, else the per-CATALOGUE-MODEL spec
+// (collider-catalogue.js's COLLIDER_SPECS, keyed by catalogueId), else
+// empty (no spec yet for this model — Add a shape to start one). Deep-
+// copies every shape (own pos/rot/size arrays) so editing never mutates
+// COLLIDER_SPECS/row.collide directly until an explicit Export/apply —
+// mirrors serializeRows' own "never mutate the source of truth mid-edit"
+// discipline in core/world-edits.js.
+function loadColliderSpecForSelection() {
+  if (!selected) { colliderShapes = null; colliderCatalogueId = null; return; }
+  colliderCatalogueId = selected.row.catalogueId;
+  const instanceSpec = (selected.row.collide && typeof selected.row.collide === 'object') ? selected.row.collide : null;
+  const familySpec = COLLIDER_SPECS[colliderCatalogueId] || null;
+  const source = instanceSpec || familySpec;
+  colliderTarget = instanceSpec ? 'instance' : 'family';
+  colliderIsStatic = source?.static !== false;
+  colliderShapes = (source?.shapes || []).map(s => ({
+    ...s,
+    pos: s.pos ? [...s.pos] : undefined,
+    rot: s.rot ? [...s.rot] : undefined,
+    size: s.size ? [...s.size] : undefined,
+  }));
+  colliderShapeSelected = null;
+  clearColliderDirtyFlag();
+}
 
 const MODE_KEYS = { KeyT: 'translate', KeyR: 'rotate', KeyY: 'scale' };
 
@@ -68,6 +313,10 @@ function select(rec) {
   selectedScatter = null;
   selected = rec;
   transform.attach(rec.obj);
+  // Switching the placed selection while the Collision tab is open re-loads
+  // it for the NEWLY selected object — same "click a different object,
+  // its own colliders show up" workflow the session brief's Phase 2 assumes.
+  if (colliderTabOpen) { loadColliderSpecForSelection(); refreshColliderOverlay(); }
   notify();
 }
 // Scatter instances (World Editor Phase 4, "scatter reach") get no
@@ -85,6 +334,7 @@ function deselect() {
   selected = null;
   selectedScatter = null;
   transform.detach();
+  if (colliderTabOpen) { colliderShapes = null; colliderCatalogueId = null; colliderShapeSelected = null; clearColliderOverlay(); }
   notify();
 }
 
@@ -141,6 +391,20 @@ function onPointerDown(e) {
   const rect = deps.domElement.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, deps.camera);
+  // Collision tab open: a hit on one of the overlay shapes takes priority
+  // over re-picking a placed/scattered object entirely — you're mid-edit on
+  // `selected`, so a click should refine THAT (select a shape to drag) before
+  // it's read as "select something else". Missing every overlay falls
+  // through to the normal raycast below unchanged (so clicking a DIFFERENT
+  // placed object still works, and reloads the tab for it — see select()).
+  if (colliderTabOpen && colliderOverlayGroup) {
+    const shapeHits = raycaster.intersectObjects(colliderOverlayGroup.children, true);
+    if (shapeHits.length) {
+      let o = shapeHits[0].object;
+      while (o && o.userData.__colliderShapeIndex === undefined) o = o.parent;
+      if (o) { selectColliderShape(o.userData.__colliderShapeIndex); return; }
+    }
+  }
   // One combined raycast (not two separate ones) so a placed object and a
   // scattered instance compete on actual distance — whichever is visually
   // closer under the cursor wins, not "placed always beats scatter".
@@ -273,7 +537,7 @@ function getSelectedParts() {
   if (!selected) return [];
   const parts = new Map(); // material name -> current hex (last one wins if somehow duplicated — cosmetic only)
   selected.obj.traverse(o => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData.__colliderOverlay) return; // skip the Collision tab's own overlay meshes, if any
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
       if (m?.name && m.color) parts.set(m.name, '#' + m.color.getHexString());
     }
@@ -298,7 +562,7 @@ function recolorSelectedPart(materialName, hex) {
   if (!selected) return false;
   let changed = false;
   selected.obj.traverse(o => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData.__colliderOverlay) return; // skip the Collision tab's own overlay meshes, if any
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     for (let i = 0; i < mats.length; i++) {
       if (mats[i].name !== materialName) continue;
@@ -312,6 +576,149 @@ function recolorSelectedPart(materialName, hex) {
   return changed;
 }
 
+// ---- Collision tab mutation API (Editor v2 phase 1) ----------------------
+// Everything below operates on `colliderShapes`/`colliderOverlayGroup`, the
+// working copy loadColliderSpecForSelection() populated for whatever's
+// currently `selected` — see that function and this section's header
+// comment (above SHAPE_KIND) for the coordinate-space/precedence rules.
+
+function openColliderTab() {
+  if (colliderTabOpen) return;
+  colliderTabOpen = true;
+  loadColliderSpecForSelection();
+  refreshColliderOverlay();
+  colliderNotify();
+}
+function closeColliderTab() {
+  if (!colliderTabOpen) return;
+  colliderTabOpen = false;
+  colliderShapeSelected = null;
+  clearColliderOverlay();
+  colliderShapes = null; colliderCatalogueId = null;
+  if (selected) transform.attach(selected.obj); // gizmo falls back to the object itself, not left dangling on a disposed shape mesh
+  colliderNotify();
+}
+function selectColliderShape(index) {
+  if (!colliderShapes || index < 0 || index >= colliderShapes.length) return;
+  colliderShapeSelected = index;
+  refreshColliderOverlay(); // rebuilds so the newly-selected shape gets its highlight wire (buildShapeOverlay checks colliderShapeSelected)
+  const group = colliderOverlayGroup?.children[index];
+  if (group) transform.attach(group);
+  colliderNotify();
+}
+function deselectColliderShape() {
+  if (colliderShapeSelected === null) return;
+  colliderShapeSelected = null;
+  refreshColliderOverlay(); // drop the highlight wire
+  if (selected) transform.attach(selected.obj);
+  colliderNotify();
+}
+function cycleColliderShape(dir) {
+  if (!colliderShapes?.length) return;
+  const cur = colliderShapeSelected ?? -1;
+  selectColliderShape((cur + dir + colliderShapes.length) % colliderShapes.length);
+}
+function addColliderShape(type) {
+  if (!colliderShapes || !SHAPE_KIND[type]) return;
+  colliderShapes.push(SHAPE_KIND[type].defaults());
+  markColliderDirty();
+  selectColliderShape(colliderShapes.length - 1); // also refreshes the overlay to include the new shape
+  liveReregisterCollider();
+}
+function deleteColliderShape() {
+  if (colliderShapeSelected === null || !colliderShapes) return;
+  colliderShapes.splice(colliderShapeSelected, 1);
+  colliderShapeSelected = null;
+  markColliderDirty();
+  refreshColliderOverlay();
+  if (selected) transform.attach(selected.obj);
+  liveReregisterCollider();
+  colliderNotify();
+}
+function setColliderStatic(v) {
+  if (!colliderShapes) return;
+  colliderIsStatic = !!v;
+  markColliderDirty();
+  liveReregisterCollider();
+  colliderNotify();
+}
+function setColliderTarget(t) {
+  colliderTarget = t === 'instance' ? 'instance' : 'family';
+  markColliderDirty();
+  colliderNotify();
+}
+// Numeric-field write path (position/rotation) for the currently selected
+// shape — same role as setSelectedPosition et al. for placed objects, one
+// level down. Live-reregisters on every commit (unlike the placement
+// fields' own "don't notify every keystroke" caution): each call here is a
+// handful of collider primitives, not a whole-panel rebuild, so there's no
+// focus-stealing/perf reason to hold back — same reasoning core/colliders.js
+// itself gives for why a static bake is cheap.
+function patchColliderShapePos(x, y, z) {
+  const shape = colliderShapes?.[colliderShapeSelected];
+  if (!shape) return;
+  setPos(shape, [x, y, z]);
+  syncOverlayFromShape(colliderShapeSelected);
+  markColliderDirty();
+  liveReregisterCollider();
+}
+function patchColliderShapeRotDeg(xDeg, yDeg, zDeg) {
+  const shape = colliderShapes?.[colliderShapeSelected];
+  if (!shape) return;
+  const d = Math.PI / 180;
+  setRot(shape, [xDeg * d, yDeg * d, zDeg * d]);
+  syncOverlayFromShape(colliderShapeSelected);
+  markColliderDirty();
+  liveReregisterCollider();
+}
+// Partial patch of the shape's OWN spec fields (e.g. {size:[x,y,z]} for a
+// box, {r:...} for a sphere) — deliberately not positional args, so the
+// panel can construct exactly the fields that make sense for `shape.type`
+// without needing to know this file's internal scale-axis mapping.
+function patchColliderShape(patch) {
+  const shape = colliderShapes?.[colliderShapeSelected];
+  if (!shape) return;
+  Object.assign(shape, patch);
+  syncOverlayFromShape(colliderShapeSelected);
+  markColliderDirty();
+  liveReregisterCollider();
+}
+
+// TARGET + EXPORT (Phase 4). Applies the CURRENT working spec to wherever
+// `colliderTarget` says it belongs: 'family' mutates collider-catalogue.js's
+// own live COLLIDER_SPECS table in place (an empty shape list deletes the
+// entry rather than leaving a `{shapes:[]}` husk); 'instance' writes an
+// explicit per-placement override onto this row's own `collide` field
+// (reusing the EXISTING placement-dirty flag/Save path — serializePlaced()
+// already spreads `...row`, `collide` included, so nothing else needs to
+// change for that half). Returns which target it applied to, or null if
+// there's nothing to apply (no selection).
+function applyColliderTarget() {
+  if (!selected || !colliderShapes) return null;
+  const spec = { static: colliderIsStatic, shapes: colliderShapes };
+  if (colliderTarget === 'instance') {
+    selected.row.collide = colliderShapes.length ? spec : 'none';
+    markDirty();
+    return 'instance';
+  }
+  if (colliderCatalogueId) {
+    if (colliderShapes.length) COLLIDER_SPECS[colliderCatalogueId] = spec;
+    else delete COLLIDER_SPECS[colliderCatalogueId];
+  }
+  return 'family';
+}
+// Pure text generation (no download side-effect, no re-applying the working
+// spec — the caller already did that via applyColliderTarget()), same
+// contract as exportEditsText below — world-editor-panel.js owns the actual
+// Blob/anchor/clipboard mechanics for both.
+function exportColliderCatalogueText() {
+  const body = JSON.stringify(COLLIDER_SPECS, null, 2);
+  return `// Auto-exported by the World Editor's Collision tab — paste over world/core/collider-catalogue.js\n`
+    + `// Replaces the WHOLE table — this file's own hand-written header comments\n`
+    + `// aren't round-tripped; copy back whichever ones you still want to keep.\n`
+    + `export const COLLIDER_SPECS = ${body};\n`;
+}
+
 function onKeyDown(e) {
   if (!e.isTrusted || !open) return;
   // Don't hijack T/R/Y/Delete/Ctrl+D while the user is typing/searching in
@@ -321,10 +728,19 @@ function onKeyDown(e) {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (MODE_KEYS[e.code]) { transform.mode = MODE_KEYS[e.code]; notify(); return; }
-  if ((e.code === 'Delete' || e.code === 'Backspace') && selected) { e.preventDefault(); deleteSelected(); return; }
-  if ((e.code === 'Delete' || e.code === 'Backspace') && selectedScatter) { e.preventDefault(); hideSelectedScatterInstance(); return; }
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    if (colliderTabOpen && colliderShapeSelected !== null) { e.preventDefault(); deleteColliderShape(); return; }
+    if (selected) { e.preventDefault(); deleteSelected(); return; }
+    if (selectedScatter) { e.preventDefault(); hideSelectedScatterInstance(); return; }
+  }
   if (e.code === 'KeyD' && (e.ctrlKey || e.metaKey) && selected) { e.preventDefault(); duplicateSelected(); return; }
-  if (e.code === 'Escape') { if (armedPlacement) { armedPlacement = null; notify(); } else deselect(); }
+  if (e.code === 'KeyX' && selected) { e.preventDefault(); if (colliderTabOpen) closeColliderTab(); else openColliderTab(); return; }
+  if (colliderTabOpen && (e.code === 'BracketRight' || e.code === 'BracketLeft')) { e.preventDefault(); cycleColliderShape(e.code === 'BracketRight' ? 1 : -1); return; }
+  if (e.code === 'Escape') {
+    if (armedPlacement) { armedPlacement = null; notify(); }
+    else if (colliderTabOpen && colliderShapeSelected !== null) { deselectColliderShape(); }
+    else deselect();
+  }
 }
 
 // ---- exported surface — world-editor-panel.js and main.js are the only callers ----
@@ -442,8 +858,20 @@ export async function openEditor(d) {
   raycaster = new THREE.Raycaster();
   transform = new TransformControls(deps.camera, deps.domElement);
   deps.scene.add(transform.getHelper());
-  transform.addEventListener('objectChange', () => { markDirty(); notify(); });
-  transform.addEventListener('dragging-changed', e => { if (!e.value) { snapSelectedY(); notify(); } });
+  transform.addEventListener('objectChange', () => {
+    // A collider shape is attached instead of `selected.obj` itself while
+    // one's picked (selectColliderShape) — route drags there instead of
+    // treating them as a placement move (which would wrongly mark the
+    // PLACEMENT dirty dot and, worse, feed a shape's local coordinates into
+    // snapSelectedY() below as if they were the object's own world Y).
+    if (colliderShapeSelected !== null) { syncColliderShapeFromGizmo(); colliderNotify(); return; }
+    markDirty(); notify();
+  });
+  transform.addEventListener('dragging-changed', e => {
+    if (e.value) return;
+    if (colliderShapeSelected !== null) { syncColliderShapeFromGizmo(); liveReregisterCollider(); colliderNotify(); return; }
+    snapSelectedY(); notify();
+  });
   deps.domElement.addEventListener('pointerdown', onPointerDown, { signal: abortCtl.signal });
   addEventListener('keydown', onKeyDown, { signal: abortCtl.signal });
   open = true;
@@ -459,7 +887,9 @@ export async function openEditor(d) {
 // documented upstream-bug tradeoff, not new to this module).
 export function closeEditor() {
   if (!open) return;
-  deselect();
+  deselect(); // already clears the collider overlay/working-shapes state when colliderTabOpen — see deselect()
+  colliderTabOpen = false; colliderShapeSelected = null;
+  clearColliderOverlay();
   armedPlacement = null;
   transform?.disconnect();
   const helper = transform?.getHelper();
@@ -468,4 +898,35 @@ export function closeEditor() {
   transform = null; raycaster = null; abortCtl = null; deps = null;
   open = false;
   notify();
+}
+
+// ---- Collision tab exported surface (Editor v2 phase 1) — world-editor-panel.js is the only caller ----
+export { openColliderTab, closeColliderTab, selectColliderShape, deselectColliderShape, cycleColliderShape };
+export { addColliderShape, deleteColliderShape, setColliderStatic, setColliderTarget };
+export { patchColliderShapePos, patchColliderShapeRotDeg, patchColliderShape, applyColliderTarget, exportColliderCatalogueText };
+export function isColliderTabOpen() { return colliderTabOpen; }
+export function getColliderShapes() { return colliderShapes || []; }
+export function getColliderShapeSelected() { return colliderShapeSelected; }
+export function getColliderTarget() { return colliderTarget; }
+export function getColliderIsStatic() { return colliderIsStatic; }
+export function getColliderCatalogueId() { return colliderCatalogueId; }
+export function isColliderDirty() { return colliderDirty; }
+export function clearColliderDirty() { clearColliderDirtyFlag(); }
+export function onColliderSelectionChange(cb) { onColliderChange = cb; }
+export function onColliderDirty(cb) { onColliderDirtyChange = cb; }
+// A read-only display view of one shape — position/rotation already
+// resolved through the deck y/pos[1] merge (getEffectivePos) and rotation
+// in degrees, so the panel never needs to know either convention itself.
+export function getColliderShapeDisplay(index) {
+  const shape = colliderShapes?.[index];
+  const kind = shape && SHAPE_KIND[shape.type];
+  if (!shape || !kind) return null;
+  return {
+    type: shape.type,
+    role: kind.role,
+    pos: getEffectivePos(shape),
+    rotDeg: getRot(shape).map(r => r * 180 / Math.PI),
+    scale: kind.getScale(shape),
+    raw: shape,
+  };
 }

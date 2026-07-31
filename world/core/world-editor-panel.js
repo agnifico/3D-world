@@ -191,6 +191,184 @@ function buildInspector(sel) {
   return wrap;
 }
 
+// COLLISION-PAINTER-SESSION — Editor v2 phase 1: switches the inspector
+// between the existing Properties view (buildInspector, above) and the new
+// Collision view below. Deliberately has no LOCAL "which tab" state of its
+// own — Editor.isColliderTabOpen() is the single source of truth (also
+// flips via the X hotkey in world-editor.js), so clicking a tab button here
+// and pressing X do the exact same thing and can never drift out of sync.
+function buildTabBar() {
+  const row = mkRow();
+  row.style.marginTop = '2px';
+  const collisionOpen = Editor.isColliderTabOpen();
+  const propBtn = mkButton('Properties');
+  propBtn.style.cssText += `flex:1; ${collisionOpen ? 'opacity:.55;' : 'font-weight:700;'}`;
+  propBtn.onclick = () => Editor.closeColliderTab();
+  const colBtn = mkButton('Collision');
+  colBtn.style.cssText += `flex:1; ${collisionOpen ? 'font-weight:700;' : 'opacity:.55;'}`;
+  colBtn.onclick = () => Editor.openColliderTab();
+  row.append(propBtn, colBtn);
+  return row;
+}
+
+// One row per shape in the working spec, highlighting whichever index is
+// currently gizmo-attached (Editor.getColliderShapeSelected()) — clicking a
+// row is the panel-side equivalent of clicking the shape's 3D overlay.
+function buildColliderShapeList(shapes, selIdx) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:3px; margin-top:4px; max-height:140px; overflow:auto;';
+  if (!shapes.length) {
+    const n = document.createElement('small');
+    n.style.opacity = '.6';
+    n.textContent = 'No shapes yet — this model is walk-through.';
+    wrap.appendChild(n);
+    return wrap;
+  }
+  shapes.forEach((s, i) => {
+    const b = mkButton(`${i}. ${s.type}${s.type === 'deck' ? ' (walk-on)' : ''}`);
+    b.style.cssText += `width:100%; text-align:left; ${i === selIdx ? 'border-color:#c88; background:#fdf0e8;' : ''}`;
+    b.onclick = () => Editor.selectColliderShape(i);
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+// Numeric fields for whichever shape is currently selected — pos/rot are
+// uniform across every type (getColliderShapeDisplay already resolves the
+// deck y/pos[1] merge); size fields switch on `disp.type` since box/sphere/
+// capsule/cone/deck each store their own dimensions under different field
+// names (collider-catalogue.js's own vocabulary, not reinvented here).
+function buildColliderShapeFields(disp0) {
+  const idx = Editor.getColliderShapeSelected();
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-top:8px; border-top:1px solid rgba(80,80,90,.2); padding-top:6px;';
+  const label = document.createElement('small');
+  label.textContent = `Shape ${idx}: ${disp0.type}${disp0.role === 'deck' ? ' — walkable surface, not a wall' : ''}`;
+  wrap.appendChild(label);
+
+  // Every setter re-reads the CURRENT live shape via
+  // Editor.getColliderShapeDisplay(idx) at the moment it fires, not the
+  // `disp0` snapshot this function was built with — patchColliderShapePos
+  // et al. deliberately don't trigger a full panel re-render per keystroke
+  // (same "don't steal focus" reasoning as every other numField in this
+  // file), so without this, editing field B after already editing field A
+  // in the same render cycle would silently revert A back to its stale
+  // pre-edit value — the exact bug buildScaleSection's own per-axis scale
+  // fields hit and fixed (see PROJECT-STATE.md's Phase 3 write-up) for the
+  // identical reason, one level up (placed objects, not collider shapes).
+  const live = () => Editor.getColliderShapeDisplay(idx) || disp0;
+
+  const posGrid = fieldGrid();
+  numField(posGrid, 'X', () => live().pos[0], v => { const d = live(); Editor.patchColliderShapePos(v, d.pos[1], d.pos[2]); });
+  numField(posGrid, 'Y', () => live().pos[1], v => { const d = live(); Editor.patchColliderShapePos(d.pos[0], v, d.pos[2]); });
+  numField(posGrid, 'Z', () => live().pos[2], v => { const d = live(); Editor.patchColliderShapePos(d.pos[0], d.pos[1], v); });
+  wrap.appendChild(posGrid);
+
+  // Rotation is a genuine no-op for sphere (radius is direction-independent)
+  // in core/colliders.js's actual math — hidden rather than shown-but-inert,
+  // to not offer an affordance that silently does nothing.
+  if (disp0.type !== 'sphere') {
+    const rotGrid = fieldGrid();
+    numField(rotGrid, 'Rot X°', () => live().rotDeg[0], v => { const d = live(); Editor.patchColliderShapeRotDeg(v, d.rotDeg[1], d.rotDeg[2]); }, 1);
+    numField(rotGrid, 'Rot Y°', () => live().rotDeg[1], v => { const d = live(); Editor.patchColliderShapeRotDeg(d.rotDeg[0], v, d.rotDeg[2]); }, 1);
+    numField(rotGrid, 'Rot Z°', () => live().rotDeg[2], v => { const d = live(); Editor.patchColliderShapeRotDeg(d.rotDeg[0], d.rotDeg[1], v); }, 1);
+    wrap.appendChild(rotGrid);
+  }
+
+  const sizeGrid = fieldGrid();
+  if (disp0.type === 'box') {
+    numField(sizeGrid, 'Size X', () => live().raw.size?.[0] ?? 1, v => { const r = live().raw; Editor.patchColliderShape({ size: [v, r.size?.[1] ?? 1, r.size?.[2] ?? 1] }); }, 0.05);
+    numField(sizeGrid, 'Size Y', () => live().raw.size?.[1] ?? 1, v => { const r = live().raw; Editor.patchColliderShape({ size: [r.size?.[0] ?? 1, v, r.size?.[2] ?? 1] }); }, 0.05);
+    numField(sizeGrid, 'Size Z', () => live().raw.size?.[2] ?? 1, v => { const r = live().raw; Editor.patchColliderShape({ size: [r.size?.[0] ?? 1, r.size?.[1] ?? 1, v] }); }, 0.05);
+  } else if (disp0.type === 'sphere') {
+    numField(sizeGrid, 'Radius', () => live().raw.r ?? 0.5, v => Editor.patchColliderShape({ r: v }), 0.05);
+  } else if (disp0.type === 'capsule' || disp0.type === 'cone') {
+    numField(sizeGrid, 'Radius', () => live().raw.r ?? 0.5, v => Editor.patchColliderShape({ r: v }), 0.05);
+    numField(sizeGrid, 'Height', () => live().raw.h ?? 1, v => Editor.patchColliderShape({ h: v }), 0.05);
+  } else if (disp0.type === 'deck') {
+    numField(sizeGrid, 'Size X', () => live().raw.size?.[0] ?? 1, v => { const r = live().raw; Editor.patchColliderShape({ size: [v, r.size?.[1] ?? 1] }); }, 0.05);
+    numField(sizeGrid, 'Size Z', () => live().raw.size?.[1] ?? 1, v => { const r = live().raw; Editor.patchColliderShape({ size: [r.size?.[0] ?? 1, v] }); }, 0.05);
+  }
+  wrap.appendChild(sizeGrid);
+  return wrap;
+}
+
+function buildCollisionTab(sel) {
+  const wrap = document.createElement('div');
+
+  const catId = Editor.getColliderCatalogueId();
+  const idLabel = document.createElement('small');
+  idLabel.style.cssText = 'display:block; opacity:.6; word-break:break-all; margin-top:6px;';
+  idLabel.textContent = catId || '(no catalogue id)';
+  wrap.appendChild(idLabel);
+
+  const staticRow = document.createElement('label');
+  staticRow.style.cssText = 'display:flex; align-items:center; gap:6px; margin-top:8px;';
+  const staticCb = document.createElement('input'); staticCb.type = 'checkbox';
+  staticCb.checked = Editor.getColliderIsStatic();
+  staticCb.onchange = () => Editor.setColliderStatic(staticCb.checked);
+  const staticLabel = document.createElement('span'); staticLabel.textContent = 'Static (bake once — buildings/docks/decor)';
+  staticRow.append(staticCb, staticLabel);
+  wrap.appendChild(staticRow);
+
+  const targetLabel = document.createElement('small');
+  targetLabel.style.cssText = 'display:block; margin-top:8px; opacity:.75;';
+  targetLabel.textContent = 'Apply to:';
+  const targetSel = document.createElement('select');
+  targetSel.style.cssText = 'width:100%; font:inherit; margin-top:2px;';
+  targetSel.append(
+    new Option(`ALL placements of ${catId ? catId.split(':').slice(0, 3).join(':') : 'this model'}`, 'family'),
+    new Option('Just this instance', 'instance'),
+  );
+  targetSel.value = Editor.getColliderTarget();
+  targetSel.onchange = () => Editor.setColliderTarget(targetSel.value);
+  wrap.append(targetLabel, targetSel);
+
+  const shapes = Editor.getColliderShapes();
+  const selIdx = Editor.getColliderShapeSelected();
+  const listLabel = document.createElement('small');
+  listLabel.style.cssText = 'display:block; margin-top:10px; opacity:.75;';
+  listLabel.textContent = `Shapes (${shapes.length}) — click to select, [ / ] to cycle`;
+  wrap.appendChild(listLabel);
+  wrap.appendChild(buildColliderShapeList(shapes, selIdx));
+
+  const addRow = mkRow();
+  const addSel = document.createElement('select');
+  addSel.style.cssText = 'flex:1; font:inherit;';
+  for (const t of ['box', 'sphere', 'capsule', 'cone', 'deck']) addSel.appendChild(new Option(t, t));
+  const addBtn = mkButton('Add shape');
+  addBtn.onclick = () => Editor.addColliderShape(addSel.value);
+  addRow.append(addSel, addBtn);
+  wrap.appendChild(addRow);
+
+  const delBtn = mkButton('Delete selected shape (Del)');
+  delBtn.style.cssText += 'width:100%; margin-top:6px; color:#a33; border-color:#a33;';
+  delBtn.disabled = selIdx === null;
+  delBtn.onclick = () => Editor.deleteColliderShape();
+  wrap.appendChild(delBtn);
+
+  if (selIdx !== null) {
+    const disp = Editor.getColliderShapeDisplay(selIdx);
+    if (disp) wrap.appendChild(buildColliderShapeFields(disp));
+  }
+
+  const exportRow = mkRow();
+  exportRow.style.marginTop = '10px';
+  const exportBtn = mkButton(Editor.isColliderDirty() ? 'Export colliders*' : 'Export colliders');
+  exportBtn.style.flex = '1';
+  exportBtn.onclick = () => exportColliders();
+  exportRow.appendChild(exportBtn);
+  wrap.appendChild(exportRow);
+  const exportNote = document.createElement('small');
+  exportNote.style.cssText = 'display:block; opacity:.6; margin-top:4px;';
+  exportNote.textContent = Editor.getColliderTarget() === 'instance'
+    ? 'Downloads this zone\'s edits.js (same as the top-bar Save) — this override lives on the placement, not the catalogue.'
+    : 'Downloads collider-catalogue.js — paste over world/core/collider-catalogue.js.';
+  wrap.appendChild(exportNote);
+
+  return wrap;
+}
+
 // World Editor Phase 4 ("scatter reach") — a scattered instance (a tree/
 // rock/bush from the catalogue-flora scatter pass, not a hand-placed
 // prop). No gizmo, no position/rotation/scale fields (see world-editor.js's
@@ -273,6 +451,13 @@ export async function initEditorPanel() {
   const dotEl = document.createElement('span');
   dotEl.title = 'No unsaved changes';
   dotEl.style.cssText = 'width:8px; height:8px; border-radius:50%; background:#3a3; flex:0 0 auto;';
+  // Collision tab's own HUD line + dot (Editor v2 phase 1) — see render()'s
+  // own comment on why this is a SEPARATE indicator from dotEl above (two
+  // different export targets, collider-catalogue.js vs edits.js).
+  const colliderHudEl = document.createElement('span');
+  colliderHudEl.style.cssText = 'opacity:.8; display:none;';
+  const colliderDotEl = document.createElement('span');
+  colliderDotEl.style.cssText = 'width:8px; height:8px; border-radius:50%; background:#3a3; flex:0 0 auto;';
   const copyBtn = mkButton('Copy selection JSON');
   copyBtn.onclick = () => {
     const text = Editor.copySelectionAsJSON();
@@ -285,7 +470,7 @@ export async function initEditorPanel() {
   saveBtnTop.onclick = () => exportEdits();
   const spacer = document.createElement('span');
   spacer.style.flex = '1';
-  topBar.append(zoneEl, selEl, modeEl, dotEl, spacer, copyBtn, saveBtnTop);
+  topBar.append(zoneEl, selEl, modeEl, dotEl, colliderHudEl, colliderDotEl, spacer, copyBtn, saveBtnTop);
   document.body.appendChild(topBar);
   Editor.onDirty(isDirty => {
     dotEl.style.background = isDirty ? '#c33' : '#3a3';
@@ -293,7 +478,7 @@ export async function initEditorPanel() {
   });
 
   const title = document.createElement('div');
-  title.innerHTML = '<b>World Editor</b><br><small style="opacity:.65">click select (placed OR scattered) · T/R/Y gizmo · Del remove/hide · Ctrl/Cmd+D duplicate · Esc cancel · ` close</small>';
+  title.innerHTML = '<b>World Editor</b><br><small style="opacity:.65">click select (placed OR scattered) · T/R/Y gizmo · Del remove/hide · Ctrl/Cmd+D duplicate · Esc cancel · ` close<br><b>X</b> Collision tab · <b>[</b>/<b>]</b> cycle shapes (while open)</small>';
   root.appendChild(title);
 
   // --- catalogue picker: room -> variant -> Place (armed, next canvas click drops it) ---
@@ -377,11 +562,28 @@ export async function initEditorPanel() {
     const sel = Editor.getSelected();
     const scatterSel = Editor.getSelectedScatter();
     const armed = Editor.getArmedPlacement();
+    const collisionOpen = Editor.isColliderTabOpen();
     zoneEl.textContent = Editor.getZoneId() || '';
     selEl.textContent = sel ? `selected: ${sel.id}` : scatterSel ? `selected: ${scatterSel.id}` : armed ? 'placing…' : 'nothing selected';
     modeEl.textContent = sel ? `[${Editor.getMode()}]` : '';
     dotEl.style.background = Editor.isDirty() ? '#c33' : '#3a3';
     dotEl.title = Editor.isDirty() ? 'Unsaved changes' : 'No unsaved changes';
+    // Collision tab's own HUD line (Phase 5) — a separate dot from the
+    // placement Save dot above: they write to two different files
+    // (collider-catalogue.js / edits.js's `collide` field, depending on
+    // target), so conflating them into one indicator would be misleading.
+    if (collisionOpen && sel) {
+      const shapes = Editor.getColliderShapes();
+      const idx = Editor.getColliderShapeSelected();
+      colliderHudEl.style.display = '';
+      colliderHudEl.textContent = `collision: ${shapes.length} shape${shapes.length === 1 ? '' : 's'}`
+        + (idx !== null ? ` · #${idx} (${shapes[idx]?.type})` : '')
+        + ` · ${Editor.getColliderTarget()} · ${Editor.getColliderIsStatic() ? 'static' : 'dynamic'}`;
+      colliderDotEl.style.background = Editor.isColliderDirty() ? '#c33' : '#3a3';
+      colliderDotEl.title = Editor.isColliderDirty() ? 'Unsaved collider changes' : 'No unsaved collider changes';
+    } else {
+      colliderHudEl.style.display = 'none';
+    }
     lockCb.checked = sel ? !!sel.row.locked : false;
     lockCb.disabled = !sel;
     dupBtn.disabled = !sel;
@@ -394,7 +596,8 @@ export async function initEditorPanel() {
       hint.innerHTML = `<b>Click terrain to place…</b> <small style="opacity:.6">(Esc cancels)</small>`;
       statusEl.appendChild(hint);
     } else if (sel) {
-      statusEl.appendChild(buildInspector(sel));
+      statusEl.appendChild(buildTabBar());
+      statusEl.appendChild(collisionOpen ? buildCollisionTab(sel) : buildInspector(sel));
     } else if (scatterSel) {
       statusEl.appendChild(buildScatterInspector(scatterSel));
     } else {
@@ -405,6 +608,7 @@ export async function initEditorPanel() {
     }
   }
   Editor.onSelectionChange(render);
+  Editor.onColliderSelectionChange(render); // separate notification stream — see world-editor.js's colliderNotify
   render();
 }
 
@@ -420,4 +624,35 @@ function exportEdits() {
   navigator.clipboard?.writeText(text).catch(() => {});
   Editor.clearDirty();
   console.log(`[world-editor] exported ${zoneId}/edits.js (${text.length} chars) — download + clipboard`);
+}
+
+// COLLISION-PAINTER-SESSION (Phase 4 — TARGET + EXPORT). Which file actually
+// gets downloaded depends on the Collision tab's own target toggle:
+// 'family' -> collider-catalogue.js (Editor.exportColliderCatalogueText,
+// same Blob/anchor/clipboard mechanics as exportEdits above — this module
+// owns the download side-effect for both, colliders.js/world-editor.js stay
+// pure text generation); 'instance' -> the spec was just written onto this
+// row's own `collide` field (Editor.applyColliderTarget), so the RIGHT
+// download is the existing edits.js Save, reused as-is rather than
+// duplicated. Either branch also needs to clear the Collision tab's OWN
+// dirty flag — exportColliderCatalogueText does this itself for the
+// 'family' path (see its own code), so only 'instance' needs it here.
+function exportColliders() {
+  const target = Editor.applyColliderTarget();
+  if (!target) return;
+  if (target === 'instance') {
+    exportEdits(); // downloads/copies edits.js; also clears the PLACEMENT dot (applyColliderTarget already marked it)
+    Editor.clearColliderDirty();
+    return;
+  }
+  const text = Editor.exportColliderCatalogueText();
+  const blob = new Blob([text], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'collider-catalogue.js';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  navigator.clipboard?.writeText(text).catch(() => {});
+  Editor.clearColliderDirty();
+  console.log(`[world-editor] exported collider-catalogue.js (${text.length} chars) — download + clipboard`);
 }
