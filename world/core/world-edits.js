@@ -108,34 +108,51 @@ async function buildPlacedObject(zone, manifest, row) {
 // Editor can select/transform/duplicate/delete/save it. `zone` is a small
 // { id, terrainHeight, WATER_Y } — each zone.js already has these imported
 // directly, no need to pass the whole zone contract object.
-export async function applyEdits(ctx, scene, zone, editsModule) {
+// The in-flight applyEdits() promise for the CURRENT zone build. A zone's
+// build() fires applyEdits without awaiting it (fire-and-forget, by
+// convention), so the shell has no other handle on "the fleet spawn pass has
+// finished." A boat-borne portal crossing needs exactly that: it used to
+// blind-poll boats[] for ~1s and give up, which meant a cold GLB load lost the
+// boat and dumped the rider on foot. Assigned synchronously in applyEdits
+// below, so it always refers to the build that just started.
+let _applied = Promise.resolve();
+export function whenEditsApplied() { return _applied; }
+
+export function applyEdits(ctx, scene, zone, editsModule) {
+  _applied = applyEditsAsync(ctx, scene, zone, editsModule);
+  return _applied;
+}
+
+async function applyEditsAsync(ctx, scene, zone, editsModule) {
   _registry = [];
   _editsModule = editsModule;
   const placed = editsModule?.placed || [];
-  if (!placed.length) return;
   const manifest = await loadCatalogue();
   // Kick off every row's load concurrently (same reasoning as catalogue-
   // flora.js's own resolved-then-parallel-await pattern) — placed[] is
   // expected to stay small, but there's no reason to serialize it either.
-  const pending = placed.map(row => buildPlacedObject(zone, manifest, row));
-  const built = await Promise.all(pending);
-  for (let i = 0; i < placed.length; i++) {
-    const row = placed[i];
-    if (row.boardable) { registerBoardable(zone, row); continue; }  // fleet, not decor
-    const b = built[i];
-    if (!b) continue;
-    scene.add(b.obj);
-    // COLLISION-FOUNDATION-SESSION — static bake only (this loop never runs
-    // again for this object; a rebuild via rebuildPlacedObject or the World
-    // Editor's live place/duplicate doesn't re-run it either, see colliders.js's
-    // header for why that's an accepted gap this session, not an oversight).
-    // The disposer is kept on the registry record (colliderDispose) — COLLISION-
-    // PAINTER-SESSION's Collision tab needs it to retract THIS zone-load
-    // collider before installing a live-edited replacement on the same object.
-    const spec = resolveCollideSpec(row.collide, row.catalogueId);
-    const colliderDispose = spec ? registerColliders(b.obj, spec, null, ctx) : null;
-    _registry.push({ id: row.id, obj: b.obj, row: { ...row }, zoneId: zone.id, policyScaleFactor: b.policyScaleFactor, colliderDispose });
-    _issuedIds.add(row.id);
+
+  if (placed.length) {
+    const pending = placed.map(row => buildPlacedObject(zone, manifest, row));
+    const built = await Promise.all(pending);
+    for (let i = 0; i < placed.length; i++) {
+      const row = placed[i];
+      if (row.boardable) { registerBoardable(zone, row); continue; }  // fleet, not decor
+      const b = built[i];
+      if (!b) continue;
+      scene.add(b.obj);
+      // COLLISION-FOUNDATION-SESSION — static bake only (this loop never runs
+      // again for this object; a rebuild via rebuildPlacedObject or the World
+      // Editor's live place/duplicate doesn't re-run it either, see colliders.js's
+      // header for why that's an accepted gap this session, not an oversight).
+      // The disposer is kept on the registry record (colliderDispose) — COLLISION-
+      // PAINTER-SESSION's Collision tab needs it to retract THIS zone-load
+      // collider before installing a live-edited replacement on the same object.
+      const spec = resolveCollideSpec(row.collide, row.catalogueId);
+      const colliderDispose = spec ? registerColliders(b.obj, spec, null, ctx) : null;
+      _registry.push({ id: row.id, obj: b.obj, row: { ...row }, zoneId: zone.id, policyScaleFactor: b.policyScaleFactor, colliderDispose });
+      _issuedIds.add(row.id);
+    }
   }
   // Spawn every fleet boat currently in this zone (home moorings + sailed-in).
   await spawnFleetForZone(scene, ctx.animated, zone.id, zone.WATER_Y);

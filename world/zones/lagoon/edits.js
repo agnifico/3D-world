@@ -4,25 +4,45 @@
 // mainShip row + lagoon/catalogue-flora.js's dedicated placeMainShip()) —
 // bindings.js is back to pure family->pack scatter slots only.
 export const edits = {
-  placed: [
+  "placed": [
     {
-      id: 'mainShip',
-      catalogueId: 'pirates:Ship:Large:normal:alive:',
-      variant: undefined,
-      x: 25, z: -25,
-      // NOT terrain-snapped (y stays an explicit number, not null): this
-      // floats at the waterline (WATER_Y=0, -0.15 draft — the same
-      // convention core/boats.js uses for every sailable boat spawn), not
-      // the seafloor terrainHeight(25,-25) would resolve to (-6.15u down).
-      y: -0.15,
-      rot: [0.3, 0, 0.2], // world-editor Phase 0's proof vector — tune via the editor once Phase 2 lands
-      scale: 1,
-      tint: null,
-      materialPolicy: null,
-      locked: false,
-      collide: 'auto', // data only — no collider is actually generated from this yet, see core/world-edits.js's header
+      "id": "mainShip",
+      "catalogueId": "pirates:Ship:Large:normal:alive:",
+      "x": 52.204,
+      "z": -65.764,
+      "y": 1.103,
+      "rot": [
+        -0.9547,
+        1.1726,
+        0.6367
+      ],
+      "scale": 1,
+      "tint": null,
+      "materialPolicy": null,
+      "locked": false,
+      "collide": "auto"
     },
+    {
+      "id": "boat-row-small-2",
+      "catalogueId": "kenney-models::boat-row-small:normal:alive:",
+      "variant": null,
+      "x": -40,
+      "y": -0.085,
+      "z": 34,
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "scale": .75,
+      "tint": null,
+      "materialPolicy": null,
+      "locked": false,
+      "collide": "auto",
+      "boardable": "rowboat"
+    }
   ],
-  familyOverrides: {},
-  scatterEdits: {},
+  "familyOverrides": {},
+  "scatterEdits": {}
 };
+

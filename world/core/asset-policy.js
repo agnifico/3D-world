@@ -29,7 +29,7 @@ export const PACK_POLICY = {
   // Not yet routed through this resolver — grassland/assets.js's own Kenney
   // pipeline loads these directly (see core/gltf-assets.js's header). Row
   // kept for when/if that pipeline migrates onto resolveAsset.
-  'kenney-models': { material: 'flat-matte', scaleFactor: 1 },
+  'kenney-models': { material: 'flat-matte', scaleFactor: 2 },
 
   // Left open by the brief ("sensible default, easy to edit"); set here
   // from direct GLB inspection. Simple_Nature's Grass material has no

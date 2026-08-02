@@ -17,6 +17,12 @@
 //     whichever legend color is nearest (RGB distance) to each pixel.
 //   opts:
 //     extent      — world spans [-extent, extent] on X and Z (default 100)
+//     extentX, extentZ — per-axis half-extent for an OBLONG map (open-sea is
+//                    600 x 300); each defaults to `extent`, so a square zone
+//                    passing only `extent` behaves exactly as before. Passing
+//                    these without `extent` used to silently fall back to the
+//                    100 default — which squeezed the whole map into a 200x200
+//                    box and made everything past it read as the deepest band.
 //     tolerance    — max RGB distance (0..441.7) accepted as "this pixel IS
 //                    that band"; anything farther (hand-drawn labels,
 //                    anti-aliasing fringe) is unclassified and instead
@@ -114,6 +120,11 @@ export async function loadTerrainMap(url, legend, opts = {}) {
     noiseAmp = {},
     noiseScale = 0.08,
   } = opts;
+  // Oblong maps: a zone may give a half-extent per axis instead of one scalar
+  // (open-sea is 600 x 300). Both default to `extent`, so a square zone that
+  // only passes `extent` is unaffected.
+  const extentX = opts.extentX ?? extent;
+  const extentZ = opts.extentZ ?? extent;
 
   const img = await new Promise((resolve, reject) => {
     const im = new Image();
@@ -178,14 +189,14 @@ export async function loadTerrainMap(url, legend, opts = {}) {
   // units so frequency doesn't depend on the source image's resolution.
   const finalHeight = new Float32Array(N);
   for (let y = 0; y < H; y++) {
-    const wz = -extent + (y / (H - 1)) * (2 * extent);
+    const wz = -extentZ + (y / (H - 1)) * (2 * extentZ);
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
       const id = legend[bandGrid[i]].id;
       const amp = noiseAmp[id] || 0;
       let h = heightGrid[i];
       if (amp) {
-        const wx = -extent + (x / (W - 1)) * (2 * extent);
+        const wx = -extentX + (x / (W - 1)) * (2 * extentX);
         const freq = typeof noiseScale === 'object' ? (noiseScale[id] ?? 0.08) : noiseScale;
         h += fbm(wx * freq, wz * freq, 3) * amp;
       }
@@ -199,14 +210,14 @@ export async function loadTerrainMap(url, legend, opts = {}) {
   const outsideId = legend.find(e => e.height === outsideHeight).id;
 
   function toUV(x, z) {
-    return [(x + extent) / (2 * extent), (z + extent) / (2 * extent)];
+    return [(x + extentX) / (2 * extentX), (z + extentZ) / (2 * extentZ)];
   }
 
   // 5. sample: bilinear from the precomputed grid. Build once at zone load;
   // this is O(1) array math, as cheap as (cheaper than) a hand-tuned fbm
   // stack evaluated per query.
   function terrainHeight(x, z) {
-    if (x < -extent || x > extent || z < -extent || z > extent) return outsideHeight;
+    if (x < -extentX || x > extentX || z < -extentZ || z > extentZ) return outsideHeight;
     const [u, v] = toUV(x, z);
     const fx = u * (W - 1), fy = v * (H - 1);
     const x0 = Math.floor(fx), y0 = Math.floor(fy);
@@ -221,7 +232,7 @@ export async function loadTerrainMap(url, legend, opts = {}) {
 
   // Categorical (not bilinear) — nearest raw classified band at (x,z).
   function bandAt(x, z) {
-    if (x < -extent || x > extent || z < -extent || z > extent) return outsideId;
+    if (x < -extentX || x > extentX || z < -extentZ || z > extentZ) return outsideId;
     const [u, v] = toUV(x, z);
     const px = Math.min(W - 1, Math.max(0, Math.round(u * (W - 1))));
     const py = Math.min(H - 1, Math.max(0, Math.round(v * (H - 1))));

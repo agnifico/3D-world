@@ -66,6 +66,19 @@ reflect current reality as of this session, not a full project history.)
     showroom, not a placement rehearsal).
 
 ## Known bugs / OPEN
+- **Open-sea: no catalogue GLB props at all.** `world/zones/open-sea/zone.js`'s
+  `build()` never calls `instantiateCatalogueFlora` — grassland's and lagoon's
+  do. `terrain.js` exports a `catalogueBands` table (palm / reefRock /
+  shoreBush) that nothing consumes, so the zone renders only its procedural
+  content (`createOpenSea` + `createStoneArch`) and whatever boat sails in.
+  Not a loader bug; the zone simply never instantiates them.
+- **Open-sea: a boat's hull mesh may not be visible after a crossing.** Seen
+  once at the gullhook-gate arrival riding the fishing boat: the boat was
+  registered and driving (chimney smoke animating, rider seated, heading
+  responding), but the hull did not read on screen. Unconfirmed whether this
+  is an actual render failure or just the boat being small/dark against
+  near-black deep water at that light level — re-check now that the terrain
+  extent fix below puts the real Gullhook island back under that portal.
 - Grassland dock collider (`world/core/collider-catalogue.js`'s three Dock
   entries) is REASONED, not eyeballed: the footprint/height numbers come
   from real measured GLB bounds (a one-off Node script parsing each .glb's
@@ -956,3 +969,55 @@ responsive, and the concrete payoff this whole session was built for:
 opening the dock's Collision tab, seeing the deck box floating above the
 planks, dragging it down, and confirming the character now stands exactly
 on the visible surface.
+
+---
+
+## OPEN-SEA-BUGFIX-SESSION — 2026-08-01 (two reported bugs, three root causes)
+
+Both reported bugs were traced to hardcoded ~100-unit world assumptions that
+only surfaced because open-sea is the first NON-SQUARE, non-100-extent zone
+(600 x 300, `worldExtentX: 300` / `worldExtentZ: 150`). Diagnosed by logging
+the real values in-browser rather than by inspection — which mattered, because
+the first suspect in each case was wrong.
+
+**Bug 2 — "~±90 movement wall".** The suspected cause (`_worldBoundX/Z` in
+`character/controller.js` falling back to the 95 default) was NOT it: the log
+read `open-sea worldExtentX=300 worldExtentZ=150 -> bound 305 155`, i.e. the
+character's own bound was already correct. Two separate real causes:
+
+1. **`core/boats.js`'s `updateBoat` had its own hardcoded bound**:
+   `Math.abs(nx) < 94 && Math.abs(nz) < 94`. Boats are shared across zones so
+   this could never have been a constant. Past |94| the position assignment
+   never ran while `o.rotation.y = b.heading` still did — which reads exactly
+   like the reported symptom, "the boat spins in place but will not move."
+   Confirmed at the gullhook-gate arrival (x=-204.7, z=-85.1). Fixed with a
+   per-zone `setWorldBounds(extentX, extentZ)` pushed in from `loadZone`,
+   keeping the old 6-unit margin (94 = a 100 extent minus 6).
+2. **`core/terrain-from-map.js` silently ignored `extentX`/`extentZ`.** It
+   only ever destructured a scalar `extent = 100`; open-sea's `terrain.js`
+   passes `{ extentX: 300, extentZ: 150 }` and no `extent`, so the whole
+   600x300 map was sampled as if it were 200x200, and `terrainHeight`/`bandAt`
+   returned the deepest band (TRENCH, -52) for everything past |100|. That
+   erased Gullhook island, put the gullhook-gate portal arch 52 units under
+   water, and made the "beach, not afloat" default spawn (70, 20) read
+   -16.865 — the value that gave this away. Fixed by honoring per-axis
+   extents, each defaulting to `extent` so every square zone is unaffected.
+
+**Bug 1 — "fleet boat did not appear, arriving on foot".** Not a zone-id
+mismatch and not an `instanceId` mismatch: the log showed `zoneId="open-sea"`
+matching, and a crossing did succeed once (rider correctly seated on a
+registered, driving boat). The real cause is a race. `spawnFleetForZone` runs
+inside `applyEdits`, which every zone's `build()` fires WITHOUT awaiting, so
+`crossPortal` had no handle on it and blind-polled `boats[]` for ~1s before
+giving up — a cold GLB load beats that timeout and the rider gets dumped on
+foot, permanently, with the fleet record already moved to the destination.
+Fixed by exporting `whenEditsApplied()` from `core/world-edits.js` (the
+in-flight promise, assigned synchronously so it always refers to the build
+that just started) and awaiting it in `crossPortal` before the poll. No
+arbitrary timeout in the path any more.
+
+**Not verified** (needs Agni, in-browser): the two Verify steps — carry a boat
+lagoon -> open-sea and confirm the mesh appears and you arrive mounted; and
+walk on foot in open-sea to x≈250, z≈130 with no invisible wall. Also unknown
+whether the terrain-extent fix resolves the "hull mesh not visible" note in
+Known bugs above, since it substantially changes what is at that portal.

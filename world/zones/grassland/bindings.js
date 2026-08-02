@@ -27,5 +27,5 @@ export const bindings = {
   Willow:      { family: 'Willow',      id: 'BIGNature::Willow:normal:alive:' },
   Rock:        { family: 'Rock',        id: 'BIGNature::Rock:normal:alive:' },
   Bush:        { family: 'Bush',        id: 'BIGNature::Bush:normal:alive:' },
-  BushBerries: { family: 'BushBerries', id: 'NNK Style::Bush_Common_Flowers:normal:alive:' },
+  BushBerries: { family: 'BushBerries', id: 'BIGNature::BushBerries:normal:alive:' },
 };

@@ -64,7 +64,7 @@ export const SANDBARS = [
 //    DEEP     height -16.0  old DEEP_FLOOR_Y precedent          -> swim, high sea
 // ─────────────────────────────────────────────────────────────────────────────
 const LEGEND = [
-  { id: 'LAND',    color: '#ff9100', height:  0.8 },
+  { id: 'LAND',    color: '#ff9100', height:  2},
   { id: 'SHALLOW', color: '#ffeb00', height: -0.22 },
   { id: 'WADE',    color: '#00d6ff', height: -0.82 },
   { id: 'REEF',    color: '#007dff', height: -2.6 },
@@ -345,6 +345,12 @@ export const portals = [
     x: 6, z: 20,
     targetZone: 'grassland',
     targetPortal: 'shore-arch',
+  },
+  {
+    id: 'sea-gate',
+    x: -30, z: -20,
+    targetZone: 'open-sea',
+    targetPortal: 'gullhook-gate',
   },
 ];
 

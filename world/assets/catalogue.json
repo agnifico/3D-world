@@ -19259,7 +19259,25 @@
       "variants": [
         {
           "variant": null,
-          "source": "3DResources/pirates/Ship_Large.glb"
+          "source": "3DResources/pirates/Ship_Large_aligned.glb"
+        }
+      ],
+      "used": false
+    },
+    {
+      "id": "pirates::Xiriya:normal:alive:",
+      "set": "pirates",
+      "category": "Ship",
+      "family": "Large",
+      "season": "normal",
+      "state": "alive",
+      "tags": [
+        "nautical"
+      ],
+      "variants": [
+        {
+          "variant": null,
+          "source": "3DResources/pirates/Xiriya.glb"
         }
       ],
       "used": false

@@ -8,14 +8,10 @@ import { PALETTES, dayCycle } from './palettes.js';
 import { createTerrainMesh, createWater } from './terrain-mesh.js';
 import { initNightFx } from './night-fx.js';
 import { initMinimap, disposeMinimap } from './minimap.js';
-import { placeNativeProps, placeKenneyProps, registerBridge, resetRegistry } from './props.js';
 import { scatterWorld, resetScatter } from './scatter.js';
 import { placeCatalogueFloraSync, instantiateCatalogueFlora } from './catalogue-flora.js';
 import { applyEdits } from '../../core/world-edits.js';
 import { edits } from './edits.js';
-import * as Gallery from './gallery.js';
-import { initEditor, disposeEditor } from './editor.js';
-import { initEditorPanel, disposeEditorPanel } from './editor-panel.js';
 import { boats, boatHeight } from '../../core/boats.js';
 import { disposeGroup, registerPortals } from '../../core/zone.js';
 import { createStoneArch } from '../../core/portal-arch.js';
@@ -38,36 +34,26 @@ const _col = hex => _colScratch.set(hex);
 let built = null; // { realScene, group } — captured at build() for dispose()
 
 function build(ctx) {
-  resetRegistry();
   resetScatter();
 
   ctx.heightRegistry.register(terrainHeight, 'terrain');
-  ctx.heightRegistry.register(boatHeight, 'boat');
+  ctx.heightRegistry.register(boatHeight, 'boat'); // non-ridden decks walkable
 
   const { applyBlend: applyTerrainBlend } = createTerrainMesh(ctx.scene, PALETTES);
   const { waterMat } = createWater(ctx.scene, PALETTES);
 
   initNightFx({ ...ctx, terrainHeightFn: terrainHeight, waterY: WATER_Y }, ctx.scene, ctx.animated, ctx.renderer, ctx.camera);
-  initMinimap(ctx, ctx.animated, PALETTES, boats, ctx.getChar, ctx.getHeading, Gallery.isGalleryOpen);
-
-  placeNativeProps(ctx, ctx.scene, ctx.animated);
-  registerBridge(ctx);
-  placeKenneyProps(ctx, ctx.scene, ctx.animated); // fire-and-forget — awaits internally per placement
+  initMinimap(ctx, ctx.animated, PALETTES, boats, ctx.getChar, ctx.getHeading, () => false);
 
   // Trees/rocks/bushes: position/species/variant decided synchronously
   // (treePts must be ready before scatterWorld's mushroom-clustering pass,
   // right below); the actual GLB load + instancing + collision registration
-  // is fire-and-forget async, same convention as placeKenneyProps above.
+  // is fire-and-forget async.
   const { groups: catalogueFloraGroups } = placeCatalogueFloraSync();
   const { applyGrassBlend, flowerMat } = scatterWorld(ctx.scene, ctx.animated, PALETTES);
   instantiateCatalogueFlora(ctx, ctx.scene, catalogueFloraGroups).catch(e => console.error('[catalogue-flora]', e));
-  // World Editor (Layer 4) — hand-placed catalogue props, empty for now (see edits.js).
+  // World Editor (Layer 4) — hand-placed catalogue props (backtick editor).
   applyEdits(ctx, ctx.scene, { id: 'grassland', terrainHeight, WATER_Y }, edits).catch(e => console.error('[grassland world-edits]', e));
-
-  Gallery.buildGallery(ctx, ctx.scene, ctx.animated, open => ctx.onOverlayToggle?.(open));
-
-  initEditor({ ctx, scene: ctx.scene, camera: ctx.camera, domElement: ctx.domElement, animated: ctx.animated, getChar: ctx.getChar });
-  initEditorPanel();
 
   // Portal arch — base at WATER_Y (per the addendum: "standing in/over the
   // water"), rising up from the surface rather than the seafloor 3.3 units
@@ -106,42 +92,18 @@ function build(ctx) {
 function update(dt, camera) {
   if (!built) return;
   const sun = built.sun;
-  if (Gallery.isGalleryOpen()) {
-    // The gallery's orbit-camera view lives here (moved from the old main.js
-    // render loop, since the gallery — and the camera mode it needs — are
-    // zone content now, not a shell concern): the shell skips its own
-    // character-follow camera update whenever an overlay is open and defers
-    // to this instead.
-    const t = performance.now() / 1000;
-    if (window.__focusPos) {
-      const f = window.__focusPos, r = window.__focusR || 3.5;
-      camera.position.set(f.x + Math.sin(t * 0.25) * r, f.y + r * 0.55, f.z - 400 + Math.cos(t * 0.25) * r);
-      camera.lookAt(f.x, f.y, f.z - 400);
-      sun.position.set(f.x + 8, 40, f.z - 400 + 8); sun.target.position.set(f.x, f.y, f.z - 400);
-    } else {
-      const a = t * 0.06;
-      camera.position.set(Math.sin(a) * 58, 24, -400 + Math.cos(a) * 58);
-      camera.lookAt(0, 1, -400);
-      sun.position.set(30, 50, -370); sun.target.position.set(0, 0, -400);
-    }
-  } else {
-    // Shadow-casting sun follows the character every frame (moved from the
-    // old main.js loop — this "sun rides the player" behavior is Grassland's
-    // own choice for shadow quality, not a shell-generic concern; Lagoon's
-    // sun stays at a fixed directional angle instead).
-    const char = built.getChar();
-    const off = built.lighting.getSunOffset();
-    sun.position.set(char.position.x + off.x, off.y, char.position.z + off.z);
-    sun.target.position.copy(char.position);
-  }
+  // Shadow-casting sun follows the character every frame — Grassland's own
+  // choice for shadow quality (Lagoon's sun stays at a fixed angle instead).
+  const char = built.getChar();
+  const off = built.lighting.getSunOffset();
+  sun.position.set(char.position.x + off.x, off.y, char.position.z + off.z);
+  sun.target.position.copy(char.position);
 }
 
 function dispose() {
   if (!built) return;
   built.unsubscribe?.();
   disposeMinimap();
-  disposeEditorPanel();
-  disposeEditor();
   disposeGroup(built.realScene, built.group);
   built = null;
 }

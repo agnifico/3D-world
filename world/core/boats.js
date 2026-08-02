@@ -9,6 +9,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as Interactables from './interactables.js';
+import { loadCatalogue, resolveAsset } from './catalogue.js';
+import { loadTintedTemplate } from './gltf-assets.js';
 
 let _gltfLoader = null;
 // Loads and places a boat GLB at (x,z,rot), then registers it exactly like a
@@ -18,17 +20,21 @@ let _gltfLoader = null;
 // GLTFLoader rather than a zone's own recolor/vertex-bake pipeline: this is
 // a rare, one-off spawn (a portal crossing), not worth a cross-zone
 // dependency on one particular zone's asset-loading internals.
-export async function spawnBoatAt(scene, animated, name, x, z, rot, waterY) {
+export async function spawnBoatAt(scene, animated, name, x, z, rot, waterY, instanceId, scale) {
   const def = BOAT_DEFS[name];
   if (!def) { console.warn(`[boats] unknown boat "${name}"`); return null; }
-  _gltfLoader ||= new GLTFLoader();
-  const gltf = await _gltfLoader.loadAsync(`assets/kenney/watercraft-pack/${name}.glb`);
-  const obj = gltf.scene;
+  if (!def.catalogueId) { console.warn(`[boats] "${name}" has no catalogueId — cannot spawn`); return null; }
+  const manifest = await loadCatalogue();
+  const resolved = resolveAsset(manifest, def.catalogueId);
+  if (!resolved) { console.warn(`[boats] "${name}": catalogue id ${def.catalogueId} not found`); return null; }
+  const template = await loadTintedTemplate(resolved.url, null, resolved.policy);
+  const obj = template.clone(true);
+  obj.scale.setScalar((scale ?? def.crossScale ?? 1) * resolved.policy.scaleFactor);
   obj.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   obj.rotation.y = rot;
   obj.position.set(x, waterY - 0.15, z);
   scene.add(obj);
-  return registerBoat(scene, animated, obj, name, waterY);
+  return registerBoat(scene, animated, obj, name, waterY, instanceId);
 }
 
 // disembark: 'step' = climb down onto the surface with the step-out clip (no
@@ -36,13 +42,72 @@ export async function spawnBoatAt(scene, animated, name, x, z, rot, waterY) {
 // deckOffset/deckInset define the WALKABLE deck surface (see boatHeight) —
 // tune deckOffset up/down so feet sit on the visible floor for each boat.
 export const BOAT_DEFS = {
-  'boat-row-small':     { label: 'Board the rowboat',      sitClip: 'sitRow',  seatAlong: -1.37,  seatUp: .39, faceOffset: 0,        turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
-  'ship-large':     { label: 'Board the galleon',      sitClip: 'sitRow',  seatAlong: -5.3,  seatUp: 2.95, faceOffset: Math.PI,        turn: 1, accel: 1.0, maxSpeed: 25, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
-  'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI/2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
+  // 'boat-row-small': { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: -1.37, seatUp: .39, faceOffset: 0, turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  // 'ship-large': { label: 'Board the galleon', sitClip: 'sitRow', seatAlong: -5.3, seatUp: 2.95, faceOffset: Math.PI, turn: 1, accel: 1.0, maxSpeed: 25, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
+  // 'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
+  xiriya: { label: 'Board the Xiriya', singleton: true, sitClip: 'idle', seatAlong: -8.0, seatUp: 4.85, faceOffset: 0, turn: 1.2, accel: 1.4, maxSpeed: 22, fwdSign: 1, disembark: 'leap', deckOffset: 2.4, deckInset: 0.45, catalogueId: 'pirates::Xiriya:normal:alive:', crossScale: 1.37 },
+  rowboat: { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: .8, seatUp: .35, faceOffset: Math.PI, turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6, catalogueId: 'kenney-models::boat-row-small:normal:alive:', crossScale: .75 },
+  fishing: { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -1.7, seatUp: 1.2, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5, catalogueId: 'kenney-models::boat-fishing-small:normal:alive:', crossScale: 1 },
 };
+
+
 export const FISH_SMOKE = { along: 1.1, side: 0.45, up: 1.95 };
 
 export const boats = [];
+// World edge for boat travel, set per zone by the shell (main.js's loadZone).
+// Boats are shared across zones, so this can't be a constant: open-sea is the
+// first non-square, non-100-extent map, and the old hardcoded 94 pinned a boat
+// in place anywhere past |94| (rotation still applied, so it read as "the boat
+// spins but won't move"). Defaults reproduce the old value for a 100-extent
+// zone, so a caller that never sets them behaves as before.
+let _boundX = 94, _boundZ = 94;
+export function setWorldBounds(extentX, extentZ) {
+  _boundX = extentX - 6; _boundZ = extentZ - 6; // same 6-unit margin the old 94 kept off a 100 extent
+}
+// ── Persistent fleet (survives resetBoats / zone rebuilds) ────────────────
+// One entry per boardable instance, keyed by its edits.js placement id.
+// A boat exists exactly ONCE across the whole world; a zone spawns only the
+// instances whose curZone == that zone. This is what kills cross-rebuild
+// duplication (the old boat-identity bug) at the root.
+const _fleet = new Map(); // instanceId -> { boatClass, homeZone, curZone, x, z, heading, scale }
+
+// Register a boardable placement into the fleet the first time its home zone
+// builds. Idempotent: re-entering the home zone finds the existing entry and
+// leaves its (possibly-elsewhere) location untouched.
+export function registerFleetBoat(instanceId, boatClass, homeZone, x, z, heading, scale) {
+  if (_fleet.has(instanceId)) return _fleet.get(instanceId);
+  const f = { boatClass, homeZone, curZone: homeZone, x, z, heading: heading || 0, scale: scale ?? 1, _homeX: x, _homeZ: z };
+  _fleet.set(instanceId, f);
+  return f;
+}
+
+// Spawn every fleet boat currently located in `zoneId`. Called once per zone
+// build (from applyEdits, after placed[] is processed). Handles BOTH the
+// home mooring and any boat that sailed in — same path.
+export async function spawnFleetForZone(scene, animated, zoneId, waterY) {
+  for (const [instanceId, f] of _fleet) {
+    if (f.curZone !== zoneId) continue;
+    await spawnBoatAt(scene, animated, f.boatClass, f.x, f.z, f.heading, waterY, instanceId, f.scale);
+  }
+}
+
+// Update an instance's location — called by the crossing (new zone) and by
+// disembark (park in place), so a boat is always re-spawned where you left it.
+export function setFleetLocation(instanceId, zoneId, x, z, heading) {
+  const f = _fleet.get(instanceId);
+  if (!f) return;
+  f.curZone = zoneId; f.x = x; f.z = z; f.heading = heading ?? f.heading;
+}
+export function getFleetEntry(instanceId) { return _fleet.get(instanceId); }
+
+// Escape hatch (dev now; the grassland dock will call this later): send every
+// boat back to its home mooring. Only affects the persistent record — the
+// visible boat updates on the next build of the relevant zones.
+export function recallAllBoats() {
+  for (const f of _fleet.values()) { f.curZone = f.homeZone; f.x = f._homeX ?? f.x; f.z = f._homeZ ?? f.z; }
+  return `recalled ${_fleet.size} boat(s) to home moorings`;
+}
+window.recall = recallAllBoats;
 let _boardHandler = null;
 export function setBoardHandler(fn) { _boardHandler = fn; }
 
@@ -72,11 +137,12 @@ function isDescendant(root, node) {
 // waterY: the active zone's WATER_Y — boats are shared, but each zone
 // defines its own water level, so this is passed in rather than imported
 // from one zone's module.
-export function registerBoat(scene, animated, obj, name, waterY) {
+export function registerBoat(scene, animated, obj, name, waterY, instanceId) {
   const def = BOAT_DEFS[name];
-  const b = { obj, name, def, waterY, rowPhase: 0, ridden: false, heading: 0, speed: 0 };
+  const b = { obj, name, instanceId: instanceId ?? null, def, waterY, rowPhase: 0, ridden: false, heading: 0, speed: 0 };
   if (def.paddles) b.paddles = obj.getObjectByName('paddles');
   boats.push(b);
+  obj.rotation.x = 0; obj.rotation.z = 0;
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   // Walkable deck: a flat surface inset from the hull, a little above the base,
@@ -150,6 +216,15 @@ window.__deckTune = (name, { deckOffset, deckInset } = {}) => {
   return { name, deckOffset: def.deckOffset, deckInset: def.deckInset, updated: n };
 };
 
+window.__seatTune = (name, { seatAlong, seatUp, faceOffset } = {}) => {
+  const def = BOAT_DEFS[name];
+  if (!def) return `unknown boat "${name}"`;
+  if (seatAlong !== undefined) def.seatAlong = seatAlong;
+  if (seatUp !== undefined) def.seatUp = seatUp;
+  if (faceOffset !== undefined) def.faceOffset = faceOffset;
+  return { name, seatAlong: def.seatAlong, seatUp: def.seatUp, faceOffset: def.faceOffset };
+};
+
 // console/debug hook — exact measured numbers for the bridge-clearance
 // check, since none of this (loaded GLB geometry) can be measured in Node.
 window.__boatDraft = () => boats.map(b => {
@@ -195,10 +270,10 @@ export function updateBoat(dt, b, keys, char, terrainHeightFn) {
   }
   b.bridgeBlocked = bridgeBlocked;
   if (bridgeBlocked) { b.speed *= 0.25; }
-  else if (Math.abs(nx) < 94 && Math.abs(nz) < 94 && afloat) { o.position.x = nx; o.position.z = nz; }
+  else if (Math.abs(nx) < _boundX && Math.abs(nz) < _boundZ && afloat) { o.position.x = nx; o.position.z = nz; }
   else b.speed *= 0.25;                          // stall against the shallows
   o.rotation.y = b.heading;
-  o.position.y = (b.waterY - 0.15) + Math.sin(bobT * 1.2) * 0.05;
+
   o.rotation.z = Math.sin(bobT * 0.9) * 0.02;      // gentle roll
   char.position.set(
     o.position.x + Math.sin(b.heading) * d.seatAlong,

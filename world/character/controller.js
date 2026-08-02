@@ -12,8 +12,8 @@
 // services (ctx) instead of one zone's private singletons.
 import * as THREE from 'three';
 import { CHARACTERS, CHARACTER, loadCharacter } from './character.js';
-import { boats, updateBoat, setBoardHandler } from '../core/boats.js';
 import * as Interactables from '../core/interactables.js';
+import { boats, updateBoat, setBoardHandler, setFleetLocation } from '../core/boats.js';
 
 function createPlaceholder() {
   const mat = c => new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: 0.9 });
@@ -67,9 +67,14 @@ export function initController(scene, sharedAnimated, opts) {
   let WATER_Y = 0;
   let terrainHeightFn = () => 0;
   let zoneHooks = { isOverlayOpen: () => false };
+  let _activeZoneId = null;
+  let _worldBoundX = 95, _worldBoundZ = 95;
   function setActiveZone(zone, hooks = {}) {
     WATER_Y = zone.WATER_Y;
     terrainHeightFn = zone.terrainHeight;
+    _activeZoneId = zone.id;
+    _worldBoundX = (zone.worldExtentX ?? zone.worldExtent ?? 95) + 5; // +5 slack past the edge
+    _worldBoundZ = (zone.worldExtentZ ?? zone.worldExtent ?? 95) + 5;
     zoneHooks = { isOverlayOpen: () => false, ...hooks };
   }
   function placeAt(x, y, z, h = 0) {
@@ -135,9 +140,10 @@ export function initController(scene, sharedAnimated, opts) {
 
   const keys = {};
   let heading = 0, groundY = 0, waterDepth = 0, curRunning = false, curMoving = false;
+  let submerged = false; // FP dive sub-mode of SWIM
   let activeInteract = null;
   // swim tuning: depth = water surface (WATER_Y) minus the ground/bed under the character
-  const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 6.0;
+  const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 10.0, DIVE_VSPEED = 8.0;
   const CHAR_RADIUS = 0.35; // horizontal collision radius, resolveMovement() calls below
   const CHAR_HEIGHT = 1.7, STEP_UP = 0.5; // vertical band height, step-up threshold
   let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
@@ -157,6 +163,7 @@ export function initController(scene, sharedAnimated, opts) {
   // ================= character state machine =================
   let state = { name: 'GROUND', impulseT: 0 };
   function transition(name, params = {}) {
+    if (state.name === 'SWIM' && name !== 'SWIM') submerged = false;
     STATES[state.name].exit?.(state);
     state = { name, ...params };
     STATES[name].enter?.(params);
@@ -176,18 +183,31 @@ export function initController(scene, sharedAnimated, opts) {
         groundY += (restY - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
-      exit() {},
+      exit() { },
     },
     SWIM: {
       enter(p) { state.impulseT = p.impulseT ?? 0; },
       update(dt) {
         const support = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
-        if (waterDepth < SWIM_DEPTH - 0.3) { const carry = state.impulseT; transition('GROUND', { impulseT: carry }); }
-        const restY = state.name === 'SWIM' ? (WATER_Y - SWIM_SINK) : support;
-        groundY += (restY - groundY) * Math.min(1, dt * 14);
-        char.position.y = groundY;
+        if (submerged) {
+          // FP dive: vertical from look-pitch + thrust. Look down + W → descend, look up + W → ascend.
+          const dir = keys.KeyW ? 1 : keys.KeyS ? -1 : 0;
+          const vy = dir * -Math.sin(camPitch) * DIVE_VSPEED;
+          let y = char.position.y + vy * dt;
+          y = Math.max(support + 0.6, Math.min(WATER_Y - 0.5, y)); // stay under surface, above seabed
+          groundY = y; char.position.y = y;
+          // auto-surface: rising to just under the waterline pops you back to surface swim
+          if (y >= WATER_Y - 0.8) { submerged = false; }
+          if (waterDepth < SWIM_DEPTH - 0.3) { submerged = false; transition('GROUND', { impulseT: state.impulseT }); }
+        } else {
+          if (waterDepth < SWIM_DEPTH - 0.3) { const carry = state.impulseT; transition('GROUND', { impulseT: carry }); }
+          const bob = Math.sin(performance.now() * 0.0016) * 0.15; // wave amplitude (tune 0.15)
+          const restY = WATER_Y - SWIM_SINK + bob;
+          groundY += (restY - groundY) * Math.min(1, dt * 14);
+          char.position.y = groundY;
+        }
       },
-      exit() {},
+      exit() { },
     },
     AIRBORNE: {
       enter(p) {
@@ -200,12 +220,12 @@ export function initController(scene, sharedAnimated, opts) {
         if (state.kind === 'dive') { // lunge forward so the dive carries into the water even from a standstill
           const dx = Math.sin(heading) * DIVE_FWD * dt, dz = Math.cos(heading) * DIVE_FWD * dt;
           const r = collisionRegistry.resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
-          if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
+          if (Math.abs(r.x) < _worldBoundX && Math.abs(r.z) < _worldBoundZ) { char.position.x = r.x; char.position.z = r.z; }
         }
         if (state.airFwd) { // horizontal travel during a leap → parabolic arc off the boat, not a vertical pop
           const dx = Math.sin(heading) * state.airFwd * dt, dz = Math.cos(heading) * state.airFwd * dt;
           const r = collisionRegistry.resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
-          if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
+          if (Math.abs(r.x) < _worldBoundX && Math.abs(r.z) < _worldBoundZ) { char.position.x = r.x; char.position.z = r.z; }
         }
         const swimY = WATER_Y - SWIM_SINK;
         const support = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
@@ -223,8 +243,8 @@ export function initController(scene, sharedAnimated, opts) {
           transition('GROUND', { impulseT: state.queueImpulse ? 0.5 : 0 });
         }
       },
-      exit() {},
-      onClipFinished() {}, // clip clamps on its last frame — physics above decides when to land
+      exit() { },
+      onClipFinished() { }, // clip clamps on its last frame — physics above decides when to land
     },
     RIDING: {
       enter(p) {
@@ -238,7 +258,7 @@ export function initController(scene, sharedAnimated, opts) {
         sfxBoard();
         if (locomotion) locomotion.setState(clips[b.def.sitClip] ? b.def.sitClip : 'idle', { fade: 0.3 });
       },
-      exit() {},
+      exit() { },
     },
     EMOTE: {
       enter(p) { if (locomotion) locomotion.setState(p.clipName, { fade: 0.25 }); },
@@ -247,7 +267,7 @@ export function initController(scene, sharedAnimated, opts) {
         groundY += (support - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
-      exit() {},
+      exit() { },
     },
     STEP_OUT: {
       enter(p) {
@@ -262,7 +282,7 @@ export function initController(scene, sharedAnimated, opts) {
         groundY += (restY - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
-      exit() {},
+      exit() { },
       onClipFinished() {
         const wasSwimming = state.swimming;
         transition(wasSwimming ? 'SWIM' : 'GROUND', { impulseT: 0.4 });
@@ -294,6 +314,10 @@ export function initController(scene, sharedAnimated, opts) {
     if (locomotion && (state.name === 'GROUND' || state.name === 'EMOTE')) {
       const em = { Digit1: 'emote1', Digit2: 'emote2', Digit3: 'emote3' }[e.code];
       if (em && clips[em]) transition('EMOTE', { clipName: em });
+    }
+    if (e.code === 'KeyF') {
+      if (state.name === 'SWIM' && !submerged && waterDepth > SWIM_DEPTH) { submerged = true; camPitch = 0.2; sfxSplash(); }
+      else if (submerged) { submerged = false; }
     }
     // Generic — fires whichever candidate the resolver picked this frame,
     // as long as the pressed key matches THAT candidate's own declared key
@@ -334,7 +358,7 @@ export function initController(scene, sharedAnimated, opts) {
   let panX = null, panY = null, panId = -1, panT = 0;
   const cv = canvas;
   function endPan() {
-    if (panId !== -1) { try { cv.releasePointerCapture(panId); } catch {} }
+    if (panId !== -1) { try { cv.releasePointerCapture(panId); } catch { } }
     panX = null; panY = null; panId = -1;
   }
   cv.addEventListener('pointerdown', e => {
@@ -351,7 +375,7 @@ export function initController(scene, sharedAnimated, opts) {
     const dy = Math.max(-60, Math.min(60, e.clientY - panY));
     camYaw -= dx * 0.0032;
     camPitch += dy * 0.0034; // drag matches horizontal orbit feel
-    camPitch = Math.max(0.02, Math.min(1.45, camPitch));
+    camPitch = Math.max(submerged ? -1.3 : 0.02, Math.min(1.45, camPitch));
     panX = e.clientX; panY = e.clientY; panT = performance.now();
   });
 
@@ -406,6 +430,7 @@ export function initController(scene, sharedAnimated, opts) {
   });
   function disembark() {
     const b = state.boat;
+    if (b.instanceId) setFleetLocation(b.instanceId, _activeZoneId, b.obj.position.x, b.obj.position.z, b.heading);
     b.ridden = false;
     heading = b.heading + b.def.faceOffset;                 // face the way the rider sat
     if ((b.def.disembark || 'leap') === 'step') {
@@ -436,16 +461,16 @@ export function initController(scene, sharedAnimated, opts) {
   // zone can spawn the same kind afloat and re-seat the rider.
   function getCrossingState() {
     if (state.name !== 'RIDING') return { riding: false };
-    return { riding: true, boatType: state.boat.name, heading: state.boat.heading };
+    return { riding: true, boatType: state.boat.name, instanceId: state.boat.instanceId, heading: state.boat.heading };
   }
 
   function updateCharacter(dt) {
     // arrows = camera
     if (keys.ArrowLeft) camYaw += dt * 2.0;
     if (keys.ArrowRight) camYaw -= dt * 2.0;
-    if (keys.ArrowUp) camPitch += dt * 1.4;
-    if (keys.ArrowDown) camPitch -= dt * 1.4;
-    camPitch = Math.max(0.02, Math.min(1.45, camPitch));
+    if (keys.ArrowDown) camPitch += dt * 1.4;
+    if (keys.ArrowUp) camPitch -= dt * 1.4;
+    camPitch = Math.max(submerged ? -1.3 : 0.02, Math.min(1.45, camPitch));
     if (state.name === 'EMOTE' && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD)) transition('GROUND', { impulseT: 0 });
     if (state.name === 'RIDING') {
       updateBoat(dt, state.boat, keys, char, terrainHeightFn);
@@ -465,7 +490,7 @@ export function initController(scene, sharedAnimated, opts) {
     if (footingOn) {
       const r = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP);
       const th = terrainHeightFn(char.position.x, char.position.z);
-      footingEl.textContent = `support: ${r.contributor} @ ${r.height.toFixed(3)}  |  terrain: ${th.toFixed(3)}  |  waterDepth: ${waterDepth.toFixed(3)}  |  state: ${state.name}`;
+      footingEl.textContent = `pos: ${char.position.x.toFixed(1)}, ${char.position.z.toFixed(1)}  |  support: ${r.contributor} @ ${r.height.toFixed(3)}  |  terrain: ${th.toFixed(3)}  |  waterDepth: ${waterDepth.toFixed(3)}  |  state: ${state.name}`;
     }
     const isSwim = isSwimNow();
     // WASD movement runs for every non-riding state, including AIRBORNE/STEP_OUT
@@ -492,7 +517,7 @@ export function initController(scene, sharedAnimated, opts) {
       else if (waterDepth > WADE_START) speed *= 0.5;    // wading drag through shallow water
       const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
       const r = collisionRegistry.resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
-      if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) {    // water is walkable now — depth drives wade/swim
+      if (Math.abs(r.x) < _worldBoundX && Math.abs(r.z) < _worldBoundZ) {    // water is walkable now — depth drives wade/swim
         char.position.x = r.x; char.position.z = r.z;
       }
     } else if ((state.name === 'GROUND' || state.name === 'SWIM') && state.impulseT > 0) {
@@ -501,7 +526,7 @@ export function initController(scene, sharedAnimated, opts) {
       const speed = isSwim ? 3.6 : 4;
       const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt;
       const r = collisionRegistry.resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
-      if (Math.abs(r.x) < 95 && Math.abs(r.z) < 95) { char.position.x = r.x; char.position.z = r.z; }
+      if (Math.abs(r.x) < _worldBoundX && Math.abs(r.z) < _worldBoundZ) { char.position.x = r.x; char.position.z = r.z; }
       moving = true;
     }
     if ((state.name === 'GROUND' || state.name === 'SWIM') && state.impulseT > 0) state.impulseT -= dt;
@@ -526,10 +551,16 @@ export function initController(scene, sharedAnimated, opts) {
     if (zoneHooks.isOverlayOpen()) return;
     camDist = Math.max(1.6, Math.min(16, camDist + e.deltaY * 0.008));
   }, { passive: true });
+
+
+  let fpBlend = 0;
   function updateCamera(dt, camera) {
-    // Genshin/WuWa feel: pull back a little while running, ease back in when stopping
+    const submergedNow = false; // 3rd-person dive: keep the orbit camera while submerged
+    fpBlend += ((submergedNow ? 1 : 0) - fpBlend) * (1 - Math.exp(-dt * 6));
+
+    // orbit target (unchanged feel)
     const targetDist = camDist + (curRunning ? 2.4 : 0);
-    const k = curRunning ? 3.5 : 1.6; // out fast, in slow
+    const k = curRunning ? 3.5 : 1.6;
     camDistDyn += (targetDist - camDistDyn) * (1 - Math.exp(-dt * k));
     const dist = camDistDyn;
     const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
@@ -539,10 +570,17 @@ export function initController(scene, sharedAnimated, opts) {
     ty = Math.max(ty, terrainHeightFn(tx, tz) + 0.6);
     if (!camPos) camPos = new THREE.Vector3(tx, ty, tz);
     camPos.lerp(new THREE.Vector3(tx, ty, tz), 1 - Math.exp(-dt * 10));
-    camera.position.copy(camPos);
-    // as the camera tilts overhead, aim lower so the ground/feet stay in frame
     const lookH = 1.6 - Math.max(0, camPitch - 0.55) * 1.5;
-    camera.lookAt(char.position.x, char.position.y + Math.max(0.35, lookH), char.position.z);
+    const orbitLook = new THREE.Vector3(char.position.x, char.position.y + Math.max(0.35, lookH), char.position.z);
+
+    if (fpBlend < 0.001) { camera.position.copy(camPos); camera.lookAt(orbitLook); return; }
+
+    // first-person (diving): camera at the head, looking where the orbit cam would look
+    const eye = new THREE.Vector3(char.position.x, char.position.y + 1.5, char.position.z);
+    const viewDir = new THREE.Vector3(-Math.sin(camYaw) * cp, -sp, -Math.cos(camYaw) * cp).normalize();
+    const fpTarget = eye.clone().add(viewDir);
+    camera.position.copy(camPos.clone().lerp(eye, fpBlend));
+    camera.lookAt(orbitLook.clone().lerp(fpTarget, fpBlend));
   }
 
   window.__tp = (x, z) => { char.position.set(x, heightRegistry.groundHeight(x, z), z); }; // debug teleport
@@ -550,7 +588,7 @@ export function initController(scene, sharedAnimated, opts) {
   window.__view = (yaw, pitch, dist) => { camYaw = yaw; camPitch = pitch; camDist = dist; camDistDyn = dist; };
   window.__ci = () => ({ camYaw, camPitch, camDist, camDistDyn, inGallery: zoneHooks.isOverlayOpen() });
   window.__keys = keys; window.__step = dt => { if (state.name === 'RIDING') updateBoat(dt || 0.1, state.boat, keys, char, terrainHeightFn); };
-  window.__seat = () => state.name === 'RIDING' ? { boat: state.boat.name, char: char.position.toArray().map(v=>+v.toFixed(2)), boatPos: state.boat.obj.position.toArray().map(v=>+v.toFixed(2)), heading:+state.boat.heading.toFixed(2), spd:+state.boat.speed.toFixed(2), paddleX: state.boat.paddles ? +state.boat.paddles.rotation.x.toFixed(3) : null } : 'not riding';
+  window.__seat = () => state.name === 'RIDING' ? { boat: state.boat.name, char: char.position.toArray().map(v => +v.toFixed(2)), boatPos: state.boat.obj.position.toArray().map(v => +v.toFixed(2)), heading: +state.boat.heading.toFixed(2), spd: +state.boat.speed.toFixed(2), paddleX: state.boat.paddles ? +state.boat.paddles.rotation.x.toFixed(3) : null } : 'not riding';
   window.__stateName = () => state.name; // console/debug hook
 
   // per-frame guards, run before the animated list: no input while unfocused;

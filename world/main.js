@@ -13,14 +13,22 @@ import { initNightSky } from './core/night-sky.js';
 import * as Audio from './core/audio.js';
 import * as Boats from './core/boats.js';
 import * as Interactables from './core/interactables.js';
+import { whenEditsApplied } from './core/world-edits.js';
 import { CHARACTER } from './character/character.js';
 import { initController } from './character/controller.js';
 import grasslandZone from './zones/grassland/zone.js';
 import lagoonZone from './zones/lagoon/zone.js';
 import highland from './zones/highland/zone.js';
+import opensea from './zones/open-sea/zone.js';
 import galleryZone from './zones/gallery/zone.js';
 
-const ZONES = { grassland: grasslandZone, lagoon: lagoonZone, highland: highland, gallery: galleryZone };
+const ZONES = { 
+  grassland: grasslandZone, 
+  lagoon: lagoonZone, 
+  highland: highland, 
+  'open-sea': opensea,
+  gallery: galleryZone 
+};
 
 // ================= renderer / scene / camera =================
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -170,6 +178,12 @@ export function loadZone(zoneId, entryId) {
 
   lighting.loadZonePalette(zoneModule, lighting.getT());
   controllerApi.setActiveZone(zoneModule, { isOverlayOpen: () => overlayOpen });
+  // Boats are shared across zones, so their travel bound is pushed in per zone
+  // (same values setActiveZone reads for the character's own bound).
+  Boats.setWorldBounds(
+    zoneModule.worldExtentX ?? zoneModule.worldExtent ?? 100,
+    zoneModule.worldExtentZ ?? zoneModule.worldExtent ?? 100,
+  );
 
   const spawn = resolveSpawn(zoneModule, entryId);
   const y = zoneModule.terrainHeight(spawn.x, spawn.z);
@@ -214,9 +228,12 @@ export async function crossPortal(portal) {
     loadZone(portal.targetZone, portal.targetPortal);
 
     if (crossState.riding && crossState.instanceId) {
-      // spawnFleetForZone runs fire-and-forget during loadZone's build, so the
-      // boat appears in Boats.boats a few frames later — poll briefly, then
-      // mount that instance. Arriving on foot is the graceful fallback.
+      // spawnFleetForZone runs inside the destination's applyEdits, which its
+      // build() fires without awaiting — so wait on THAT promise rather than
+      // guessing a timeout (a cold GLB load easily outran the old ~1s poll and
+      // dropped the rider on foot). The short poll after it only covers the
+      // frame the boat is registered on. Arriving on foot stays the fallback.
+      await whenEditsApplied().catch(() => {});
       const boat = await waitForFleetBoat(crossState.instanceId);
       if (boat) controllerApi.mountBoat(boat);
       else console.warn('[crossPortal] fleet boat did not appear, arriving on foot:', crossState.instanceId);
