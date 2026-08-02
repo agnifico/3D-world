@@ -44,6 +44,27 @@ const DEFAULT_POLICY = { material: 'authored', scaleFactor: 1 }; // pass-through
 let _loader = null;
 const _templateCache = new Map(); // "url::materialMode" -> Promise<THREE.Group>
 
+// Every consumer of a template (boats.js spawnBoatAt, world-edits.js
+// buildPlacedObject, catalogue-flora.js) gets there via template.clone(true),
+// which shares geometry/materials/textures BY REFERENCE — those resources
+// belong to this module's caches, not to whichever zone group ends up
+// holding the clone. core/zone.js's disposeGroup() checks this mark before
+// disposing anything, so a zone teardown can free its own procedural content
+// without freeing GPU resources every other zone is still using.
+export const SHARED = '__sharedAsset';
+export function markShared(root) {
+  root.traverse(o => {
+    if (o.geometry) o.geometry.userData[SHARED] = true;
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of mats) {
+      m.userData[SHARED] = true;
+      for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap']) {
+        if (m[k]) m[k].userData[SHARED] = true;
+      }
+    }
+  });
+}
+
 // Cache key includes policy.material (NOT the whole policy — scaleFactor is
 // applied per-instance by callers, never baked into the template) because
 // this invariant broke once the World Editor (Phase 3) added PER-OBJECT
@@ -72,6 +93,7 @@ function loadRaw(url, policy) {
         o.castShadow = true; o.receiveShadow = true;
         for (const m of Array.isArray(o.material) ? o.material : [o.material]) applyMaterialPolicy(m, policy.material);
       });
+      markShared(scene);
       return scene;
     }));
   }
@@ -135,6 +157,10 @@ export function loadTintedTemplate(url, remap, policy = DEFAULT_POLICY) {
         o.material = o.material.clone();
         o.material.color.set(hex);
       });
+      // The remap above builds brand-new materials, but they still live in
+      // _tintedCache (module-level, cross-zone) — equally shared, so they need
+      // the same mark as the raw template, not just its untouched siblings.
+      markShared(tinted);
       return tinted;
     }));
   }

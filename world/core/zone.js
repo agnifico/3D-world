@@ -96,20 +96,28 @@ export function registerPortals(ctx, portals) {
 // whatever it's given, unaware it's a subgroup — that's what makes
 // disposeGroup() below a complete, generic dispose() for ANY zone,
 // regardless of which of its own submodules created what: traverse once,
-// free every geometry/material/texture, then remove the group from the real
-// scene. Things that must NOT go through ctx.scene: the character (shell-
-// owned, persists across crossings — added straight to the real scene by
-// character/controller.js) and shared fx like ripples/splash (also added to
-// the real scene, once, at shell startup).
+// free every geometry/material/texture THIS ZONE OWNS, then remove the group
+// from the real scene. Catalogue content (anything template.clone(true)'d
+// from core/gltf-assets.js's _templateCache/_tintedCache, or an InstancedMesh
+// built straight off a shared template's geometry/material by
+// core/instancing.js) is cross-zone and loader-owned — those resources carry
+// a `__sharedAsset` mark (gltf-assets.js's markShared) and are skipped here,
+// left for the cache to keep handing out. Only zone-local procedural content
+// — terrain, water, fx, portal arches, everything built fresh per build() —
+// actually gets freed. Things that must NOT go through ctx.scene: the
+// character (shell-owned, persists across crossings — added straight to the
+// real scene by character/controller.js) and shared fx like ripples/splash
+// (also added to the real scene, once, at shell startup).
 export function disposeGroup(realScene, group) {
   group.traverse(o => {
-    if (o.geometry) o.geometry.dispose();
+    if (o.isInstancedMesh) o.dispose(); // frees instanceMatrix/instanceColor only — geometry/material are borrowed, handled below
+    if (o.geometry && !o.geometry.userData.__sharedAsset) o.geometry.dispose();
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
-        if (!m) continue;
+        if (!m || m.userData.__sharedAsset) continue;
         for (const key of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap']) {
-          if (m[key]) m[key].dispose();
+          if (m[key] && !m[key].userData.__sharedAsset) m[key].dispose();
         }
         m.dispose();
       }
