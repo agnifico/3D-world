@@ -1328,11 +1328,54 @@ export function createOpenSea(zone, opts = {}) {
   function attach(s) { scene = s; s.add(group); }
   function detach(s) { s.remove(group); if (scene === s) scene = null; }
 
+  // Mirrors the water vertexShader's swell() exactly (see buildWater above).
+  // Any edit to one is an edit to both. Evaluated on LOCAL position.xz; the
+  // water mesh carries no transform, so local == world — if that ever
+  // changes, both this and the shader must change together.
+  function swell(x, z, t, scale) {
+    const a = Math.sin((x * 0.92 + z * 0.39) * scale + t * 0.55);
+    const b = Math.sin((x * -0.35 + z * 0.94) * scale * 0.72 - t * 0.41);
+    const c = Math.sin((x * 0.6 + z * -0.8) * scale * 2.6 + t * 1.15) * 0.28;
+    return a * 0.62 + b * 0.5 + c;
+  }
+  function smoothstepJS(e0, e1, x) {
+    const t = clamp01((x - e0) / (e1 - e0));
+    return t * t * (3 - 2 * t);
+  }
+
+  // Zone contract: absolute world Y of the water surface at (x,z) THIS
+  // FRAME (core/zone.js's surfaceHeightAt). Accepted approximation, do not
+  // "fix": the shader interpolates wl across ~4-unit triangles from a
+  // per-vertex aDepth; this evaluates terrainHeight at the exact point
+  // instead, so the two differ slightly on steep beaches — the JS answer is
+  // the better one.
+  function surfaceHeightAt(x, z) {
+    const depth = WATER_Y - zone.terrainHeight(x, z);
+    const wl = smoothstepJS(0, 3, depth);
+    return WATER_Y + swell(x, z, state.time, cur.wSwellScale) * cur.wSwellAmp * wl;
+  }
+
+  // Companion slope, for boats/objects that should pitch/roll with the real
+  // surface instead of a flat cosmetic bob — same finite difference (e =
+  // 1.4) the shader uses for vNormalW.
+  function surfaceNormalAt(x, z) {
+    const depth = WATER_Y - zone.terrainHeight(x, z);
+    const wl = smoothstepJS(0, 3, depth);
+    const t = state.time, scale = cur.wSwellScale, amp = cur.wSwellAmp;
+    const e = 1.4;
+    const d0 = swell(x, z, t, scale), dx = swell(x + e, z, t, scale), dz = swell(x, z + e, t, scale);
+    const nx = -(dx - d0) * amp * wl / e;
+    const nz = -(dz - d0) * amp * wl / e;
+    const len = Math.hypot(nx, 1, nz) || 1;
+    return { x: nx / len, y: 1 / len, z: nz / len };
+  }
+
   setDayNight(0);
 
   return {
     group, layers, state, bloom,
     attach, detach, setDayNight, setLayerEnabled, setOverlay, update,
+    surfaceHeightAt, surfaceNormalAt,
     get underwater() { return state.underwater; },
     get underwaterAmount() { return state.underwaterAmount; },
     dispose() {

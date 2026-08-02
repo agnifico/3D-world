@@ -16,18 +16,23 @@ import * as Interactables from './core/interactables.js';
 import { whenEditsApplied } from './core/world-edits.js';
 import { CHARACTER } from './character/character.js';
 import { initController } from './character/controller.js';
+import { validateZone } from './core/zone.js';
 import grasslandZone from './zones/grassland/zone.js';
 import lagoonZone from './zones/lagoon/zone.js';
 import highland from './zones/highland/zone.js';
 import opensea from './zones/open-sea/zone.js';
 import galleryZone from './zones/gallery/zone.js';
 
-const ZONES = { 
-  grassland: grasslandZone, 
-  lagoon: lagoonZone, 
-  highland: highland, 
-  'open-sea': opensea,
-  gallery: galleryZone 
+// validateZone both shape-checks and backfills optional contract methods
+// (e.g. surfaceHeightAt defaulting to WATER_Y) — every zone goes through it
+// once here so a zone that doesn't implement an optional method still gets
+// correct default behavior, with no per-zone boilerplate.
+const ZONES = {
+  grassland: validateZone(grasslandZone),
+  lagoon: validateZone(lagoonZone),
+  highland: validateZone(highland),
+  'open-sea': validateZone(opensea),
+  gallery: validateZone(galleryZone),
 };
 
 // ================= renderer / scene / camera =================
@@ -184,6 +189,9 @@ export function loadZone(zoneId, entryId) {
     zoneModule.worldExtentX ?? zoneModule.worldExtent ?? 100,
     zoneModule.worldExtentZ ?? zoneModule.worldExtent ?? 100,
   );
+  // Same reason: boats ride the active zone's real water surface (flat
+  // WATER_Y on every zone but open-sea, whose live swell overrides both).
+  Boats.setSurfaceProvider(zoneModule.surfaceHeightAt, zoneModule.surfaceNormalAt);
 
   const spawn = resolveSpawn(zoneModule, entryId);
   const y = zoneModule.terrainHeight(spawn.x, spawn.z);
@@ -368,6 +376,11 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
+// ─── TEMP DIAGNOSTIC (hull-not-rendering) — REVERT ───
+window.__renderer = renderer;
+window.__camera = camera;
+window.__currentZone = () => currentZone;
+// ─────────────────────────────────────────────────────
 window.__scene = scene;
 window.__loadZone = loadZone; // dev hook — force a zone (re)build from the console, e.g. for the round-trip memory check
 window.__rendererInfo = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures });

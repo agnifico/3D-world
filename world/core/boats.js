@@ -45,7 +45,7 @@ export const BOAT_DEFS = {
   // 'boat-row-small': { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: -1.37, seatUp: .39, faceOffset: 0, turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
   // 'ship-large': { label: 'Board the galleon', sitClip: 'sitRow', seatAlong: -5.3, seatUp: 2.95, faceOffset: Math.PI, turn: 1, accel: 1.0, maxSpeed: 25, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
   // 'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
-  xiriya: { label: 'Board the Xiriya', singleton: true, sitClip: 'idle', seatAlong: -8.0, seatUp: 4.85, faceOffset: 0, turn: 1.2, accel: 1.4, maxSpeed: 22, fwdSign: 1, disembark: 'leap', deckOffset: 2.4, deckInset: 0.45, catalogueId: 'pirates::Xiriya:normal:alive:', crossScale: 1.37 },
+  xiriya: { label: 'Board the Xiriya', singleton: true, sitClip: 'idle', seatAlong: -8.0, seatUp: 4.85, faceOffset: 0, turn: 1.2, accel: 1.4, maxSpeed: 40, fwdSign: 1, disembark: 'leap', deckOffset: 2.4, deckInset: 0.45, catalogueId: 'pirates::Xiriya:normal:alive:', crossScale: 1.37 },
   rowboat: { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: .8, seatUp: .35, faceOffset: Math.PI, turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6, catalogueId: 'kenney-models::boat-row-small:normal:alive:', crossScale: .75 },
   fishing: { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -1.7, seatUp: 1.2, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5, catalogueId: 'kenney-models::boat-fishing-small:normal:alive:', crossScale: 1 },
 };
@@ -63,6 +63,15 @@ export const boats = [];
 let _boundX = 94, _boundZ = 94;
 export function setWorldBounds(extentX, extentZ) {
   _boundX = extentX - 6; _boundZ = extentZ - 6; // same 6-unit margin the old 94 kept off a 100 extent
+}
+// Real water surface (height + slope) for the active zone, pushed in by the
+// shell (main.js's loadZone) same as setWorldBounds above. A zone with a flat
+// plane (every zone but open-sea) never calls this, so boats keep floating
+// at the flat waterY — only open-sea's live swell drives it.
+let _surfaceAt = null, _surfaceNormalAt = null;
+export function setSurfaceProvider(heightFn, normalFn) {
+  _surfaceAt = heightFn || null;
+  _surfaceNormalAt = normalFn || null;
 }
 // ── Persistent fleet (survives resetBoats / zone rebuilds) ────────────────
 // One entry per boardable instance, keyed by its edits.js placement id.
@@ -241,6 +250,130 @@ window.__boatDraft = () => boats.map(b => {
   };
 });
 
+// ─────────── TEMP DIAGNOSTIC (hull-not-rendering) — REVERT ───────────
+const _hex = (c) => { try { return '#' + c.getHexString(); } catch { return null; } };
+const _nextFrames = (n) => new Promise(res => {
+  let i = 0;
+  const step = () => (++i >= n ? res() : requestAnimationFrame(step));
+  requestAnimationFrame(step);
+});
+window.__boatDump = async function (which) {
+  const b = which ?? boats.find(x => x.ridden) ?? boats[0];
+  if (!b) return { error: 'no boat in boats[]' };
+  const obj = b.obj;
+  const renderer = window.__renderer;
+  const zone = window.__currentZone && window.__currentZone();
+
+  // ── parent chain ──
+  const chain = [];
+  for (let n = obj; n; n = n.parent) {
+    n.updateMatrixWorld && n.updateMatrixWorld(false);
+    const ws = new THREE.Vector3();
+    n.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), ws);
+    chain.push({
+      type: n.type, name: n.name || '(unnamed)', visible: n.visible,
+      layers: n.layers.mask,
+      localScale: [+n.scale.x.toFixed(4), +n.scale.y.toFixed(4), +n.scale.z.toFixed(4)],
+      worldScale: [+ws.x.toFixed(4), +ws.y.toFixed(4), +ws.z.toFixed(4)],
+      isScene: !!n.isScene,
+    });
+  }
+  const inSceneGraph = chain[chain.length - 1].isScene;
+
+  // ── box3 ──
+  const box = new THREE.Box3().setFromObject(obj);
+  const f3 = (v) => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
+
+  // ── meshes + materials ──
+  const meshes = [];
+  const matSeen = new Set();
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    meshes.push({
+      name: o.name || '(unnamed)', visible: o.visible, frustumCulled: o.frustumCulled,
+      renderOrder: o.renderOrder, layers: o.layers.mask,
+      posCount: o.geometry?.attributes?.position?.count ?? null,
+      posArrayLen: o.geometry?.attributes?.position?.array?.length ?? null,
+      index: o.geometry?.index?.count ?? null,
+      geoUUID: o.geometry?.uuid?.slice(0, 8),
+      drawRange: o.geometry ? `${o.geometry.drawRange.start}..${o.geometry.drawRange.count}` : null,
+      geoBoundingSphereR: o.geometry?.boundingSphere ? +o.geometry.boundingSphere.radius.toFixed(3) : 'null(unset)',
+      mats: mats.map(m => {
+        if (!m) return null;
+        const props = renderer?.properties?.get?.(m);
+        const rec = {
+          uuid: m.uuid.slice(0, 8), type: m.type, name: m.name || '(unnamed)',
+          color: m.color ? _hex(m.color) : null,
+          opacity: m.opacity, transparent: m.transparent, visible: m.visible,
+          depthTest: m.depthTest, depthWrite: m.depthWrite, colorWrite: m.colorWrite,
+          side: m.side, wireframe: !!m.wireframe, alphaTest: m.alphaTest,
+          fog: m.fog, needsUpdate: m.version,
+          map: m.map ? { uuid: m.map.uuid.slice(0, 8), img: !!m.map.source?.data, ver: m.map.version } : null,
+          // "is it live in the renderer": a compiled program means the renderer
+          // has actually seen and set this material up this session.
+          hasProgram: !!(props && props.currentProgram),
+          firstDump: !matSeen.has(m.uuid),
+        };
+        matSeen.add(m.uuid);
+        return rec;
+      }),
+    });
+  });
+
+  // ── triangles before/after toggling obj.visible ──
+  const wasVisible = obj.visible;
+  obj.visible = true;  await _nextFrames(3);
+  const triVisible = renderer ? renderer.info.render.triangles : null;
+  const callsVisible = renderer ? renderer.info.render.calls : null;
+  obj.visible = false; await _nextFrames(3);
+  const triHidden = renderer ? renderer.info.render.triangles : null;
+  const callsHidden = renderer ? renderer.info.render.calls : null;
+  obj.visible = wasVisible; await _nextFrames(2);
+
+  const cam = window.__camera;
+  return {
+    zone: zone?.id, ridden: b.ridden, boatName: b.name, instanceId: b.instanceId,
+    obj: {
+      position: f3(obj.position), scale: f3(obj.scale), visible: obj.visible,
+      rotationY: +obj.rotation.y.toFixed(3), uuid: obj.uuid.slice(0, 8),
+      childCount: obj.children.length, meshCount: meshes.length,
+    },
+    parentChain: chain,
+    inSceneGraph,
+    box3: box.isEmpty() ? 'EMPTY' : { min: f3(box.min), max: f3(box.max), size: f3(box.getSize(new THREE.Vector3())) },
+    meshes,
+    render: {
+      triWithBoatVisible: triVisible, triWithBoatHidden: triHidden,
+      deltaTriangles: (triVisible !== null && triHidden !== null) ? triVisible - triHidden : null,
+      callsVisible, callsHidden, deltaCalls: callsVisible - callsHidden,
+      geometriesInMemory: renderer?.info.memory.geometries,
+      texturesInMemory: renderer?.info.memory.textures,
+      programs: renderer?.info.programs?.length,
+    },
+    world: {
+      WATER_Y: zone?.WATER_Y, boatWaterY: b.waterY,
+      terrainHeightUnderBoat: zone?.terrainHeight ? +zone.terrainHeight(obj.position.x, obj.position.z).toFixed(3) : null,
+      deckY: b.deckY, airDraft: b.airDraft !== undefined ? +b.airDraft.toFixed(3) : null,
+    },
+    renderer: {
+      clippingPlanes: renderer?.clippingPlanes?.length ?? 'n/a',
+      localClippingEnabled: renderer?.localClippingEnabled ?? 'n/a',
+      currentRenderTarget: renderer?.getRenderTarget?.() ? 'SET' : 'null(default framebuffer)',
+      renderFnPatched: renderer ? renderer.render.name !== 'render' : null,
+      usesBloomComposer: zone?.usesBloomComposer !== false,
+      toneMapping: renderer?.toneMapping, outputColorSpace: renderer?.outputColorSpace,
+    },
+    camera: cam ? {
+      layersMask: cam.layers.mask, near: cam.near, far: cam.far,
+      position: f3(cam.position),
+      distToBoat: +cam.position.distanceTo(obj.position).toFixed(2),
+    } : 'no __camera hook',
+    fog: window.__scene?.fog ? { type: window.__scene.fog.type, near: window.__scene.fog.near, far: window.__scene.fog.far, color: _hex(window.__scene.fog.color) } : null,
+  };
+};
+// ───────────────────── END TEMP DIAGNOSTIC ─────────────────────
+
 let bobT = 0;
 export function updateBoat(dt, b, keys, char, terrainHeightFn) {
   const d = b.def, o = b.obj;
@@ -274,7 +407,27 @@ export function updateBoat(dt, b, keys, char, terrainHeightFn) {
   else b.speed *= 0.25;                          // stall against the shallows
   o.rotation.y = b.heading;
 
-  o.rotation.z = Math.sin(bobT * 0.9) * 0.02;      // gentle roll
+  // Ride the real surface: flat waterY everywhere but open-sea, whose live
+  // swell drives both the float height and the deck's pitch/roll.
+  const surf = _surfaceAt ? _surfaceAt(o.position.x, o.position.z) : b.waterY;
+  o.position.y = surf - 0.15 + Math.sin(bobT * 1.2) * 0.05;
+  const cosmeticRoll = Math.sin(bobT * 0.9) * 0.02; // kept as a floor so flat-water zones still look alive
+  const n = _surfaceNormalAt ? _surfaceNormalAt(o.position.x, o.position.z) : null;
+  const damp = Math.min(1, dt * 3);
+  if (n) {
+    const hs = Math.sin(b.heading), hc = Math.cos(b.heading);
+    const slopeFwd = n.x * hs + n.z * hc;   // surface slope along the boat's heading -> pitch
+    const slopeSide = n.x * hc - n.z * hs;  // surface slope across the boat's heading -> roll
+    o.rotation.x += (slopeFwd * 0.6 - o.rotation.x) * damp;
+    o.rotation.z += (-slopeSide * 0.6 + cosmeticRoll - o.rotation.z) * damp;
+  } else {
+    o.rotation.x += (0 - o.rotation.x) * damp;
+    o.rotation.z = cosmeticRoll;
+  }
+  // deckY tracks the swell too — stale once-computed deckY reads as feet
+  // sinking through the floor as the hull rides a crest or trough.
+  b.deckY = o.position.y + (d.deckOffset ?? 0.4);
+
   char.position.set(
     o.position.x + Math.sin(b.heading) * d.seatAlong,
     o.position.y + d.seatUp,

@@ -11,6 +11,7 @@ import { createOpenSea } from './open-sea-fx.js';
 import { disposeGroup, registerPortals } from '../../core/zone.js';
 import { createStoneArch } from '../../core/portal-arch.js';
 import { applyEdits } from '../../core/world-edits.js';
+import { edits } from './edits.js';
 
 // The data zone object createOpenSea(zone) expects. worldExtentX/Z are the
 // oblong pair (the fx layer sizes its terrain/water planes off them);
@@ -37,9 +38,7 @@ function build(ctx) {
   // through ctx.heightRegistry, not a zone's terrainHeight directly.
   ctx.heightRegistry.register(terrainHeight, 'terrain');
 
-  // open-sea has no hand-placed props yet, so pass empty edits — this still runs
-  // the fleet spawn pass so boats that sail in appear.
-  applyEdits(ctx, ctx.scene, { id: 'open-sea', terrainHeight, WATER_Y }, { placed: [], familyOverrides: {}, scatterEdits: {} })
+  applyEdits(ctx, ctx.scene, { id: 'open-sea', terrainHeight, WATER_Y }, edits)
     .catch(e => console.error('[open-sea world-edits]', e));
 
   const sea = createOpenSea(zoneData, { hemi: ctx.lighting.hemi, sun: ctx.lighting.sun });
@@ -88,6 +87,12 @@ function dispose() {
   built = null;
 }
 
+// Zone contract (core/zone.js): the real swell, not the flat WATER_Y plane
+// every other zone falls back to. Guarded for the window before build() has
+// run (e.g. resolveSpawn reads terrainHeight before the fx layer exists).
+function surfaceHeightAt(x, z) { return built ? built.sea.surfaceHeightAt(x, z) : WATER_Y; }
+function surfaceNormalAt(x, z) { return built ? built.sea.surfaceNormalAt(x, z) : { x: 0, y: 1, z: 0 }; }
+
 export const zone = {
   id: 'open-sea',
   name: 'The Open Sea',
@@ -96,6 +101,8 @@ export const zone = {
   worldExtentZ: WORLD_EXTENT_Z,
   WATER_Y,
   terrainHeight,
+  surfaceHeightAt,
+  surfaceNormalAt,
   PALETTES,
   dayCycle,
   spawnPoints,

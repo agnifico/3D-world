@@ -66,17 +66,22 @@ export function initController(scene, sharedAnimated, opts) {
   // these closure vars rather than importing one zone's world.js directly.
   let WATER_Y = 0;
   let terrainHeightFn = () => 0;
+  let surfaceHeightAtFn = () => WATER_Y;
   let zoneHooks = { isOverlayOpen: () => false };
   let _activeZoneId = null;
   let _worldBoundX = 95, _worldBoundZ = 95;
   function setActiveZone(zone, hooks = {}) {
     WATER_Y = zone.WATER_Y;
     terrainHeightFn = zone.terrainHeight;
+    surfaceHeightAtFn = zone.surfaceHeightAt || (() => WATER_Y);
     _activeZoneId = zone.id;
     _worldBoundX = (zone.worldExtentX ?? zone.worldExtent ?? 95) + 5; // +5 slack past the edge
     _worldBoundZ = (zone.worldExtentZ ?? zone.worldExtent ?? 95) + 5;
     zoneHooks = { isOverlayOpen: () => false, ...hooks };
   }
+  // The real water surface at (x,z) this frame — flat WATER_Y on every zone
+  // except open-sea, which overrides surfaceHeightAt with the live swell.
+  const surfaceY = (x, z) => surfaceHeightAtFn(x, z);
   function placeAt(x, y, z, h = 0) {
     char.position.set(x, y, z);
     heading = h;
@@ -179,7 +184,7 @@ export function initController(scene, sharedAnimated, opts) {
       update(dt) {
         const support = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         if (waterDepth > SWIM_DEPTH) { const carry = state.impulseT; transition('SWIM', { impulseT: carry }); }
-        const restY = state.name === 'SWIM' ? (WATER_Y - SWIM_SINK) : support;
+        const restY = state.name === 'SWIM' ? (surfaceY(char.position.x, char.position.z) - SWIM_SINK) : support;
         groundY += (restY - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
@@ -201,8 +206,7 @@ export function initController(scene, sharedAnimated, opts) {
           if (waterDepth < SWIM_DEPTH - 0.3) { submerged = false; transition('GROUND', { impulseT: state.impulseT }); }
         } else {
           if (waterDepth < SWIM_DEPTH - 0.3) { const carry = state.impulseT; transition('GROUND', { impulseT: carry }); }
-          const bob = Math.sin(performance.now() * 0.0016) * 0.15; // wave amplitude (tune 0.15)
-          const restY = WATER_Y - SWIM_SINK + bob;
+          const restY = surfaceY(char.position.x, char.position.z) - SWIM_SINK;
           groundY += (restY - groundY) * Math.min(1, dt * 14);
           char.position.y = groundY;
         }
@@ -227,7 +231,7 @@ export function initController(scene, sharedAnimated, opts) {
           const r = collisionRegistry.resolveMovement(char.position.x, char.position.z, CHAR_RADIUS, dx, dz, { feetY: char.position.y, headY: char.position.y + CHAR_HEIGHT, stepUp: STEP_UP });
           if (Math.abs(r.x) < _worldBoundX && Math.abs(r.z) < _worldBoundZ) { char.position.x = r.x; char.position.z = r.z; }
         }
-        const swimY = WATER_Y - SWIM_SINK;
+        const swimY = surfaceY(char.position.x, char.position.z) - SWIM_SINK;
         const support = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         const depthHere = support >= WATER_Y ? 0 : WATER_Y - support;
         // A dive settles into a swim at the surface line over ANY real water and is
@@ -278,7 +282,7 @@ export function initController(scene, sharedAnimated, opts) {
         const support = heightRegistry.resolveSupport(char.position.x, char.position.z, char.position.y, STEP_UP).height;
         if (!state.swimming && waterDepth > SWIM_DEPTH) state.swimming = true;
         if (state.swimming && waterDepth < SWIM_DEPTH - 0.3) state.swimming = false;
-        const restY = state.swimming ? (WATER_Y - SWIM_SINK) : support;
+        const restY = state.swimming ? (surfaceY(char.position.x, char.position.z) - SWIM_SINK) : support;
         groundY += (restY - groundY) * Math.min(1, dt * 14);
         char.position.y = groundY;
       },
@@ -441,7 +445,7 @@ export function initController(scene, sharedAnimated, opts) {
       char.position.z += Math.cos(heading) * off;
       const depth = waterDepthAt(char.position.x, char.position.z);
       const swimmingNow = depth > SWIM_DEPTH;
-      groundY = swimmingNow ? (WATER_Y - SWIM_SINK) : heightRegistry.groundHeight(char.position.x, char.position.z);
+      groundY = swimmingNow ? (surfaceY(char.position.x, char.position.z) - SWIM_SINK) : heightRegistry.groundHeight(char.position.x, char.position.z);
       char.position.y = groundY;
       if (locomotion && clips.hopOut) transition('STEP_OUT', { swimming: swimmingNow });
       else transition(swimmingNow ? 'SWIM' : 'GROUND', { impulseT: 0 });

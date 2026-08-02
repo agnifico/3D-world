@@ -10,6 +10,17 @@
 //     worldExtent: 100,           // world spans roughly ±worldExtent on X/Z
 //     WATER_Y: -0.9,              // this zone's water surface height
 //     terrainHeight(x, z),        // PURE function, no three import, Node-testable
+//     surfaceHeightAt(x, z),      // OPTIONAL — absolute world Y of the water
+//                                 // surface at (x,z) THIS FRAME. Zones with a
+//                                 // flat plane don't implement it; validateZone
+//                                 // installs a `() => WATER_Y` default for any
+//                                 // zone that omits it. A zone with real waves
+//                                 // (open-sea) overrides it with the live swell.
+//     surfaceNormalAt(x, z),      // OPTIONAL companion — the surface slope at
+//                                 // (x,z), for boats/objects that should pitch
+//                                 // and roll with real waves instead of a flat
+//                                 // cosmetic bob. No default is installed for
+//                                 // this one; callers must guard its absence.
 //     PALETTES: { day: {...}, night: {...}, ... },   // keyframe-name -> palette
 //     dayCycle: [{ t: 0, key: 'day' }, { t: 1, key: 'night' }],  // ascending t
 //     spawnPoints: { [name]: { position:[x,y,z], lookAt:[x,y,z], eyeHeight } },
@@ -61,6 +72,9 @@ export function validateZone(zone) {
   const required = ['id', 'name', 'worldExtent', 'WATER_Y', 'terrainHeight', 'PALETTES', 'dayCycle', 'spawnPoints', 'portals', 'build', 'update', 'dispose'];
   const missing = required.filter(k => zone[k] === undefined);
   if (missing.length) throw new Error(`[zone] "${zone.id || '?'}" is missing: ${missing.join(', ')}`);
+  // Absolute world Y of the water surface at (x,z) this frame. Optional —
+  // zones with a flat plane don't implement it, so they fall back to WATER_Y.
+  if (!zone.surfaceHeightAt) zone.surfaceHeightAt = () => zone.WATER_Y;
   return zone;
 }
 
