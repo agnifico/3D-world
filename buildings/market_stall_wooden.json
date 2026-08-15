@@ -1,0 +1,124 @@
+{
+ "id": "market_stall_wooden",
+ "name": "Market Stall",
+ "type": "prop",
+ "set": "Medieval Village",
+ "glb": "market_stall_wooden.glb",
+ "note": "One-module timber stall: four posts, a plank counter on the street side, and a two-slope wooden roof (one Roof_Wooden_2x panel mirrored). The Roof_Wooden_2x1_Middle ridge cap was dropped — it is a flat 2x2 m plate that reads as a slab floating over the ridge at this size.",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "footprint": {
+  "x": 2.184,
+  "z": 2.184,
+  "modulesX": 1,
+  "modulesZ": 1,
+  "comment": "wall panels sit 0.092 m proud of the module line on each face"
+ },
+ "origin": "floor centre; ground pieces lifted so bbox.min.y = 0. rotY in radians, scale uniform.",
+ "partCount": 11,
+ "parts": [
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 0,
+   "y": 0.01,
+   "z": 0,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -1,
+   "y": 0,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -1,
+   "y": 0,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 1,
+   "y": 0,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 1,
+   "y": 0,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_Wooden_2x:normal:alive:",
+   "file": "Roof_Wooden_2x1",
+   "x": 0,
+   "y": 3,
+   "z": 0,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_Wooden_2x:normal:alive:",
+   "file": "Roof_Wooden_2x1",
+   "x": 0,
+   "y": 3,
+   "z": 0,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:WoodenFence_Single:normal:alive:",
+   "file": "Prop_WoodenFence_Single",
+   "x": 0,
+   "y": 0.03,
+   "z": 0.98,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -0.4,
+   "y": 0,
+   "z": -0.4,
+   "rotY": 0.3,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": 0.45,
+   "y": 0,
+   "z": -0.5,
+   "rotY": -0.5,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -0.42,
+   "y": 1.06,
+   "z": -0.42,
+   "rotY": 0.1,
+   "scale": 1
+  }
+ ],
+ "anchors": []
+}

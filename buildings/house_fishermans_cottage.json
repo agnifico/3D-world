@@ -1,0 +1,557 @@
+{
+ "id": "house_fishermans_cottage",
+ "name": "Fisherman's Cottage",
+ "type": "dwelling",
+ "set": "Medieval Village",
+ "glb": "house_fishermans_cottage.glb",
+ "note": "Two storeys, plaster + timber. One Roof_RoundTiles_6x replaces the three tiled 2x1 segments, so the ridge is a single unbroken run; the stack is now an external gable-end chimney (two Prop_Chimney lengths) instead of a roof-slope stub, which the 4.9 m roof rise had swallowed.",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "footprint": {
+  "x": 6.184,
+  "z": 4.184,
+  "modulesX": 3,
+  "modulesZ": 2,
+  "comment": "wall panels sit 0.092 m proud of the module line on each face"
+ },
+ "origin": "floor centre; ground pieces lifted so bbox.min.y = 0. rotY in radians, scale uniform.",
+ "partCount": 57,
+ "parts": [
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": -2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": -2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 0,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 0,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": -2,
+   "y": 3.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": -2,
+   "y": 3.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 0,
+   "y": 3.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 0,
+   "y": 3.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 2,
+   "y": 3.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_WoodDark:normal:alive:",
+   "file": "Floor_WoodDark",
+   "x": 2,
+   "y": 3.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Thin_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Thin_Round",
+   "x": -2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Door_Round:normal:alive:",
+   "file": "Wall_Plaster_Door_Round",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": 2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Straight:normal:alive:",
+   "file": "Wall_Plaster_Straight",
+   "x": -2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Thin_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Thin_Round",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Straight_Base:normal:alive:",
+   "file": "Wall_Plaster_Straight_Base",
+   "x": 2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Straight_Base:normal:alive:",
+   "file": "Wall_Plaster_Straight_Base",
+   "x": 3,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": 3,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Straight:normal:alive:",
+   "file": "Wall_Plaster_Straight",
+   "x": -3,
+   "y": 0,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": -2,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": 0,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": 2,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": -2,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Thin_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Thin_Round",
+   "x": 0,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": 2,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": 3,
+   "y": 3,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Wide_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Wide_Round",
+   "x": 3,
+   "y": 3,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Thin_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Thin_Round",
+   "x": -3,
+   "y": 3,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": -3,
+   "y": 3,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 0,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 3,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 0,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 3,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::DoorFrame_Round_WoodDark:normal:alive:",
+   "file": "DoorFrame_Round_WoodDark",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 3,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": -2,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 2,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 0,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 3,
+   "y": 3,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -3,
+   "y": 3,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::WindowShutters_Wide_Round_Closed:normal:alive:",
+   "file": "WindowShutters_Wide_Round_Closed",
+   "x": 3,
+   "y": 3,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_RoundTiles_6x:normal:alive:",
+   "file": "Roof_RoundTiles_6x4",
+   "x": 0,
+   "y": 6,
+   "z": -2.358,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Chimney:normal:alive:",
+   "file": "Prop_Chimney",
+   "x": -3.42,
+   "y": 3,
+   "z": 0,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Chimney:normal:alive:",
+   "file": "Prop_Chimney",
+   "x": -3.42,
+   "y": 6.178,
+   "z": 0,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Vine:normal:alive:",
+   "file": "Prop_Vine1",
+   "x": 1.2,
+   "y": 3,
+   "z": 2.1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Stairs_Exterior_Straight:normal:alive:",
+   "file": "Stairs_Exterior_Straight",
+   "x": 0,
+   "y": 0.204,
+   "z": 3.1,
+   "rotY": 0,
+   "scale": 1
+  }
+ ],
+ "anchors": [
+  {
+   "role": "door",
+   "part": "Medieval Village::Door_2_Round:normal:alive:",
+   "x": -0.558,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "note": "centre module of the south wall, hinge on the left jamb"
+  },
+  {
+   "role": "shutter",
+   "part": "Medieval Village::WindowShutters_Wide_Round_Open:normal:alive:",
+   "x": -2,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "note": "upper south-west wide window"
+  }
+ ]
+}

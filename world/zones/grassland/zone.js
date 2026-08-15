@@ -23,6 +23,7 @@ import { createStoneArch } from '../../core/portal-arch.js';
 const PORTALS = [
   { id: 'shore-arch',    x: 55, z: 33, targetZone: 'lagoon',   targetPortal: 'drowned-arch' },
   { id: 'highland-arch', x: 22, z: 49, targetZone: 'highland', targetPortal: 'plunge-arch' },
+  { id: 'fjord-arch', x: 92, z: 61, targetZone: 'open-sea', targetPortal: 'sea-fjord-gate' },
 ];
 
 // scratch Color reused by the water-blend subscriber below (module-scope so

@@ -1,0 +1,485 @@
+{
+ "id": "watchtower_stone",
+ "name": "Stone Watchtower",
+ "type": "landmark",
+ "set": "Medieval Village",
+ "glb": "watchtower_stone.glb",
+ "note": "Three brick storeys capped by Roof_Tower_RoundTiles, thin round windows only, one door, exterior stair at the base. Deliberately no corner quoins: Corner_Exterior_Brick is ~3.1k tris each and twelve would have doubled the tower.",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "footprint": {
+  "x": 4.184,
+  "z": 4.184,
+  "modulesX": 2,
+  "modulesZ": 2,
+  "comment": "wall panels sit 0.092 m proud of the module line on each face"
+ },
+ "origin": "floor centre; ground pieces lifted so bbox.min.y = 0. rotY in radians, scale uniform.",
+ "partCount": 50,
+ "parts": [
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 3.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 3.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 3.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 3.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 6.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -1,
+   "y": 6.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 6.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 1,
+   "y": 6.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Door_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Door_Round",
+   "x": -1,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 1,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -1,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 1,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 0,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": -1,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 1,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -1,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 1,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 2,
+   "y": 3,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 3,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 3,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": -2,
+   "y": 3,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": -1,
+   "y": 6,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 1,
+   "y": 6,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -1,
+   "y": 6,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 1,
+   "y": 6,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 2,
+   "y": 6,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 6,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 6,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": -2,
+   "y": 6,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::DoorFrame_Round_Brick:normal:alive:",
+   "file": "DoorFrame_Round_Brick",
+   "x": -1,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 1,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -1,
+   "y": 3,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 1,
+   "y": 3,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 2,
+   "y": 3,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -2,
+   "y": 3,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -1,
+   "y": 6,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 1,
+   "y": 6,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 2,
+   "y": 6,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": -2,
+   "y": 6,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_Tower_RoundTiles:normal:alive:",
+   "file": "Roof_Tower_RoundTiles",
+   "x": 0,
+   "y": 9,
+   "z": 0,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Stairs_Exterior_Straight:normal:alive:",
+   "file": "Stairs_Exterior_Straight",
+   "x": -1,
+   "y": 0.204,
+   "z": 3.1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Vine:normal:alive:",
+   "file": "Prop_Vine1",
+   "x": 1,
+   "y": 3,
+   "z": 2.1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Vine:normal:alive:",
+   "file": "Prop_Vine1",
+   "x": -1,
+   "y": 6,
+   "z": 2.1,
+   "rotY": 0,
+   "scale": 1
+  }
+ ],
+ "anchors": [
+  {
+   "role": "door",
+   "part": "Medieval Village::Door_4_Round:normal:alive:",
+   "x": -1.558,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "note": "tower door, south"
+  }
+ ]
+}

@@ -148,7 +148,7 @@ export function initController(scene, sharedAnimated, opts) {
   let submerged = false; // FP dive sub-mode of SWIM
   let activeInteract = null;
   // swim tuning: depth = water surface (WATER_Y) minus the ground/bed under the character
-  const GRAV = 20, SWIM_DEPTH = 1.2, SWIM_SINK = 1.05, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 10.0, DIVE_VSPEED = 8.0;
+  const GRAV = 20, SWIM_DEPTH = 1.25, SWIM_SINK = 1.25, WADE_START = 0.45, DIVE_TRIGGER = 0.6, DIVE_FWD = 10.0, DIVE_VSPEED = 8.0;
   const CHAR_RADIUS = 0.35; // horizontal collision radius, resolveMovement() calls below
   const CHAR_HEIGHT = 1.7, STEP_UP = 0.5; // vertical band height, step-up threshold
   let stepSfxT = 0, rippleT = 0; // footstep-SFX / water-ripple cadence timers
@@ -202,7 +202,7 @@ export function initController(scene, sharedAnimated, opts) {
           y = Math.max(support + 0.6, Math.min(WATER_Y - 0.5, y)); // stay under surface, above seabed
           groundY = y; char.position.y = y;
           // auto-surface: rising to just under the waterline pops you back to surface swim
-          if (y >= WATER_Y - 0.8) { submerged = false; }
+          // if (y >= WATER_Y - 0.8) { submerged = false; }
           if (waterDepth < SWIM_DEPTH - 0.3) { submerged = false; transition('GROUND', { impulseT: state.impulseT }); }
         } else {
           if (waterDepth < SWIM_DEPTH - 0.3) { const carry = state.impulseT; transition('GROUND', { impulseT: carry }); }

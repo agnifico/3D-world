@@ -25,7 +25,7 @@ const zoneData = {
 };
 
 const spawnPoints = {
-  default: { x: 70, z: 20 }, // beach, not afloat
+  default: { x: 70, z: 20 }, 
   shore: { x: rawSpawnPoints.shore.position[0], z: rawSpawnPoints.shore.position[2] },
   boat: { x: rawSpawnPoints.boat.position[0], z: rawSpawnPoints.boat.position[2] },
   dive: { x: rawSpawnPoints.dive.position[0], z: rawSpawnPoints.dive.position[2] },

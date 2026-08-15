@@ -1129,7 +1129,7 @@ export function createOpenSea(zone, opts = {}) {
 
   const layers = { terrain, water, godrays, motes, currents, vents, spindrift, fish, flora: flora.group, caustics: null, abyss: null };
   const enabled = {
-    terrain: true, water: true, caustics: true, abyss: true, godrays: true, motes: true,
+    terrain: true, water: true, caustics: true, abyss: true, godrays: false, motes: true,
     currents: true, vents: true, spindrift: true, fish: true, flora: true, glow: true,
   };
   let glowOn = true;

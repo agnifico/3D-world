@@ -8,8 +8,8 @@
 //
 // Re-run this script any time a new family is added to USED — that's the
 // whole update path, nothing else needs to change by hand.
-import { readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, extname, basename, relative, dirname } from 'node:path';
+import { readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { join, extname, relative, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,17 +25,46 @@ const NATURE_OUT = join(ROOT, 'world', 'assets', 'nature');
 // catalogued but unused. Add a row here + re-run to pull a new family in.
 // ---------------------------------------------------------------------------
 const USED = [
-  { set: 'BIGNature', family: 'CommonTree' },   // grassland workhorse tree
-  { set: 'BIGNature', family: 'PineTree' },      // grassland mix
-  { set: 'BIGNature', family: 'BirchTree' },     // grassland mix
-  { set: 'BIGNature', family: 'Willow' },        // grassland — biased near water
-  { set: 'BIGNature', family: 'Rock' },          // grassland scatter (+ _Moss/_Snow variants, same family)
-  { set: 'BIGNature', family: 'Bush' },          // grassland scatter
-  { set: 'BIGNature', family: 'BushBerries' },   // grassland — harvestable, placed not wired
-  { set: 'Simple_Nature', family: 'Grass' },     // lagoon — stretched into seaweed
-  { set: 'Simple_Nature', family: 'Bush' },      // lagoon — small vegetation, shallow bands
-  { set: 'pirates', family: 'PalmTree', category: 'Environment' }, // lagoon — real palms
-  { set: 'pirates', family: 'Rock', category: 'Environment' },     // lagoon — shallow-band rocks
+  { set: 'BIGNature', family: 'CommonTree' },
+  { set: 'BIGNature', family: 'PineTree' },
+  { set: 'BIGNature', family: 'BirchTree' },
+  { set: 'BIGNature', family: 'Willow' },
+  { set: 'BIGNature', family: 'Rock' },
+  { set: 'BIGNature', family: 'Bush' },
+  { set: 'BIGNature', family: 'BushBerries' },
+  { set: 'Simple_Nature', family: 'Grass' },
+  { set: 'Simple_Nature', family: 'Bush' },
+  { set: 'pirates', family: 'PalmTree', category: 'Environment' },
+  { set: 'pirates', family: 'Rock', category: 'Environment' },
+  { set: 'BIGNature', family: 'PalmTree' },                      // derived — lagoon/bindings.js
+  { set: 'BIGNature', family: 'Plant' },                         // derived — lagoon/bindings.js, open-sea/bindings.js
+  { set: 'kenney-models', family: 'boat-fishing-small' },        // derived — core/boats.js, grassland/edits.js
+  { set: 'kenney-models', family: 'boat-row-small' },            // derived — core/boats.js, grassland/edits.js
+  { set: 'kenney-models', family: 'bridge-draw' },               // derived — core/collider-catalogue.js, grassland/edits.js
+  { set: 'kenney-models', family: 'fence-doorway' },             // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'fence-fortified' },           // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'fountain-square-detail' },    // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'pillar-stone' },              // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'siege-ram' },                 // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'siege-tower' },               // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'stall' },                     // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'tower-hexagon-base' },        // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'tower-hexagon-mid' },         // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'windmill' },                  // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'workbench-anvil' },           // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'workbench-grind' },           // derived — grassland/edits.js
+  { set: 'kenney-models', family: 'workbench' },                 // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'Clover' },                        // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'Mushroom_Laetiporus' },           // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'Plant_1_Big' },                   // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'Plant_7_Big' },                   // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'Plant' },                         // derived — grassland/edits.js
+  { set: 'NNK Style', family: 'TwistedTree' },                   // derived — grassland/edits.js
+  { set: 'pirates', family: 'Cliff', category: 'Environment' },  // derived — grassland/edits.js
+  { set: 'pirates', family: 'Dock_Broken', category: 'Environment' }, // derived — core/collider-catalogue.js, grassland/edits.js
+  { set: 'pirates', family: 'Dock_Pole', category: 'Environment' }, // derived — core/collider-catalogue.js, grassland/edits.js
+  { set: 'pirates', family: 'Dock', category: 'Environment' },   // derived — core/collider-catalogue.js, grassland/edits.js
+  { set: 'pirates', family: 'Large', category: 'Ship' },         // derived — core/boats.js, grassland/edits.js
 ];
 
 // ---------------------------------------------------------------------------
@@ -162,6 +191,38 @@ const files = [];
 walk(SHELF_DIR, files);
 
 // ---------------------------------------------------------------------------
+// Collapse parallel format exports. walk() prefers .glb over .gltf within one
+// directory, but some packs ship the SAME model twice in sibling format dirs:
+// every Kenney kit carries both "Models/FBX format/x.glb" (FBX2glTF, texture
+// embedded) and "Models/GLB format/x.glb" (UnityGLTF, external atlas). Left
+// alone those become two variants of one entry, and the resolver would pick
+// between two different exports of the same object at random.
+//
+// The tie is broken toward "GLB format" deliberately, not arbitrarily: that
+// UnityGLTF export is the one that has actually been shipping (it won the
+// old flat copy's last-write-wins overwrite), so the meshes that placements
+// and hand-tuned colliders were measured against stay exactly as they are.
+// The FBX2glTF sibling is self-contained and would save copying the atlas,
+// but it is a different export with its own axis/scale conventions — that is
+// an asset swap, not a bug fix, so it is not made silently here.
+// ---------------------------------------------------------------------------
+const FORMAT_DIR = /^(fbx|obj|glb|gltf)( format| \(unity\))?$/i;
+const FORMAT_RANK = (dir) => {
+  const seg = dir.split(sep).find(s => FORMAT_DIR.test(s)) || '';
+  return /^glb/i.test(seg) ? 0 : /^gltf/i.test(seg) ? 1 : seg ? 3 : 2;
+};
+const byAsset = new Map();
+for (const f of files) {
+  // Identity = the path with the format-dir segment dropped, so this only
+  // ever merges format twins — never two same-named models in different kits.
+  const key = [relative(SHELF_DIR, f.dir).split(sep).filter(s => !FORMAT_DIR.test(s)).join('/'), f.nameNoExt].join('/');
+  const prev = byAsset.get(key);
+  if (!prev || FORMAT_RANK(f.dir) < FORMAT_RANK(prev.dir)) byAsset.set(key, f);
+}
+files.length = 0;
+files.push(...byAsset.values());
+
+// ---------------------------------------------------------------------------
 // Parse + group into catalogue entries.
 // ---------------------------------------------------------------------------
 const entriesByKey = new Map();
@@ -192,33 +253,95 @@ function isUsed(entry) {
   return USED.some(u => u.set === entry.set && u.family === entry.family && (u.category === undefined ? true : u.category === entry.category));
 }
 
+// ---------------------------------------------------------------------------
+// Sidecar closure. A .gltf is only half a model — its geometry lives in a
+// sibling .bin and its textures in sibling .png/.jpg, referenced by relative
+// URI from inside the JSON. Kenney's .glb files carry their geometry inline
+// but still point at an external Textures/colormap.png. Copying the model
+// alone therefore yields a file that 404s half its content at load time,
+// which is the same "served path nothing backs" failure the block below
+// exists to prevent — so the sidecars are resolved here and copied as part
+// of the model, not left on the shelf.
+// ---------------------------------------------------------------------------
+function externalUris(modelAbs) {
+  let json;
+  if (extname(modelAbs).toLowerCase() === '.glb') {
+    // GLB container: 12-byte header, then [len:u32][type:u32][data] chunks.
+    // The first chunk is always the JSON one.
+    const buf = readFileSync(modelAbs);
+    json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8'));
+  } else {
+    json = JSON.parse(readFileSync(modelAbs, 'utf8'));
+  }
+  const uris = [];
+  for (const list of [json.buffers, json.images]) {
+    for (const item of list || []) {
+      // Embedded base64 payloads need no file alongside the model.
+      if (item.uri && !item.uri.startsWith('data:')) uris.push(decodeURIComponent(item.uri));
+    }
+  }
+  return [...new Set(uris)];
+}
+
 // Catalogue integrity: the catalogue must be structurally incapable of
 // lying about what's servable. A `served` path is only ever written once
 // the file has actually been copied — if the source that walk() found a
 // moment ago has since vanished (deleted, or a symlink that broke), or the
 // copy itself fails, that variant is skipped and reported below instead of
 // silently getting a `served` path nothing backs.
-const copied = [];
+// A Set, not an array: one texture atlas is a sidecar of many models, so the
+// same destination gets written repeatedly and should still be reported once.
+const copied = new Set();
 const skipped = [];
 for (const entry of entries) {
   const used = isUsed(entry);
   entry.used = used;
   if (!used) continue;
-  const destDir = join(NATURE_OUT, entry.set);
-  mkdirSync(destDir, { recursive: true });
   for (const v of entry.variants) {
     const srcAbs = join(ROOT, v.source);
     if (!existsSync(srcAbs)) { skipped.push({ entry: entry.id, variant: v.variant, source: v.source }); continue; }
-    const filename = basename(srcAbs);
-    const destAbs = join(destDir, filename);
+
+    // Mirror the shelf's own layout under the set dir instead of flattening
+    // it. Flat sets (BIGNature, pirates, ghibli_nature, ...) are unaffected —
+    // their path relative to the set root already IS the bare filename. It
+    // matters for the nested ones: kenney-models holds four kits that each
+    // ship a DIFFERENT Textures/colormap.png, so flattening them would
+    // collide four distinct atlases onto one path and paint three of the
+    // four kits out of the wrong palette.
+    const relFromSet = relative(join(SHELF_DIR, entry.set), srcAbs);
+    const destAbs = join(NATURE_OUT, entry.set, relFromSet);
+    const srcDir = dirname(srcAbs);
+
+    let sidecars;
     try {
+      sidecars = externalUris(srcAbs);
+    } catch (e) {
+      skipped.push({ entry: entry.id, variant: v.variant, source: v.source, reason: `unreadable (${e.message})` });
+      continue;
+    }
+    // A model missing a buffer or texture is not servable, so it must not get
+    // a `served` path — same discipline as a missing source file.
+    const absent = sidecars.find(u => !existsSync(join(srcDir, u)));
+    if (absent) {
+      skipped.push({ entry: entry.id, variant: v.variant, source: v.source, reason: `missing sidecar ${absent}` });
+      continue;
+    }
+
+    try {
+      mkdirSync(dirname(destAbs), { recursive: true });
       copyFileSync(srcAbs, destAbs);
+      for (const u of sidecars) {
+        const sideDest = join(dirname(destAbs), u);
+        mkdirSync(dirname(sideDest), { recursive: true });
+        copyFileSync(join(srcDir, u), sideDest);
+        copied.add(relative(ROOT, sideDest));
+      }
     } catch (e) {
       skipped.push({ entry: entry.id, variant: v.variant, source: v.source, reason: e.message });
       continue;
     }
-    v.served = `assets/nature/${entry.set}/${filename}`;
-    copied.push(relative(ROOT, destAbs));
+    v.served = `assets/nature/${entry.set}/${relFromSet.split(sep).join('/')}`;
+    copied.add(relative(ROOT, destAbs));
   }
 }
 
@@ -243,8 +366,8 @@ console.log(`\nCatalogued ${entries.length} entries (${files.length} source file
 console.log(`Written: ${relative(ROOT, CATALOGUE_OUT)}\n`);
 console.log('Tag counts:');
 for (const [t, n] of Object.entries(tagCounts).sort((a, b) => b[1] - a[1])) console.log(`  ${t.padEnd(14)} ${n}`);
-console.log(`\nCopied ${copied.length} files into ${relative(ROOT, NATURE_OUT)}/:`);
-for (const c of copied) console.log(`  ${c}`);
+console.log(`\nCopied ${copied.size} files into ${relative(ROOT, NATURE_OUT)}/:`);
+for (const c of [...copied].sort()) console.log(`  ${c}`);
 
 if (skipped.length) {
   console.log(`\n\x1b[31m\x1b[1mSKIPPED ${skipped.length} used variant(s) — no phantom catalogue entry written:\x1b[0m`);

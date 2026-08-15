@@ -1,0 +1,314 @@
+{
+ "id": "granary_barn",
+ "name": "Granary & Barn",
+ "type": "establishment",
+ "set": "Medieval Village",
+ "glb": "granary_barn.glb",
+ "note": "One tall storey: brick street face with the cart door, timber-grid walls elsewhere, single 6x roof. Wagon, crates and a fence run ship with the prefab so the yard reads as in use.",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "footprint": {
+  "x": 6.184,
+  "z": 4.184,
+  "modulesX": 3,
+  "modulesZ": 2,
+  "comment": "wall panels sit 0.092 m proud of the module line on each face"
+ },
+ "origin": "floor centre; ground pieces lifted so bbox.min.y = 0. rotY in radians, scale uniform.",
+ "partCount": 31,
+ "parts": [
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": -2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": -2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": 0,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": 0,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": 2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_UnevenBrick:normal:alive:",
+   "file": "Floor_UnevenBrick",
+   "x": 2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Door_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Door_Round",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": -2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_Window_Thin_Round:normal:alive:",
+   "file": "Wall_Plaster_Window_Thin_Round",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": 2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": 3,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Wide_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Wide_Round",
+   "x": 3,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Wide_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Wide_Round",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Plaster_WoodGrid:normal:alive:",
+   "file": "Wall_Plaster_WoodGrid",
+   "x": -3,
+   "y": 0,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 0,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": -3,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 0,
+   "z": -2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_Exterior_Wood:normal:alive:",
+   "file": "Corner_Exterior_Wood",
+   "x": 3,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::DoorFrame_Round_WoodDark:normal:alive:",
+   "file": "DoorFrame_Round_WoodDark",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 3,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::WindowShutters_Wide_Round_Closed:normal:alive:",
+   "file": "WindowShutters_Wide_Round_Closed",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_RoundTiles_6x:normal:alive:",
+   "file": "Roof_RoundTiles_6x4",
+   "x": 0,
+   "y": 3,
+   "z": -2.358,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Wagon:normal:alive:",
+   "file": "Prop_Wagon",
+   "x": 3.2,
+   "y": 0,
+   "z": 3.2,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -2.6,
+   "y": 0,
+   "z": 2.8,
+   "rotY": 0.25,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -2.5,
+   "y": 1.06,
+   "z": 2.85,
+   "rotY": -0.2,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:WoodenFence_Single:normal:alive:",
+   "file": "Prop_WoodenFence_Single",
+   "x": -1,
+   "y": 0.03,
+   "z": 4.2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:WoodenFence_Extension:normal:alive:",
+   "file": "Prop_WoodenFence_Extension1",
+   "x": 1,
+   "y": 0.03,
+   "z": 4.2,
+   "rotY": 0,
+   "scale": 1
+  }
+ ],
+ "anchors": [
+  {
+   "role": "door",
+   "part": "Medieval Village::Door_8_Round:normal:alive:",
+   "x": -0.558,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "note": "cart door, south"
+  }
+ ]
+}

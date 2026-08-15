@@ -1,0 +1,91 @@
+{
+ "set": "Medieval Village",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "note": "part lists are the deliverable; the GLBs are visual reference bakes",
+ "buildings": [
+  {
+   "id": "house_fishermans_cottage",
+   "name": "Fisherman's Cottage",
+   "type": "dwelling",
+   "json": "buildings/house_fishermans_cottage.json",
+   "modulesX": 3,
+   "modulesZ": 2,
+   "partCount": 57,
+   "anchors": 2
+  },
+  {
+   "id": "inn_the_gilded_stag",
+   "name": "The Gilded Stag (Inn)",
+   "type": "establishment",
+   "json": "buildings/inn_the_gilded_stag.json",
+   "modulesX": 4,
+   "modulesZ": 4,
+   "partCount": 117,
+   "anchors": 3
+  },
+  {
+   "id": "blacksmith_forge",
+   "name": "Blacksmith & Forge",
+   "type": "establishment",
+   "json": "buildings/blacksmith_forge.json",
+   "modulesX": 3,
+   "modulesZ": 2,
+   "partCount": 33,
+   "anchors": 1
+  },
+  {
+   "id": "market_stall_wooden",
+   "name": "Market Stall",
+   "type": "prop",
+   "json": "buildings/market_stall_wooden.json",
+   "modulesX": 1,
+   "modulesZ": 1,
+   "partCount": 11,
+   "anchors": 0
+  },
+  {
+   "id": "watchtower_stone",
+   "name": "Stone Watchtower",
+   "type": "landmark",
+   "json": "buildings/watchtower_stone.json",
+   "modulesX": 2,
+   "modulesZ": 2,
+   "partCount": 50,
+   "anchors": 1
+  },
+  {
+   "id": "granary_barn",
+   "name": "Granary & Barn",
+   "type": "establishment",
+   "json": "buildings/granary_barn.json",
+   "modulesX": 3,
+   "modulesZ": 2,
+   "partCount": 31,
+   "anchors": 1
+  },
+  {
+   "id": "rowhouse_bakery",
+   "name": "Bakery Rowhouse",
+   "type": "establishment",
+   "json": "buildings/rowhouse_bakery.json",
+   "modulesX": 1,
+   "modulesZ": 2,
+   "partCount": 40,
+   "anchors": 2
+  },
+  {
+   "id": "market_yard_dressing",
+   "name": "Market Yard (dressing)",
+   "type": "prop",
+   "json": "buildings/market_yard_dressing.json",
+   "modulesX": 3,
+   "modulesZ": 2,
+   "partCount": 23,
+   "anchors": 0
+  }
+ ]
+}

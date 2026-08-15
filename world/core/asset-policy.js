@@ -25,7 +25,7 @@ export const PACK_POLICY = {
   // built-for look") — both also confirmed textureless (solid
   // baseColorFactor, no baseColorTexture) by direct GLB inspection, so
   // flat-matte is the correct class for them, not just an inherited default.
-  'BIGNature': { material: 'flat-matte', scaleFactor: 1 },
+  'BIGNature': { material: 'flat-matte', scaleFactor: 1.5 },
   // Not yet routed through this resolver — grassland/assets.js's own Kenney
   // pipeline loads these directly (see core/gltf-assets.js's header). Row
   // kept for when/if that pipeline migrates onto resolveAsset.

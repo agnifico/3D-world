@@ -46,7 +46,7 @@ export const BOAT_DEFS = {
   // 'ship-large': { label: 'Board the galleon', sitClip: 'sitRow', seatAlong: -5.3, seatUp: 2.95, faceOffset: Math.PI, turn: 1, accel: 1.0, maxSpeed: 25, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6 },
   // 'boat-fishing-small': { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -2.4, seatUp: 1.35, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5 },
   xiriya: { label: 'Board the Xiriya', singleton: true, sitClip: 'idle', seatAlong: -8.0, seatUp: 4.85, faceOffset: 0, turn: 1.2, accel: 1.4, maxSpeed: 40, fwdSign: 1, disembark: 'leap', deckOffset: 2.4, deckInset: 0.45, catalogueId: 'pirates::Xiriya:normal:alive:', crossScale: 1.37 },
-  rowboat: { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: .8, seatUp: .35, faceOffset: Math.PI, turn: 3, accel: 3.0, maxSpeed: 10, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6, catalogueId: 'kenney-models::boat-row-small:normal:alive:', crossScale: .75 },
+  rowboat: { label: 'Board the rowboat', sitClip: 'sitRow', seatAlong: .8, seatUp: .35, faceOffset: Math.PI, turn: 3, accel: 3.0, maxSpeed: 30, fwdSign: 1, paddles: true, rowAmp: 0.5, disembark: 'leap', deckOffset: 0.42, deckInset: 0.6, catalogueId: 'kenney-models::boat-row-small:normal:alive:', crossScale: .75 },
   fishing: { label: 'Board the fishing boat', sitClip: 'sitFish', seatAlong: -1.7, seatUp: 1.2, faceOffset: Math.PI / 2, turn: 2, accel: 2.0, maxSpeed: 18, fwdSign: 1, smoke: true, disembark: 'leap', deckOffset: 0.7, deckInset: 0.5, catalogueId: 'kenney-models::boat-fishing-small:normal:alive:', crossScale: 1 },
 };
 
@@ -60,9 +60,9 @@ export const boats = [];
 // in place anywhere past |94| (rotation still applied, so it read as "the boat
 // spins but won't move"). Defaults reproduce the old value for a 100-extent
 // zone, so a caller that never sets them behaves as before.
-let _boundX = 94, _boundZ = 94;
+let _boundX = 100, _boundZ = 100;
 export function setWorldBounds(extentX, extentZ) {
-  _boundX = extentX - 6; _boundZ = extentZ - 6; // same 6-unit margin the old 94 kept off a 100 extent
+  _boundX = extentX - 0; _boundZ = extentZ - 0; // same 6-unit margin the old 94 kept off a 100 extent
 }
 // Real water surface (height + slope) for the active zone, pushed in by the
 // shell (main.js's loadZone) same as setWorldBounds above. A zone with a flat

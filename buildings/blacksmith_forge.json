@@ -1,0 +1,332 @@
+{
+ "id": "blacksmith_forge",
+ "name": "Blacksmith & Forge",
+ "type": "establishment",
+ "set": "Medieval Village",
+ "glb": "blacksmith_forge.glb",
+ "note": "Single-storey open forge: two arched bays on the street front so the fire shows, uneven-brick shell, wide stone quoins, stacked chimneys at the rear. Roof_RoundTiles_6x sits straight on the 6 x 4 m wall plate.",
+ "grid": {
+  "moduleX": 2,
+  "moduleZ": 2,
+  "storeyHeight": 3
+ },
+ "footprint": {
+  "x": 6.184,
+  "z": 4.184,
+  "modulesX": 3,
+  "modulesZ": 2,
+  "comment": "wall panels sit 0.092 m proud of the module line on each face"
+ },
+ "origin": "floor centre; ground pieces lifted so bbox.min.y = 0. rotY in radians, scale uniform.",
+ "partCount": 33,
+ "parts": [
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": -2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 0,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 0,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 2,
+   "y": 0.01,
+   "z": -1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Floor_Brick:normal:alive:",
+   "file": "Floor_Brick",
+   "x": 2,
+   "y": 0.01,
+   "z": 1,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Arch:normal:alive:",
+   "file": "Wall_Arch",
+   "x": -2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Door_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Door_Round",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_Arch:normal:alive:",
+   "file": "Wall_Arch",
+   "x": 2,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Thin_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Thin_Round",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 2,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Wide_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Wide_Round",
+   "x": 3,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": 3,
+   "y": 0,
+   "z": 1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Straight:normal:alive:",
+   "file": "Wall_UnevenBrick_Straight",
+   "x": -3,
+   "y": 0,
+   "z": -1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Wall_UnevenBrick_Window_Wide_Round:normal:alive:",
+   "file": "Wall_UnevenBrick_Window_Wide_Round",
+   "x": -3,
+   "y": 0,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_ExteriorWide_Brick:normal:alive:",
+   "file": "Corner_ExteriorWide_Brick",
+   "x": -3,
+   "y": 0,
+   "z": -2,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_ExteriorWide_Brick:normal:alive:",
+   "file": "Corner_ExteriorWide_Brick",
+   "x": -3,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_ExteriorWide_Brick:normal:alive:",
+   "file": "Corner_ExteriorWide_Brick",
+   "x": 3,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Corner_ExteriorWide_Brick:normal:alive:",
+   "file": "Corner_ExteriorWide_Brick",
+   "x": 3,
+   "y": 0,
+   "z": 2,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::DoorFrame_Round_Brick:normal:alive:",
+   "file": "DoorFrame_Round_Brick",
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Thin_Round:normal:alive:",
+   "file": "Window_Thin_Round1",
+   "x": 0,
+   "y": 0,
+   "z": -2,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": 3,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::WindowShutters_Wide_Round_Closed:normal:alive:",
+   "file": "WindowShutters_Wide_Round_Closed",
+   "x": 3,
+   "y": 0,
+   "z": -1,
+   "rotY": 1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Window_Wide_Round:normal:alive:",
+   "file": "Window_Wide_Round1",
+   "x": -3,
+   "y": 0,
+   "z": 1,
+   "rotY": -1.571,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village::Roof_RoundTiles_6x:normal:alive:",
+   "file": "Roof_RoundTiles_6x4",
+   "x": 0,
+   "y": 3,
+   "z": -2.358,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Chimney:normal:alive:",
+   "file": "Prop_Chimney",
+   "x": -2,
+   "y": 0,
+   "z": -2.42,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Chimney:normal:alive:",
+   "file": "Prop_Chimney",
+   "x": -2,
+   "y": 3.178,
+   "z": -2.42,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Chimney:normal:alive:",
+   "file": "Prop_Chimney",
+   "x": 2,
+   "y": 0,
+   "z": -2.42,
+   "rotY": 3.142,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Brick:normal:alive:",
+   "file": "Prop_Brick1",
+   "x": 1.6,
+   "y": 0.11,
+   "z": 2.9,
+   "rotY": 0,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Brick:normal:alive:",
+   "file": "Prop_Brick1",
+   "x": 1.9,
+   "y": 0.11,
+   "z": 3.15,
+   "rotY": 0.8,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -2.2,
+   "y": 0,
+   "z": 2.9,
+   "rotY": -0.3,
+   "scale": 1
+  },
+  {
+   "catalogueId": "Medieval Village:Prop:Crate:normal:alive:",
+   "file": "Prop_Crate",
+   "x": -2.4,
+   "y": 1.06,
+   "z": 3,
+   "rotY": 0.2,
+   "scale": 1
+  }
+ ],
+ "anchors": [
+  {
+   "role": "door",
+   "part": "Medieval Village::Door_8_Round:normal:alive:",
+   "x": -0.558,
+   "y": 0,
+   "z": 2,
+   "rotY": 0,
+   "note": "workshop door between the two arched bays"
+  }
+ ]
+}

@@ -65,7 +65,7 @@ export const { terrainHeight, bandAt } = await loadTerrainMap(
   {
     extentX: WORLD_EXTENT_X,
     extentZ: WORLD_EXTENT_Z,
-    tolerance: 60,
+    tolerance: 0,
     blurRadius: 4,
     blurPasses: 2,
     // Detail noise per band: flat where footing matters, coarse and big-
@@ -427,5 +427,11 @@ export const portals = [
     x: -233, z: -103,
     targetZone: 'lagoon',
     targetPortal: 'sea-gate',
+  },
+  {
+    id: 'sea-fjord-gate',
+    x: 233, z: 103,
+    targetZone: 'grassland',
+    targetPortal: 'fjord-arch',
   },
 ];

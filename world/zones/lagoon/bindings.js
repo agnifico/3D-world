@@ -22,7 +22,7 @@
 // (Since re-pointed again, externally, to BIGNature::Plant — see the id
 // below; that later call is Agni's own, not reverted here.)
 export const bindings = {
-  palmTree:  { family: 'PalmTree',    id: 'pirates:Environment:PalmTree:normal:alive:' },
+  palmTree:  { family: 'PalmTree',    id: 'BIGNature::PalmTree:normal:alive:' },
   seaweed:   { family: 'Grass',       id: 'Simple_Nature::Grass:normal:alive:' },
   reefRock:  { family: 'Rock',        id: 'pirates:Environment:Rock:normal:alive:' },
   shoreBush: { family: 'Bush_Common', id: 'BIGNature::Plant:normal:alive:' },

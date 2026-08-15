@@ -25,34 +25,91 @@
 // Dock/Dock_Broken measured footprint ~2.2x2.7 (x/z), height ~3.0, base at
 // local y=0 (pivot, per the convention above); Dock_Pole's footprint is
 // much smaller (~0.37x0.38) but the SAME ~3.0 height.
+// Auto-exported by the World Editor's Collision tab — paste over world/core/collider-catalogue.js
+// Replaces the WHOLE table — this file's own hand-written header comments
+// aren't round-tripped; copy back whichever ones you still want to keep.
 export const COLLIDER_SPECS = {
-  // Deck (stand-on, not a wall) biased toward the lower part of the
-  // measured envelope — most of a dock's height is piling driven down
-  // toward the waterline, not walkway above it. Footprint inset ~15% from
-  // the full measured bbox (same shrink idea as props.js's shrinkHalf) so
-  // the collider doesn't bleed past the visible planks' edge.
-  'pirates:Environment:Dock:normal:alive:': {
-    static: true,
-    shapes: [
-      { type: 'deck', size: [1.9, 2.3], y: 1.0, pos: [-0.09, 0, -0.02] },
-    ],
+  "pirates:Environment:Dock:normal:alive:": {
+    "static": true,
+    "shapes": [
+      {
+        "type": "deck",
+        "size": [
+          1.9,
+          2.064
+        ],
+        "pos": [
+          -0.09,
+          0.437,
+          0.012
+        ],
+        "rot": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
   },
-  'pirates:Environment:Dock_Broken:normal:alive:': {
-    static: true,
-    shapes: [
-      { type: 'deck', size: [2.0, 2.3], y: 1.0, pos: [0.0, 0, -0.02] },
-    ],
+  "pirates:Environment:Dock_Broken:normal:alive:": {
+    "static": true,
+    "shapes": [
+      {
+        "type": "deck",
+        "size": [
+          2,
+          2.07
+        ],
+        "pos": [
+          0,
+          0.446,
+          -0.02
+        ],
+        "rot": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
   },
-  // The pole itself: a solid post you can't walk through. Spans virtually
-  // the model's FULL measured height (capsule half-extent h/2+r ≈ 1.42,
-  // centered at y=1.5 → local [0.08, 2.92] against the measured [0, 3.01])
-  // deliberately — unlike the deck surface, getting this vertical band
-  // wrong in the "too short" direction would silently break the "can't
-  // walk through the poles" proof, so it errs generous rather than precise.
-  'pirates:Environment:Dock_Pole:normal:alive:': {
-    static: true,
-    shapes: [
-      { type: 'capsule', r: 0.22, h: 2.4, pos: [-0.02, 1.5, -0.01] },
-    ],
+  "pirates:Environment:Dock_Pole:normal:alive:": {
+    "static": true,
+    "shapes": [
+      {
+        "type": "capsule",
+        "r": 0.22,
+        "h": 2.4,
+        "pos": [
+          -0.02,
+          1.5,
+          -0.01
+        ]
+      }
+    ]
   },
+  "kenney-models::bridge-draw:normal:alive:": {
+    "static": true,
+    "shapes": [
+      {
+        "type": "box",
+        "size": [
+          1.052,
+          0.059,
+          1
+        ],
+        "pos": [
+          -0.493,
+          0,
+          0.16
+        ],
+        "rot": [
+          0,
+          0,
+          0
+        ]
+      }
+    ]
+  }
 };
+

@@ -1,0 +1,3106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propsmith 0.10 — Procedural Prop Workshop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg-0:#141516;
+  --bg-1:#1c1e20;
+  --bg-2:#232628;
+  --bg-3:#2c2f32;
+  --line:#34383b;
+  --ink-0:#eee9e2;
+  --ink-1:#a3a6a5;
+  --ink-2:#6b6e6f;
+  --brass:#c98a4b;
+  --brass-hi:#e2a35f;
+  --brass-dim:#8a6138;
+  --danger:#b6604f;
+  --danger-hi:#cf7a63;
+  --ok:#7fa86f;
+  --radius:6px;
+  --font-disp:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body{
+  background:var(--bg-0);
+  color:var(--ink-0);
+  font-family:var(--font-body);
+  font-size:13px;
+  overflow:hidden;
+}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:var(--line);}
+
+#app{
+  display:grid;
+  grid-template-columns: 250px 1fr 320px;
+  grid-template-rows: 52px 1fr;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "hier   view    inspect";
+  height:100vh;
+  width:100vw;
+}
+
+/* ---------- topbar ---------- */
+#topbar{
+  grid-area:topbar;
+  background:var(--bg-1);
+  border-bottom:1px solid var(--line);
+  display:flex;
+  align-items:center;
+  padding:0 14px;
+  gap:18px;
+}
+.brand{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--font-disp);font-weight:700;font-size:16px;
+  letter-spacing:0.02em;
+  color:var(--ink-0);
+  white-space:nowrap;
+}
+.brand .mark{
+  width:20px;height:20px;color:var(--brass);
+  flex:none;
+}
+.brand small{
+  font-family:var(--font-mono);font-weight:400;font-size:10px;color:var(--ink-2);
+  letter-spacing:0.06em;text-transform:uppercase;margin-left:2px;
+}
+.tray{
+  display:flex;gap:4px;align-items:center;
+  background:var(--bg-0);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:4px;
+  overflow-x:auto;
+  max-width:46vw;
+}
+.tray-btn{
+  width:32px;height:32px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:transparent;border:1px solid transparent;border-radius:5px;
+  color:var(--ink-1);cursor:pointer;
+}
+.tray-btn svg{width:18px;height:18px;}
+.tray-btn:hover{background:var(--bg-2);color:var(--brass-hi);border-color:var(--line);}
+.tbar-actions{display:flex;gap:6px;align-items:center;margin-left:auto;}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--bg-2);border:1px solid var(--line);color:var(--ink-0);
+  font-family:var(--font-body);font-size:12px;font-weight:500;
+  padding:7px 11px;border-radius:5px;cursor:pointer;white-space:nowrap;
+}
+.btn svg{width:14px;height:14px;flex:none;}
+.btn:hover{border-color:var(--brass-dim);color:var(--brass-hi);}
+.btn:active{transform:translateY(1px);}
+.btn.primary{background:var(--brass);border-color:var(--brass);color:#1a1408;font-weight:600;}
+.btn.primary:hover{background:var(--brass-hi);border-color:var(--brass-hi);color:#1a1408;}
+.btn.danger:hover{border-color:var(--danger);color:var(--danger-hi);}
+.btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+.btn.icon-only{padding:7px;}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:8px 2px;}
+
+/* ---------- hierarchy ---------- */
+#hier{
+  grid-area:hier;
+  background:var(--bg-1);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  min-height:0;
+}
+.panel-head{
+  padding:10px 12px 8px;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;
+  color:var(--ink-2);text-transform:uppercase;
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--line);
+}
+#tree{flex:1;overflow-y:auto;padding:6px;}
+.node-row{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 6px;border-radius:5px;cursor:pointer;
+  color:var(--ink-1);user-select:none;
+  border:1px solid transparent;
+}
+.node-row:hover{background:var(--bg-2);}
+.node-row.selected{background:rgba(201,138,75,0.15);border-color:var(--brass-dim);color:var(--ink-0);}
+.node-row .chev{width:12px;height:12px;flex:none;color:var(--ink-2);cursor:pointer;}
+.node-row .chev.leaf{visibility:hidden;}
+.node-row .gicon{width:15px;height:15px;flex:none;color:var(--ink-2);}
+.node-row.selected .gicon{color:var(--brass-hi);}
+.node-row .nlabel{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;}
+.node-row .nlabel.editing{padding:0;}
+.node-row .nlabel input{
+  width:100%;background:var(--bg-0);border:1px solid var(--brass-dim);border-radius:3px;
+  color:var(--ink-0);font-family:var(--font-body);font-size:12.5px;padding:2px 4px;
+}
+.node-row .eye{width:13px;height:13px;flex:none;color:var(--ink-2);opacity:0;}
+.node-row:hover .eye,.node-row.hidden .eye{opacity:1;}
+.node-row.hidden{opacity:0.4;}
+.tree-empty{color:var(--ink-2);font-size:12px;padding:16px 10px;line-height:1.5;}
+
+/* ---------- viewport ---------- */
+#view{
+  grid-area:view;
+  position:relative;
+  min-width:0;min-height:0;
+  background:radial-gradient(ellipse at 50% 30%, #1f2224 0%, #131415 100%);
+}
+#canvas-holder{position:absolute;inset:0;}
+#canvas-holder canvas{display:block;width:100%;height:100%;}
+.viewport-hint{
+  position:absolute;left:12px;bottom:12px;
+  font-family:var(--font-mono);font-size:10px;color:var(--ink-2);
+  background:rgba(20,21,22,0.6);padding:6px 9px;border-radius:5px;
+  border:1px solid var(--line);line-height:1.6;pointer-events:none;
+}
+.specplate{
+  position:absolute;top:12px;right:12px;
+  background:linear-gradient(180deg,#2a2320,#211c19);
+  border:1px solid #4a3a28;border-radius:5px;
+  padding:9px 12px;min-width:150px;
+  font-family:var(--font-mono);color:var(--brass-hi);
+  box-shadow:0 4px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+  pointer-events:none;
+}
+.specplate .sp-title{font-size:11px;font-weight:500;color:#f0d3ab;letter-spacing:0.02em;margin-bottom:5px;
+  text-transform:uppercase; white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+.specplate .sp-row{display:flex;justify-content:space-between;gap:16px;font-size:10.5px;color:#c99b64;padding:1px 0;}
+.specplate .sp-row b{color:#f0d3ab;font-weight:500;}
+
+.viewport-toolbar{
+  position:absolute;top:12px;left:12px;display:flex;gap:6px;
+}
+.vt-btn{
+  width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+  background:rgba(28,30,32,0.85);border:1px solid var(--line);border-radius:5px;
+  color:var(--ink-1);cursor:pointer;backdrop-filter:blur(2px);
+}
+.vt-btn svg{width:15px;height:15px;}
+.vt-btn:hover{color:var(--brass-hi);border-color:var(--brass-dim);}
+.vt-btn.active{color:var(--brass-hi);border-color:var(--brass);background:rgba(201,138,75,0.12);}
+
+/* ---------- inspector ---------- */
+#inspect{
+  grid-area:inspect;
+  background:var(--bg-1);
+  border-left:1px solid var(--line);
+  display:flex;flex-direction:column;
+  min-height:0;
+}
+#inspect-body{flex:1;overflow-y:auto;padding:12px;}
+.empty-inspect{color:var(--ink-2);font-size:12px;padding:20px 6px;line-height:1.7;}
+.section{margin-bottom:16px;}
+.section-title{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--brass-hi);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.section-title::after{content:'';flex:1;height:1px;background:var(--line);}
+.name-input{
+  width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:5px;
+  color:var(--ink-0);font-family:var(--font-disp);font-weight:600;font-size:14px;
+  padding:8px 10px;margin-bottom:10px;
+}
+.name-input:focus{outline:none;border-color:var(--brass-dim);}
+
+.field{margin-bottom:9px;}
+.field-label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-1);margin-bottom:4px;}
+.field-label .fname{white-space:nowrap;}
+.field-label .fval{font-family:var(--font-mono);color:var(--ink-0);font-size:11px;}
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:3px;background:var(--bg-3);border-radius:2px;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;border-radius:2px;background:var(--brass);
+  cursor:pointer;border:1px solid var(--brass-hi);margin-top:-4.5px;
+}
+input[type=range]::-moz-range-thumb{
+  width:12px;height:12px;border-radius:2px;background:var(--brass);border:1px solid var(--brass-hi);cursor:pointer;
+}
+input[type=range]::-moz-range-track{height:3px;background:var(--bg-3);border-radius:2px;}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.minifield label{display:block;font-size:9.5px;color:var(--ink-2);margin-bottom:3px;font-family:var(--font-mono);text-transform:uppercase;}
+.minifield input[type=number]{
+  width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:4px;color:var(--ink-0);
+  font-family:var(--font-mono);font-size:11.5px;padding:5px 6px;
+}
+.minifield input[type=number]:focus{outline:none;border-color:var(--brass-dim);}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.toggle-row .fname{font-size:11.5px;color:var(--ink-1);}
+.switch{width:32px;height:18px;background:var(--bg-3);border-radius:10px;position:relative;cursor:pointer;border:1px solid var(--line);flex:none;}
+.switch.on{background:var(--brass-dim);border-color:var(--brass);}
+.switch .knob{position:absolute;top:1px;left:1px;width:14px;height:14px;background:var(--ink-1);border-radius:50%;transition:left .12s;}
+.switch.on .knob{left:15px;background:#fff2e0;}
+
+.color-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+.color-row input[type=color]{
+  width:34px;height:26px;border:1px solid var(--line);border-radius:4px;background:var(--bg-2);padding:2px;cursor:pointer;
+}
+.color-row .fname{flex:1;font-size:11.5px;color:var(--ink-1);}
+.color-row .hex{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-2);}
+
+.swatches{display:flex;gap:5px;flex-wrap:wrap;margin:-2px 0 10px;}
+.swatch{width:18px;height:18px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;}
+.swatch:hover{outline:1.5px solid var(--brass-hi);outline-offset:1px;}
+
+select{
+  width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:5px;color:var(--ink-0);
+  font-family:var(--font-body);font-size:12px;padding:7px 8px;margin-bottom:9px;
+}
+select:focus{outline:none;border-color:var(--brass-dim);}
+
+.file-btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  border:1px dashed var(--line);border-radius:5px;padding:9px;
+  color:var(--ink-1);font-size:11.5px;cursor:pointer;margin-bottom:9px;
+}
+.file-btn:hover{border-color:var(--brass-dim);color:var(--brass-hi);}
+.file-btn svg{width:14px;height:14px;}
+
+.multi-list{max-height:120px;overflow-y:auto;border:1px solid var(--line);border-radius:5px;padding:6px 8px;margin-bottom:10px;background:var(--bg-2);}
+.multi-list div{font-size:11.5px;color:var(--ink-1);padding:2px 0;}
+
+/* ---------- export modal ---------- */
+#modal-backdrop{
+  position:fixed;inset:0;background:rgba(10,10,10,0.6);display:none;
+  align-items:center;justify-content:center;z-index:50;
+}
+#modal-backdrop.show{display:flex;}
+#modal{
+  width:min(760px,92vw);max-height:82vh;background:var(--bg-1);border:1px solid var(--line);
+  border-radius:8px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);}
+.modal-head h2{font-family:var(--font-disp);font-size:15px;margin:0;flex:1;}
+.modal-tabs{display:flex;gap:4px;background:var(--bg-0);border:1px solid var(--line);border-radius:5px;padding:3px;}
+.mtab{padding:5px 10px;border-radius:4px;font-size:11.5px;color:var(--ink-1);cursor:pointer;font-family:var(--font-mono);}
+.mtab.active{background:var(--brass);color:#1a1408;font-weight:600;}
+.modal-close{background:none;border:none;color:var(--ink-2);cursor:pointer;padding:4px;}
+.modal-close svg{width:18px;height:18px;}
+.modal-body{padding:14px 16px;overflow:auto;flex:1;}
+.modal-body input[type=text]{
+  width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:5px;color:var(--ink-0);
+  font-family:var(--font-mono);font-size:12px;padding:8px 10px;margin-bottom:10px;
+}
+#code-out{
+  width:100%;min-height:340px;background:var(--bg-0);border:1px solid var(--line);border-radius:5px;
+  color:var(--ink-0);font-family:var(--font-mono);font-size:11.5px;line-height:1.55;padding:12px;
+  white-space:pre;overflow:auto;resize:vertical;
+}
+.modal-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);justify-content:flex-end;}
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--bg-2);border:1px solid var(--brass-dim);color:var(--ink-0);
+  padding:9px 16px;border-radius:6px;font-size:12px;z-index:99;opacity:0;pointer-events:none;
+  transition:opacity .18s, transform .18s;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+/* ---- 0.9 workshop layer ---- */
+.btn[disabled]{opacity:.32;pointer-events:none;}
+.btn-row{display:flex;gap:5px;flex-wrap:wrap;}
+.mini-btn{flex:1 1 auto;min-width:48px;background:var(--bg-3);border:1px solid var(--line);color:var(--ink-1);
+  font:500 11px/1 'Inter',sans-serif;padding:7px 6px;border-radius:6px;cursor:pointer;letter-spacing:.02em;}
+.mini-btn:hover{color:var(--ink-0);border-color:var(--brass);}
+.mini-btn:active{background:var(--bg-2);}
+.batch-note{font:400 11px/1.55 'Inter',sans-serif;color:var(--ink-2);margin:8px 0 2px;}
+.minifield input.mixed{color:var(--ink-2);}
+.hex.mixed{color:var(--brass);}
+.switch.mixed{opacity:.5;}
+.node-row{user-select:none;}
+.node-row.drop-into{outline:1px dashed var(--brass);outline-offset:-1px;background:rgba(201,138,75,.10);}
+.help-overlay{position:fixed;inset:0;background:rgba(9,10,11,.74);display:none;align-items:center;justify-content:center;z-index:60;}
+.help-overlay.show{display:flex;}
+.help-card{background:var(--bg-1);border:1px solid var(--line);border-radius:12px;padding:22px 24px;max-width:520px;width:calc(100% - 48px);box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.help-card h3{font:600 12px/1 'Space Grotesk',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--brass);margin:0 0 16px;}
+.help-grid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin-bottom:18px;}
+.help-grid kbd{font:500 11px/1.4 'JetBrains Mono',monospace;color:var(--ink-0);background:var(--bg-3);border:1px solid var(--line);border-radius:5px;padding:3px 7px;white-space:nowrap;}
+.help-grid span{font:400 12px/1.6 'Inter',sans-serif;color:var(--ink-1);}
+
+/* ---- 0.10 layout + controls ---- */
+#tree::-webkit-scrollbar,#inspect-body::-webkit-scrollbar,.multi-list::-webkit-scrollbar,#code-out::-webkit-scrollbar,.tray::-webkit-scrollbar{width:0;height:0;display:none;}
+#tree,#inspect-body,.multi-list,#code-out,.tray{scrollbar-width:none;-ms-overflow-style:none;}
+.act-bar{display:flex;gap:5px;padding:8px 8px 0;}
+.act-bar .btn{flex:1 1 auto;justify-content:center;}
+.btn.sm{padding:5px 6px;font-size:10.5px;}
+.itabs{display:flex;gap:2px;margin:0 0 12px;border-bottom:1px solid var(--line);}
+.itab{padding:7px 12px;font-size:11.5px;color:var(--ink-2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;user-select:none;}
+.itab:hover{color:var(--ink-1);}
+.itab.active{color:var(--brass-hi);border-bottom-color:var(--brass);}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.seg-btn{flex:1;background:var(--bg-2);border:none;border-right:1px solid var(--line);color:var(--ink-1);
+  font:500 11px/1 'Inter',sans-serif;padding:8px 4px;cursor:pointer;}
+.seg-btn:last-child{border-right:none;}
+.seg-btn:hover{color:var(--ink-0);background:var(--bg-3);}
+.seg-btn.on{background:rgba(201,138,75,0.16);color:var(--brass-hi);}
+.recent-strip{display:flex;align-items:center;gap:5px;margin:-4px 0 10px;}
+.recent-label{font-family:var(--font-mono);font-size:9px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.08em;margin-right:2px;}
+.swatch.sm{width:14px;height:14px;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <div class="brand"><svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M3 7 L12 12 L21 7 M12 12 L12 22"/></svg>PROPSMITH<small>jxnesforge</small></div>
+    <div class="tray" id="add-tray"></div>
+    <div class="tbar-actions">
+      <button class="btn icon-only" id="btn-undo" title="Undo (Ctrl/Cmd+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2.5"/></svg></button>
+      <button class="btn icon-only" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2.5"/></svg></button>
+      <button class="btn" id="btn-snap" title="Grid snap (X)">Snap off</button>
+      <button class="btn icon-only" id="btn-help" title="Shortcuts (?)">?</button>
+      <div class="sep"></div>
+      <button class="btn" id="btn-save">Save session</button>
+      <button class="btn" id="btn-load">Load session</button>
+      <button class="btn" id="btn-import">Import JSON</button>
+      <input type="file" id="file-import" accept="application/json" style="display:none;">
+      <button class="btn primary" id="btn-export">Export code</button>
+    </div>
+  </div>
+
+  <div id="hier">
+    <div class="panel-head"><span>Hierarchy</span><span id="hier-count">0 objects</span></div>
+    <div class="act-bar">
+      <button class="btn icon-only" id="btn-group" title="Group selected (G)"></button>
+      <button class="btn icon-only" id="btn-ungroup" title="Ungroup"></button>
+      <button class="btn icon-only" id="btn-dup" title="Duplicate (Ctrl/Cmd+D)"></button>
+      <button class="btn icon-only danger" id="btn-del" title="Delete (Del)"></button>
+    </div>
+    <div class="act-bar">
+      <button class="btn sm" id="btn-drop" title="Sit the selection on the grid">Drop</button>
+      <button class="btn sm" id="btn-copymat" title="Copy the material off the selected mesh">Copy mat</button>
+      <button class="btn sm" id="btn-pastemat" title="Paste the copied material onto the selection">Paste mat</button>
+    </div>
+    <div id="tree"></div>
+  </div>
+
+  <div id="view">
+    <div id="canvas-holder"></div>
+    <div class="viewport-toolbar">
+      <div class="vt-btn active" id="vt-grid" title="Toggle grid"></div>
+      <div class="vt-btn" id="vt-wire" title="Toggle wireframe (all)"></div>
+      <div class="vt-btn" id="vt-focus" title="Focus selection (F)"></div>
+      <div class="vt-btn active" id="vt-translate" title="Move gizmo (1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M3 12h18M12 3l-2.5 2.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l2.5 2.5"/></svg></div>
+      <div class="vt-btn" id="vt-rotate" title="Rotate gizmo (2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/></svg></div>
+      <div class="vt-btn" id="vt-scale" title="Scale gizmo (3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 19h6v-6"/><rect x="13" y="4" width="7" height="7" rx="1"/><path d="M11 13L19 5"/></svg></div>
+      <div class="vt-btn" id="vt-bg" title="Background color"></div>
+      <input type="color" id="bg-color-input" style="position:absolute;opacity:0;width:1px;height:1px;">
+    </div>
+    <div class="specplate" id="specplate" style="display:none;">
+      <div class="sp-title" id="sp-title">—</div>
+      <div class="sp-row"><span>type</span><b id="sp-type">—</b></div>
+      <div class="sp-row"><span>tris</span><b id="sp-tris">—</b></div>
+      <div class="sp-row"><span>pos</span><b id="sp-pos">—</b></div>
+    </div>
+    <div class="viewport-hint">WASD: pan &middot; shift+WASD: orbit &middot; scroll: zoom &middot; 1/2/3: move rotate scale &middot; <b>?</b> shortcuts</div>
+  </div>
+
+  <div id="inspect">
+    <div class="panel-head"><span>Inspector</span></div>
+    <div id="inspect-body"></div>
+  </div>
+</div>
+
+<div id="modal-backdrop">
+  <div id="modal">
+    <div class="modal-head">
+      <h2>Export</h2>
+      <div class="modal-tabs">
+        <div class="mtab active" id="tab-code" data-tab="code">three.js</div>
+        <div class="mtab" id="tab-json" data-tab="json">json</div>
+      </div>
+      <button class="modal-close" id="modal-close-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6L18 18M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="export-name" value="MyProp" spellcheck="false">
+      <pre id="code-out"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-copy">Copy to clipboard</button>
+      <button class="btn primary" id="btn-download">Download file</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   ICONS — small line-art glyphs per primitive type, kept in one place so
+   they can be reused in the add-tray and the hierarchy rows.
+   ========================================================================= */
+const ICONS = {
+  group:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="3.5" width="17" height="17" rx="2" stroke-dasharray="2.5 2.5"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>`,
+  box:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3 L20 7.5 L20 16.5 L12 21 L4 16.5 L4 7.5 Z"/><path d="M4 7.5 L12 12 L20 7.5 M12 12 L12 21"/></svg>`,
+  sphere: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.2"/><path d="M12 3.5 V20.5"/></svg>`,
+  icosahedron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5 L21 8.5 L18 19.5 L6 19.5 L3 8.5 Z"/><path d="M12 2.5 L12 12 M3 8.5 L12 12 L21 8.5 M6 19.5 L12 12 L18 19.5"/></svg>`,
+  octahedron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5 L21 12 L12 21.5 L3 12 Z"/><path d="M3 12 L12 9 L21 12 M12 9 L12 21.5"/></svg>`,
+  dodecahedron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5 L19.5 8 L17 17 L7 17 L4.5 8 Z"/><path d="M12 2.5 L12 8 M19.5 8 L12 8 L4.5 8 M12 8 L7 17 M12 8 L17 17"/></svg>`,
+  tetrahedron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3 L21 19.5 L3 19.5 Z"/><path d="M12 3 L12 19.5 M12 3 L7.2 19.5 M12 3 L16.8 19.5"/></svg>`,
+  torus:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="9" ry="5.5"/><ellipse cx="12" cy="12" rx="3.4" ry="2"/></svg>`,
+  torusKnot: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8c0-3 3-4.5 6-3s3 5-1 6-6 3-3 6 7 1.5 8-1.5-1-6-4-6.5"/></svg>`,
+  cylinder: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6 V18 A8 3 0 0 0 20 18 V6"/></svg>`,
+  cone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="18" rx="8" ry="3"/><path d="M12 3 L4 18 M12 3 L20 18"/></svg>`,
+  plane: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8 L16 5 L20 15 L8 18 Z"/><path d="M4 8 L20 15 M16 5 L8 18"/></svg>`,
+};
+const TOOLBAR_ICONS = {
+  groupBtn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="8.5" y="13" width="7" height="7" rx="1"/></svg>`,
+  ungroupBtn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6 H21 M6 10 V21" stroke-dasharray="2 2"/></svg>`,
+  dupBtn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16 V5.5 A1.5 1.5 0 0 1 5.5 4 H16"/></svg>`,
+  delBtn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 7 H19 M9 7 V4.5 A1 1 0 0 1 10 3.5 H14 A1 1 0 0 1 15 4.5 V7 M7 7 L8 20.5 A1 1 0 0 0 9 21.5 H15 A1 1 0 0 0 16 20.5 L17 7"/></svg>`,
+  chev: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6 L15 12 L9 18"/></svg>`,
+  eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="2.6"/></svg>`,
+  eyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 5.3A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3M6.7 6.7C4 8.6 2 12 2 12s3.5 7 10 7a10.6 10.6 0 0 0 4.2-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>`,
+  grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /><rect x="3" y="3" width="18" height="18" rx="1"/></svg>`,
+  wire: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.5 L21 8.5 L18 19.5 L6 19.5 L3 8.5 Z M12 2.5 L12 12 M3 8.5 L12 12 L21 8.5 M6 19.5 L12 12 L18 19.5"/></svg>`,
+  focus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/><circle cx="12" cy="12" r="3"/></svg>`,
+  bg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18 13 13 0 0 1 0-18Z"/></svg>`,
+  upload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6L18 18M18 6L6 18"/></svg>`,
+};
+document.getElementById('btn-group').innerHTML = TOOLBAR_ICONS.groupBtn;
+document.getElementById('btn-ungroup').innerHTML = TOOLBAR_ICONS.ungroupBtn;
+document.getElementById('btn-dup').innerHTML = TOOLBAR_ICONS.dupBtn;
+document.getElementById('btn-del').innerHTML = TOOLBAR_ICONS.delBtn;
+document.getElementById('vt-grid').innerHTML = TOOLBAR_ICONS.grid;
+document.getElementById('vt-wire').innerHTML = TOOLBAR_ICONS.wire;
+document.getElementById('vt-focus').innerHTML = TOOLBAR_ICONS.focus;
+document.getElementById('vt-bg').innerHTML = TOOLBAR_ICONS.bg;
+document.getElementById('modal-close-btn').innerHTML = TOOLBAR_ICONS.close;
+
+/* =========================================================================
+   GEOMETRY DEFINITIONS — single source of truth for defaults, inspector
+   fields, three.js construction, and exported code.
+   ========================================================================= */
+const f = n => { // format number for generated code, trims trailing zeros
+  if (Math.abs(n - Math.round(n)) < 1e-6) return String(Math.round(n));
+  return (Math.round(n * 1000) / 1000).toString();
+};
+const degToRadCode = deg => f(deg * Math.PI / 180);
+
+const GEO_DEFS = {
+  box: {
+    label: 'Cube', icon: ICONS.box,
+    defaults: { width: 1, height: 1, depth: 1, wSeg: 1, hSeg: 1, dSeg: 1 },
+    fields: [
+      { key: 'width', label: 'Width', min: 0.05, max: 8, step: 0.05 },
+      { key: 'height', label: 'Height', min: 0.05, max: 8, step: 0.05 },
+      { key: 'depth', label: 'Depth', min: 0.05, max: 8, step: 0.05 },
+      { key: 'wSeg', label: 'Width segs', min: 1, max: 16, step: 1, int: true },
+      { key: 'hSeg', label: 'Height segs', min: 1, max: 16, step: 1, int: true },
+      { key: 'dSeg', label: 'Depth segs', min: 1, max: 16, step: 1, int: true },
+    ],
+    build: p => new THREE.BoxGeometry(p.width, p.height, p.depth, p.wSeg, p.hSeg, p.dSeg),
+    code: p => `new THREE.BoxGeometry(${f(p.width)}, ${f(p.height)}, ${f(p.depth)}, ${p.wSeg}, ${p.hSeg}, ${p.dSeg})`,
+  },
+  sphere: {
+    label: 'Sphere', icon: ICONS.sphere,
+    defaults: { radius: 0.75, wSeg: 8, hSeg: 6 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'wSeg', label: 'Width segs', min: 3, max: 48, step: 1, int: true },
+      { key: 'hSeg', label: 'Height segs', min: 2, max: 32, step: 1, int: true },
+    ],
+    build: p => new THREE.SphereGeometry(p.radius, p.wSeg, p.hSeg),
+    code: p => `new THREE.SphereGeometry(${f(p.radius)}, ${p.wSeg}, ${p.hSeg})`,
+  },
+  icosahedron: {
+    label: 'Icosahedron', icon: ICONS.icosahedron,
+    defaults: { radius: 0.75, detail: 0 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'detail', label: 'Detail', min: 0, max: 4, step: 1, int: true },
+    ],
+    build: p => new THREE.IcosahedronGeometry(p.radius, p.detail),
+    code: p => `new THREE.IcosahedronGeometry(${f(p.radius)}, ${p.detail})`,
+  },
+  octahedron: {
+    label: 'Octahedron', icon: ICONS.octahedron,
+    defaults: { radius: 0.75, detail: 0 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'detail', label: 'Detail', min: 0, max: 4, step: 1, int: true },
+    ],
+    build: p => new THREE.OctahedronGeometry(p.radius, p.detail),
+    code: p => `new THREE.OctahedronGeometry(${f(p.radius)}, ${p.detail})`,
+  },
+  dodecahedron: {
+    label: 'Dodecahedron', icon: ICONS.dodecahedron,
+    defaults: { radius: 0.75, detail: 0 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'detail', label: 'Detail', min: 0, max: 4, step: 1, int: true },
+    ],
+    build: p => new THREE.DodecahedronGeometry(p.radius, p.detail),
+    code: p => `new THREE.DodecahedronGeometry(${f(p.radius)}, ${p.detail})`,
+  },
+  tetrahedron: {
+    label: 'Tetrahedron', icon: ICONS.tetrahedron,
+    defaults: { radius: 0.75, detail: 0 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'detail', label: 'Detail', min: 0, max: 4, step: 1, int: true },
+    ],
+    build: p => new THREE.TetrahedronGeometry(p.radius, p.detail),
+    code: p => `new THREE.TetrahedronGeometry(${f(p.radius)}, ${p.detail})`,
+  },
+  torus: {
+    label: 'Torus', icon: ICONS.torus,
+    defaults: { radius: 0.6, tube: 0.25, radialSeg: 8, tubularSeg: 20, arc: 360 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 6, step: 0.05 },
+      { key: 'tube', label: 'Tube', min: 0.02, max: 2, step: 0.02 },
+      { key: 'radialSeg', label: 'Radial segs', min: 3, max: 32, step: 1, int: true },
+      { key: 'tubularSeg', label: 'Tubular segs', min: 3, max: 64, step: 1, int: true },
+      { key: 'arc', label: 'Arc', min: 10, max: 360, step: 5, unit: '°' },
+    ],
+    build: p => new THREE.TorusGeometry(p.radius, p.tube, p.radialSeg, p.tubularSeg, p.arc * Math.PI / 180),
+    code: p => `new THREE.TorusGeometry(${f(p.radius)}, ${f(p.tube)}, ${p.radialSeg}, ${p.tubularSeg}, ${degToRadCode(p.arc)})`,
+  },
+  torusKnot: {
+    label: 'Torus knot', icon: ICONS.torusKnot,
+    defaults: { radius: 0.5, tube: 0.18, tubularSeg: 64, radialSeg: 8, p: 2, q: 3 },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 5, step: 0.05 },
+      { key: 'tube', label: 'Tube', min: 0.02, max: 1.5, step: 0.02 },
+      { key: 'tubularSeg', label: 'Tubular segs', min: 8, max: 200, step: 1, int: true },
+      { key: 'radialSeg', label: 'Radial segs', min: 3, max: 32, step: 1, int: true },
+      { key: 'p', label: 'P (winds)', min: 1, max: 10, step: 1, int: true },
+      { key: 'q', label: 'Q (winds)', min: 1, max: 10, step: 1, int: true },
+    ],
+    build: p => new THREE.TorusKnotGeometry(p.radius, p.tube, p.tubularSeg, p.radialSeg, p.p, p.q),
+    code: p => `new THREE.TorusKnotGeometry(${f(p.radius)}, ${f(p.tube)}, ${p.tubularSeg}, ${p.radialSeg}, ${p.p}, ${p.q})`,
+  },
+  cylinder: {
+    label: 'Cylinder', icon: ICONS.cylinder,
+    defaults: { radiusTop: 0.5, radiusBottom: 0.5, height: 1.2, radialSeg: 8, heightSeg: 1, openEnded: false },
+    fields: [
+      { key: 'radiusTop', label: 'Radius top', min: 0, max: 5, step: 0.05 },
+      { key: 'radiusBottom', label: 'Radius bottom', min: 0, max: 5, step: 0.05 },
+      { key: 'height', label: 'Height', min: 0.05, max: 8, step: 0.05 },
+      { key: 'radialSeg', label: 'Radial segs', min: 3, max: 32, step: 1, int: true },
+      { key: 'heightSeg', label: 'Height segs', min: 1, max: 16, step: 1, int: true },
+      { key: 'openEnded', label: 'Open ended', bool: true },
+    ],
+    build: p => new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, p.radialSeg, p.heightSeg, p.openEnded),
+    code: p => `new THREE.CylinderGeometry(${f(p.radiusTop)}, ${f(p.radiusBottom)}, ${f(p.height)}, ${p.radialSeg}, ${p.heightSeg}, ${p.openEnded})`,
+  },
+  cone: {
+    label: 'Cone', icon: ICONS.cone,
+    defaults: { radius: 0.6, height: 1.3, radialSeg: 8, heightSeg: 1, openEnded: false },
+    fields: [
+      { key: 'radius', label: 'Radius', min: 0.05, max: 5, step: 0.05 },
+      { key: 'height', label: 'Height', min: 0.05, max: 8, step: 0.05 },
+      { key: 'radialSeg', label: 'Radial segs', min: 3, max: 32, step: 1, int: true },
+      { key: 'heightSeg', label: 'Height segs', min: 1, max: 16, step: 1, int: true },
+      { key: 'openEnded', label: 'Open ended', bool: true },
+    ],
+    build: p => new THREE.ConeGeometry(p.radius, p.height, p.radialSeg, p.heightSeg, p.openEnded),
+    code: p => `new THREE.ConeGeometry(${f(p.radius)}, ${f(p.height)}, ${p.radialSeg}, ${p.heightSeg}, ${p.openEnded})`,
+  },
+  plane: {
+    label: 'Plane', icon: ICONS.plane,
+    defaults: { width: 1.5, height: 1.5, wSeg: 1, hSeg: 1 },
+    fields: [
+      { key: 'width', label: 'Width', min: 0.05, max: 10, step: 0.05 },
+      { key: 'height', label: 'Height', min: 0.05, max: 10, step: 0.05 },
+      { key: 'wSeg', label: 'Width segs', min: 1, max: 32, step: 1, int: true },
+      { key: 'hSeg', label: 'Height segs', min: 1, max: 32, step: 1, int: true },
+    ],
+    build: p => new THREE.PlaneGeometry(p.width, p.height, p.wSeg, p.hSeg),
+    code: p => `new THREE.PlaneGeometry(${f(p.width)}, ${f(p.height)}, ${p.wSeg}, ${p.hSeg})`,
+  },
+};
+const PRIMITIVE_TYPES = Object.keys(GEO_DEFS);
+
+const PALETTE = [
+  ['#9a938c','Stone'], ['#6b6560','Stone dark'], ['#6b4a35','Bark'],
+  ['#d8cdb8','Birch bark'], ['#4f7a3d','Leaf'], ['#7fae57','Leaf light'],
+  ['#d8c48a','Sand'], ['#4c88a0','Water'],
+];
+
+/* =========================================================================
+   STATE — a flat list of nodes forms the scene graph via parentId.
+   ========================================================================= */
+let idCounter = 1;
+const newId = () => 'n' + (idCounter++);
+let nodes = [];              // {id,parentId,name,type,visible,transform,geometry,material,castShadow,receiveShadow}
+let selectedIds = [];        // array of node ids
+let clock = null;
+
+function defaultMaterial(colorHex) {
+  return {
+    color: colorHex || '#96897c',
+    roughness: 0.85,
+    metalness: 0.04,
+    flatShading: true,
+    wireframe: false,
+    transparent: false,
+    opacity: 1,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    side: 'front',
+    texture: { type: 'none', colorA: null, colorB: null, tiles: 8, repeatX: 1, repeatY: 1, dataUrl: null },
+  };
+}
+function defaultTransform() {
+  return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } };
+}
+function makeNode(type, parentId, opts) {
+  opts = opts || {};
+  const isGroup = type === 'group';
+  const node = {
+    id: newId(),
+    parentId: parentId || null,
+    name: opts.name || (isGroup ? 'Group' : GEO_DEFS[type].label),
+    type,
+    visible: true,
+    transform: opts.transform || defaultTransform(),
+    geometry: isGroup ? null : Object.assign({}, GEO_DEFS[type].defaults, opts.geometry || {}),
+    material: isGroup ? null : Object.assign({}, defaultMaterial(opts.color), opts.material || {}),
+    castShadow: true,
+    receiveShadow: true,
+  };
+  return node;
+}
+function getNode(id) { return nodes.find(n => n.id === id); }
+function getChildren(parentId) { return nodes.filter(n => n.parentId === parentId); }
+function getDescendants(id) {
+  const out = [];
+  const walk = pid => getChildren(pid).forEach(c => { out.push(c); walk(c.id); });
+  walk(id);
+  return out;
+}
+
+/* =========================================================================
+   THREE.JS SCENE SETUP
+   ========================================================================= */
+let renderer, scene, camera, controls, raycaster, mouse;
+let helpersGroup, sceneRoot, gridHelper, shadowPlane, hemiLight, dirLight;
+const threeObjects = new Map();     // node id -> THREE.Object3D
+const selectionHelpers = new Map(); // node id -> THREE.BoxHelper
+let showGrid = true, wireAll = false, bgColor = '#202325';
+
+function init3D() {
+  const holder = document.getElementById('canvas-holder');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(bgColor);
+  scene.fog = new THREE.Fog(bgColor, 18, 55);
+
+  camera = new THREE.PerspectiveCamera(45, 1, 0.05, 500);
+  camera.position.set(6, 5, 8);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  holder.appendChild(renderer.domElement);
+
+  sceneRoot = new THREE.Group();
+  sceneRoot.name = 'PropsmithRoot';
+  scene.add(sceneRoot);
+
+  helpersGroup = new THREE.Group();
+  scene.add(helpersGroup);
+
+  hemiLight = new THREE.HemisphereLight(0xdfe6ea, 0x2a2620, 0.85);
+  scene.add(hemiLight);
+  dirLight = new THREE.DirectionalLight(0xfff2df, 1.15);
+  dirLight.position.set(6, 9, 4);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  dirLight.shadow.camera.left = -12; dirLight.shadow.camera.right = 12;
+  dirLight.shadow.camera.top = 12; dirLight.shadow.camera.bottom = -12;
+  dirLight.shadow.camera.far = 40;
+  dirLight.shadow.bias = -0.0025;
+  scene.add(dirLight);
+  scene.add(dirLight.target);
+
+  gridHelper = new THREE.GridHelper(40, 40, 0x4a4d4f, 0x2a2d2f);
+  helpersGroup.add(gridHelper);
+
+  shadowPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.ShadowMaterial({ opacity: 0.32 })
+  );
+  shadowPlane.rotation.x = -Math.PI / 2;
+  shadowPlane.receiveShadow = true;
+  helpersGroup.add(shadowPlane);
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  controls = new SimpleOrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.2, 0);
+
+  new ResizeObserver(onResize).observe(holder);
+  onResize();
+
+  renderer.domElement.addEventListener('pointerdown', onViewportPointerDown);
+  clock = new THREE.Clock();
+  requestAnimationFrame(tick);
+}
+function onResize() {
+  const holder = document.getElementById('canvas-holder');
+  const w = holder.clientWidth, h = holder.clientHeight;
+  if (w === 0 || h === 0) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+function tick() {
+  controls.update();
+  selectionHelpers.forEach(bh => bh.update());
+  updateGizmo();
+  updateCameraKeys();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+/* ---- minimal self-contained orbit/pan/zoom controls (no external deps) --- */
+function SimpleOrbitControls(cam, dom) {
+  this.camera = cam; this.dom = dom;
+  this.target = new THREE.Vector3(0, 0, 0);
+  this.minDistance = 1.2; this.maxDistance = 80;
+  this.spherical = new THREE.Spherical();
+  const offset = new THREE.Vector3().copy(cam.position).sub(this.target);
+  this.spherical.setFromVector3(offset);
+
+  let rotating = false, panning = false, px = 0, py = 0;
+  dom.style.touchAction = 'none';
+  dom.addEventListener('contextmenu', e => e.preventDefault());
+  dom.addEventListener('pointerdown', e => {
+    if (e.button === 0 && gizmoTryGrab(e)) return;   // gizmo drag wins over orbit
+    if (e.button === 0) rotating = true;
+    else if (e.button === 2 || e.button === 1) panning = true;
+    px = e.clientX; py = e.clientY;
+    dom.setPointerCapture(e.pointerId);
+  });
+  window.addEventListener('pointerup', () => { rotating = false; panning = false; });
+  dom.addEventListener('pointermove', e => {
+    const dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
+    if (rotating) {
+      this.spherical.theta -= dx * 0.0055;
+      this.spherical.phi -= dy * 0.0055;
+      this.spherical.phi = Math.max(0.06, Math.min(Math.PI - 0.06, this.spherical.phi));
+    } else if (panning) {
+      const panX = -dx * 0.0022 * this.spherical.radius;
+      const panY = dy * 0.0022 * this.spherical.radius;
+      const te = this.camera.matrix.elements;
+      const xAxis = new THREE.Vector3(te[0], te[1], te[2]);
+      const yAxis = new THREE.Vector3(te[4], te[5], te[6]);
+      this.target.addScaledVector(xAxis, panX).addScaledVector(yAxis, panY);
+    }
+  });
+  dom.addEventListener('wheel', e => {
+    e.preventDefault();
+    const scale = Math.pow(0.95, e.deltaY * 0.012);
+    this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius / scale));
+  }, { passive: false });
+
+  this.update = () => {
+    const off = new THREE.Vector3().setFromSpherical(this.spherical);
+    this.camera.position.copy(this.target).add(off);
+    this.camera.lookAt(this.target);
+  };
+  this.dragged = () => rotating || panning;
+}
+
+/* =========================================================================
+   TEXTURES
+   ========================================================================= */
+function shadeColor(hex, amt) {
+  const c = new THREE.Color(hex);
+  const h = {}; c.getHSL(h);
+  c.setHSL(h.h, h.s, Math.max(0, Math.min(1, h.l + amt)));
+  return '#' + c.getHexString();
+}
+function makeCheckerTexture(colorA, colorB, tiles) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cell = size / tiles;
+  for (let y = 0; y < tiles; y++) for (let x = 0; x < tiles; x++) {
+    ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB;
+    ctx.fillRect(x * cell, y * cell, cell + 1, cell + 1);
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+function makeStripeTexture(colorA, colorB, tiles) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cell = size / tiles;
+  ctx.fillStyle = colorA; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = colorB;
+  for (let x = 0; x < tiles; x += 2) ctx.fillRect(x * cell, 0, cell, size);
+  return new THREE.CanvasTexture(canvas);
+}
+function makeSpeckleTexture(colorA, colorB, density) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = colorA; ctx.fillRect(0, 0, size, size);
+  const n = Math.round(60 + density * 40);
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * size, y = Math.random() * size, r = 1 + Math.random() * 3.2;
+    ctx.globalAlpha = 0.35 + Math.random() * 0.55;
+    ctx.fillStyle = colorB;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return new THREE.CanvasTexture(canvas);
+}
+function buildTexture(node) {
+  const t = node.material.texture;
+  if (!t || t.type === 'none') return null;
+  let tex = null;
+  const colorA = t.colorA || node.material.color;
+  const colorB = t.colorB || shadeColor(node.material.color, -0.22);
+  if (t.type === 'checker') tex = makeCheckerTexture(colorA, colorB, t.tiles);
+  else if (t.type === 'stripes') tex = makeStripeTexture(colorA, colorB, t.tiles);
+  else if (t.type === 'speckle') tex = makeSpeckleTexture(colorA, colorB, t.tiles);
+  else if (t.type === 'image' && t.dataUrl) {
+    tex = new THREE.TextureLoader().load(t.dataUrl, tx => { tx.needsUpdate = true; });
+  }
+  if (tex) {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(t.repeatX, t.repeatY);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.needsUpdate = true;
+  }
+  return tex;
+}
+
+/* =========================================================================
+   SYNC ENGINE — reconciles `nodes` (data) with live THREE.Object3D graph.
+   ========================================================================= */
+let syncScheduled = false;
+function requestSync() {
+  if (syncScheduled) return;
+  syncScheduled = true;
+  requestAnimationFrame(() => { syncScheduled = false; syncScene(); });
+}
+function applyTransform(obj3d, node) {
+  const t = node.transform;
+  obj3d.position.set(t.position.x, t.position.y, t.position.z);
+  obj3d.rotation.set(
+    THREE.MathUtils.degToRad(t.rotation.x),
+    THREE.MathUtils.degToRad(t.rotation.y),
+    THREE.MathUtils.degToRad(t.rotation.z)
+  );
+  obj3d.scale.set(t.scale.x, t.scale.y, t.scale.z);
+}
+function buildMaterialFor(node) {
+  const m = node.material;
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(m.color),
+    roughness: m.roughness,
+    metalness: m.metalness,
+    flatShading: m.flatShading,
+    wireframe: m.wireframe || wireAll,
+    transparent: m.transparent,
+    opacity: m.opacity,
+    emissive: new THREE.Color(m.emissive),
+    emissiveIntensity: m.emissiveIntensity,
+    side: m.side === 'double' ? THREE.DoubleSide : (m.side === 'back' ? THREE.BackSide : THREE.FrontSide),
+  });
+  mat.map = buildTexture(node);
+  mat._texSig = JSON.stringify(m.texture) + m.color;
+  return mat;
+}
+function updateMaterialInPlace(mat, node) {
+  const m = node.material;
+  mat.color.set(m.color);
+  mat.roughness = m.roughness;
+  mat.metalness = m.metalness;
+  mat.flatShading = m.flatShading;
+  mat.wireframe = m.wireframe || wireAll;
+  mat.transparent = m.transparent;
+  mat.opacity = m.opacity;
+  mat.emissive.set(m.emissive);
+  mat.emissiveIntensity = m.emissiveIntensity;
+  mat.side = m.side === 'double' ? THREE.DoubleSide : (m.side === 'back' ? THREE.BackSide : THREE.FrontSide);
+  const sig = JSON.stringify(m.texture) + m.color;
+  if (sig !== mat._texSig) {
+    if (mat.map) mat.map.dispose();
+    mat.map = buildTexture(node);
+    mat._texSig = sig;
+  }
+  mat.needsUpdate = true;
+}
+function syncScene() {
+  const seen = new Set();
+  // Pass 1: make sure every node has an up-to-date THREE.Object3D. Done as
+  // its own pass (rather than reparenting inline) so that a node's parent
+  // object is guaranteed to already exist below, regardless of which order
+  // parent/child happen to sit in the `nodes` array (e.g. a brand new group
+  // created by "Group Selected" is pushed after its children).
+  nodes.forEach(node => {
+    seen.add(node.id);
+    let obj = threeObjects.get(node.id);
+    if (!obj) {
+      if (node.type === 'group') {
+        obj = new THREE.Group();
+      } else {
+        const geo = GEO_DEFS[node.type].build(node.geometry);
+        const mat = buildMaterialFor(node);
+        obj = new THREE.Mesh(geo, mat);
+      }
+      obj.userData.nodeId = node.id;
+      threeObjects.set(node.id, obj);
+      if (node.type !== 'group') obj.userData._geoSig = JSON.stringify(node.geometry);
+    } else if (node.type !== 'group') {
+      // rebuild geometry only if params changed
+      const sig = JSON.stringify(node.geometry);
+      if (obj.userData._geoSig !== sig) {
+        obj.geometry.dispose();
+        obj.geometry = GEO_DEFS[node.type].build(node.geometry);
+        obj.userData._geoSig = sig;
+      }
+      updateMaterialInPlace(obj.material, node);
+    }
+    obj.name = node.name;
+    obj.visible = node.visible;
+    obj.castShadow = node.castShadow;
+    obj.receiveShadow = node.receiveShadow;
+    applyTransform(obj, node);
+  });
+  // Pass 2: reparent. All objects exist by now, so every desiredParent
+  // lookup (including freshly-created groups) resolves correctly.
+  nodes.forEach(node => {
+    const obj = threeObjects.get(node.id);
+    const desiredParent = node.parentId ? threeObjects.get(node.parentId) : sceneRoot;
+    if (desiredParent && obj.parent !== desiredParent) desiredParent.add(obj);
+  });
+  // remove stale
+  Array.from(threeObjects.keys()).forEach(id => {
+    if (!seen.has(id)) {
+      const obj = threeObjects.get(id);
+      obj.parent && obj.parent.remove(obj);
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) { if (obj.material.map) obj.material.map.dispose(); obj.material.dispose(); }
+      threeObjects.delete(id);
+    }
+  });
+  refreshSelectionHighlight();
+  updateSpecPlate();
+}
+
+/* =========================================================================
+   SELECTION
+   ========================================================================= */
+function refreshSelectionHighlight() {
+  selectionHelpers.forEach(bh => { helpersGroup.remove(bh); bh.dispose && bh.dispose(); });
+  selectionHelpers.clear();
+  selectedIds.forEach(id => {
+    const obj = threeObjects.get(id);
+    if (!obj) return;
+    const bh = new THREE.BoxHelper(obj, 0xe2a35f);
+    helpersGroup.add(bh);
+    selectionHelpers.set(id, bh);
+  });
+}
+function setSelection(ids) {
+  selectedIds = ids.filter(id => getNode(id));
+  refreshSelectionHighlight();
+  renderTree();
+  renderInspector();
+}
+function toggleSelection(id) {
+  if (selectedIds.includes(id)) setSelection(selectedIds.filter(x => x !== id));
+  else setSelection(selectedIds.concat([id]));
+}
+function onViewportPointerDown(e) {
+  if (e.button !== 0) return;
+  const startX = e.clientX, startY = e.clientY;
+  const dom = renderer.domElement;
+  function up(ev) {
+    dom.removeEventListener('pointerup', up);
+    if (gizmoWasDragging) { gizmoWasDragging = false; return; }
+    const moved = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+    if (moved > 4) return; // was an orbit drag, not a click
+    const rect = dom.getBoundingClientRect();
+    mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = [];
+    sceneRoot.traverse(o => { if (o.isMesh) meshes.push(o); });
+    const hits = raycaster.intersectObjects(meshes, false);
+    if (hits.length) {
+      let obj = hits[0].object;
+      const id = obj.userData.nodeId;
+      if (ev.ctrlKey || ev.metaKey) toggleSelection(id);
+      else setSelection([id]);
+    } else if (!(ev.ctrlKey || ev.metaKey)) {
+      setSelection([]);
+    }
+  }
+  dom.addEventListener('pointerup', up);
+}
+function focusOnSelection() {
+  const ids = selectedIds.length ? selectedIds : nodes.filter(n => !n.parentId).map(n => n.id);
+  if (!ids.length) return;
+  const box = new THREE.Box3();
+  let any = false;
+  ids.forEach(id => {
+    const obj = threeObjects.get(id);
+    if (obj) { box.expandByObject(obj); any = true; }
+  });
+  if (!any) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()).length();
+  controls.target.copy(center);
+  controls.spherical.radius = Math.max(2.5, size * 1.4);
+}
+
+/* =========================================================================
+   SPEC PLATE (viewport HUD)
+   ========================================================================= */
+function countTris(obj) {
+  let tris = 0;
+  obj.traverse(o => {
+    if (o.isMesh) {
+      const g = o.geometry;
+      tris += g.index ? g.index.count / 3 : g.attributes.position.count / 3;
+    }
+  });
+  return Math.round(tris);
+}
+
+/* =========================================================================
+   CRUD — add / delete / duplicate / group / ungroup
+   ========================================================================= */
+function addPrimitive(type) {
+  mark(null);
+  const parentId = (selectedIds.length === 1 && getNode(selectedIds[0]).type === 'group') ? selectedIds[0] : null;
+  const color = PALETTE[Math.floor(Math.random() * PALETTE.length)][0];
+  const node = makeNode(type, parentId, { color });
+  // place new object near origin, offset slightly if siblings already exist
+  const siblingCount = getChildren(parentId).length;
+  node.transform.position = { x: (siblingCount % 4) * 1.4 - 2, y: node.type === 'group' ? 0 : (GEO_DEFS[type].defaults.height ? GEO_DEFS[type].defaults.height / 2 : 0.6), z: Math.floor(siblingCount / 4) * 1.4 };
+  nodes.push(node);
+  requestSync();
+  renderTree();
+  setSelection([node.id]);
+  toast('Added ' + node.name);
+}
+function addGroup() {
+  mark(null);
+  const node = makeNode('group', null, {});
+  nodes.push(node);
+  requestSync(); renderTree(); setSelection([node.id]);
+}
+function deleteSelection() {
+  if (!selectedIds.length) return;
+  mark(null);
+  const toRemove = new Set();
+  selectedIds.forEach(id => { toRemove.add(id); getDescendants(id).forEach(d => toRemove.add(d.id)); });
+  nodes = nodes.filter(n => !toRemove.has(n.id));
+  setSelection([]);
+  requestSync(); renderTree();
+}
+function cloneSubtree(id, newParentId) {
+  const src = getNode(id);
+  const clone = JSON.parse(JSON.stringify(src));
+  clone.id = newId();
+  clone.parentId = newParentId;
+  clone.name = src.name + ' copy';
+  if (newParentId === src.parentId) {
+    clone.transform.position.x += 0.4;
+    clone.transform.position.z += 0.4;
+  }
+  nodes.push(clone);
+  getChildren(id).forEach(c => cloneSubtree(c.id, clone.id));
+  return clone.id;
+}
+function duplicateSelection() {
+  if (!selectedIds.length) return;
+  mark(null);
+  const newIds = selectedIds.map(id => cloneSubtree(id, getNode(id).parentId));
+  requestSync(); renderTree(); setSelection(newIds);
+  toast('Duplicated');
+}
+function groupSelection() {
+  if (selectedIds.length < 1) return;
+  mark(null);
+  requestSync(); // ensure world matrices are current before we read them
+  const parentId = getNode(selectedIds[0]).parentId;
+  const parentObj = parentId ? threeObjects.get(parentId) : sceneRoot;
+  parentObj.updateMatrixWorld(true);
+
+  const centroid = new THREE.Vector3();
+  let count = 0;
+  selectedIds.forEach(id => {
+    const obj = threeObjects.get(id);
+    if (obj) { const wp = new THREE.Vector3(); obj.getWorldPosition(wp); centroid.add(wp); count++; }
+  });
+  if (count) centroid.divideScalar(count);
+
+  const groupNode = makeNode('group', parentId, { name: 'Group' });
+  groupNode.transform.position = { x: centroid.x, y: centroid.y, z: centroid.z };
+  nodes.push(groupNode);
+
+  const parentWorldMatrix = parentObj.matrixWorld.clone();
+  const trueGroupWorld = new THREE.Matrix4().multiplyMatrices(parentWorldMatrix, new THREE.Matrix4().compose(centroid, new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
+  const groupWorldInverse = new THREE.Matrix4().copy(trueGroupWorld).invert();
+
+  selectedIds.forEach(id => {
+    const node = getNode(id);
+    const obj = threeObjects.get(id);
+    if (!obj) return;
+    const childWorld = obj.matrixWorld.clone();
+    const localMatrix = new THREE.Matrix4().multiplyMatrices(groupWorldInverse, childWorld);
+    const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+    localMatrix.decompose(pos, quat, scl);
+    const euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
+    node.transform.position = { x: pos.x, y: pos.y, z: pos.z };
+    node.transform.rotation = {
+      x: THREE.MathUtils.radToDeg(euler.x), y: THREE.MathUtils.radToDeg(euler.y), z: THREE.MathUtils.radToDeg(euler.z)
+    };
+    node.transform.scale = { x: scl.x, y: scl.y, z: scl.z };
+    node.parentId = groupNode.id;
+  });
+
+  requestSync(); renderTree(); setSelection([groupNode.id]);
+  toast('Grouped ' + selectedIds.length + ' object(s)');
+}
+function ungroupSelection() {
+  if (selectedIds.length !== 1) return;
+  const groupNode = getNode(selectedIds[0]);
+  if (!groupNode || groupNode.type !== 'group') return;
+  mark(null);
+  requestSync();
+  const groupObj = threeObjects.get(groupNode.id);
+  groupObj.updateMatrixWorld(true);
+  const newParentId = groupNode.parentId;
+  const newParentObj = newParentId ? threeObjects.get(newParentId) : sceneRoot;
+  newParentObj.updateMatrixWorld(true);
+  const newParentInverse = new THREE.Matrix4().copy(newParentObj.matrixWorld).invert();
+
+  const children = getChildren(groupNode.id);
+  const childIds = children.map(c => c.id);
+  children.forEach(node => {
+    const obj = threeObjects.get(node.id);
+    if (!obj) return;
+    const childWorld = obj.matrixWorld.clone();
+    const localMatrix = new THREE.Matrix4().multiplyMatrices(newParentInverse, childWorld);
+    const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+    localMatrix.decompose(pos, quat, scl);
+    const euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
+    node.transform.position = { x: pos.x, y: pos.y, z: pos.z };
+    node.transform.rotation = { x: THREE.MathUtils.radToDeg(euler.x), y: THREE.MathUtils.radToDeg(euler.y), z: THREE.MathUtils.radToDeg(euler.z) };
+    node.transform.scale = { x: scl.x, y: scl.y, z: scl.z };
+    node.parentId = newParentId;
+  });
+  nodes = nodes.filter(n => n.id !== groupNode.id);
+  requestSync(); renderTree(); setSelection(childIds);
+  toast('Ungrouped');
+}
+
+/* =========================================================================
+   HIERARCHY PANEL
+   ========================================================================= */
+const collapsed = new Set();
+function renderTree() {
+  const treeEl = document.getElementById('tree');
+  treeEl.innerHTML = '';
+  const roots = nodes.filter(n => !n.parentId);
+  document.getElementById('hier-count').textContent = nodes.length + ' object' + (nodes.length === 1 ? '' : 's');
+  if (!roots.length) {
+    treeEl.innerHTML = '<div class="tree-empty">No objects yet.<br>Use the shape tray above to add your first primitive.</div>';
+    return;
+  }
+  function renderLevel(list, depth) {
+    list.forEach(node => {
+      const row = document.createElement('div');
+      row.className = 'node-row' + (selectedIds.includes(node.id) ? ' selected' : '') + (!node.visible ? ' hidden' : '');
+      row.style.paddingLeft = (6 + depth * 14) + 'px';
+      const children = getChildren(node.id);
+      const chev = document.createElement('span');
+      chev.className = 'chev' + (children.length ? '' : ' leaf');
+      chev.innerHTML = TOOLBAR_ICONS.chev;
+      chev.style.transform = collapsed.has(node.id) ? 'rotate(0deg)' : 'rotate(90deg)';
+      chev.style.transition = 'transform .1s';
+      chev.onclick = (e) => { e.stopPropagation(); if (collapsed.has(node.id)) collapsed.delete(node.id); else collapsed.add(node.id); renderTree(); };
+      row.appendChild(chev);
+
+      const gicon = document.createElement('span');
+      gicon.className = 'gicon';
+      gicon.innerHTML = node.type === 'group' ? ICONS.group : GEO_DEFS[node.type].icon;
+      row.appendChild(gicon);
+
+      const label = document.createElement('span');
+      label.className = 'nlabel';
+      label.textContent = node.name;
+      label.ondblclick = (e) => {
+        e.stopPropagation();
+        label.classList.add('editing');
+        label.innerHTML = '';
+        const input = document.createElement('input');
+        input.value = node.name;
+        label.appendChild(input);
+        input.focus(); input.select();
+        const commit = () => { mark('rename:' + node.id); node.name = input.value.trim() || node.name; requestSync(); renderTree(); renderInspector(); };
+        input.onblur = commit;
+        input.onkeydown = (ev) => { if (ev.key === 'Enter') input.blur(); if (ev.key === 'Escape') { renderTree(); } };
+      };
+      row.appendChild(label);
+
+      const eye = document.createElement('span');
+      eye.className = 'eye';
+      eye.innerHTML = node.visible ? TOOLBAR_ICONS.eye : TOOLBAR_ICONS.eyeOff;
+      eye.onclick = (e) => { e.stopPropagation(); mark(null); node.visible = !node.visible; requestSync(); renderTree(); };
+      row.appendChild(eye);
+
+      row.onclick = (e) => {
+        if (e.ctrlKey || e.metaKey) toggleSelection(node.id);
+        else setSelection([node.id]);
+      };
+      attachRowDnD(row, node);
+      treeEl.appendChild(row);
+      if (children.length && !collapsed.has(node.id)) renderLevel(children, depth + 1);
+    });
+  }
+  renderLevel(roots, 0);
+}
+
+/* =========================================================================
+   INSPECTOR PANEL
+   ========================================================================= */
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+
+function fieldSlider(container, opts) {
+  // opts: {label, unit, value, min, max, step, int, onInput}
+  const wrap = el('div', 'field');
+  const lab = el('div', 'field-label');
+  lab.innerHTML = `<span class="fname">${opts.label}</span><span class="fval"></span>`;
+  const valSpan = lab.querySelector('.fval');
+  let mixedFlag = !!opts.mixed;
+  const setValText = v => valSpan.textContent = mixedFlag ? 'mixed' : (opts.int ? Math.round(v) : v.toFixed(2)) + (opts.unit || '');
+  setValText(opts.value);
+  const input = document.createElement('input');
+  input.type = 'range'; input.min = opts.min; input.max = opts.max; input.step = opts.step; input.value = opts.value;
+  input.addEventListener('input', () => {
+    const v = opts.int ? parseInt(input.value, 10) : parseFloat(input.value);
+    if (!opts.noHistory) mark('sl:' + opts.label);
+    mixedFlag = false;
+    setValText(v);
+    opts.onInput(v);
+  });
+  wrap.appendChild(lab); wrap.appendChild(input);
+  container.appendChild(wrap);
+}
+function fieldToggle(container, opts) {
+  // opts: {label, value, onChange}
+  const row = el('div', 'toggle-row');
+  const name = el('span', 'fname', opts.label);
+  const sw = el('div', 'switch' + (opts.value ? ' on' : '') + (opts.mixed ? ' mixed' : ''));
+  sw.appendChild(el('div', 'knob'));
+  sw.onclick = () => {
+    const v = !sw.classList.contains('on');
+    if (!opts.noHistory) mark(null);
+    sw.classList.remove('mixed');
+    sw.classList.toggle('on', v);
+    opts.onChange(v);
+  };
+  row.appendChild(name); row.appendChild(sw);
+  container.appendChild(row);
+}
+function fieldSelect(container, opts) {
+  // opts: {label, value, options:[{value,label}], onChange}
+  if (opts.label) container.appendChild(el('div', 'field-label', `<span class="fname">${opts.label}</span>`));
+  const sel = document.createElement('select');
+  opts.options.forEach(o => { const op = document.createElement('option'); op.value = o.value; op.textContent = o.label; if (o.value === opts.value) op.selected = true; sel.appendChild(op); });
+  sel.onchange = () => { if (!opts.noHistory) mark(null); opts.onChange(sel.value); };
+  container.appendChild(sel);
+  return sel;
+}
+function fieldMiniNumbers(container, label, triple, onChange) {
+  const wrap = el('div', 'field');
+  wrap.appendChild(el('div', 'field-label', `<span class="fname">${label}</span>`));
+  const row = el('div', 'row3');
+  ['x', 'y', 'z'].forEach((axis, i) => {
+    const mf = el('div', 'minifield');
+    mf.appendChild(el('label', null, axis.toUpperCase()));
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.step = triple.step || 0.1; inp.value = round3(triple[axis]);
+    inp.oninput = () => { mark('mn:' + label + axis); onChange(axis, parseFloat(inp.value) || 0); };
+    mf.appendChild(inp);
+    row.appendChild(mf);
+  });
+  wrap.appendChild(row);
+  container.appendChild(wrap);
+}
+function round3(n) { return Math.round(n * 1000) / 1000; }
+
+
+/* =========================================================================
+   CODE EXPORT
+   ========================================================================= */
+function usedTextureHelpers(rootIds) {
+  const helpers = new Set();
+  const allIds = rootIds.concat(rootIds.flatMap(id => getDescendants(id).map(n => n.id)));
+  allIds.forEach(id => {
+    const n = getNode(id);
+    if (n && n.material && n.material.texture && n.material.texture.type !== 'none' && n.material.texture.type !== 'image') {
+      helpers.add(n.material.texture.type);
+    }
+  });
+  return helpers;
+}
+const TEXTURE_HELPER_SRC = {
+  checker: `function makeCheckerTexture(colorA, colorB, tiles) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cell = size / tiles;
+  for (let y = 0; y < tiles; y++) for (let x = 0; x < tiles; x++) {
+    ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB;
+    ctx.fillRect(x * cell, y * cell, cell + 1, cell + 1);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}`,
+  stripes: `function makeStripeTexture(colorA, colorB, tiles) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cell = size / tiles;
+  ctx.fillStyle = colorA; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = colorB;
+  for (let x = 0; x < tiles; x += 2) ctx.fillRect(x * cell, 0, cell, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}`,
+  speckle: `function makeSpeckleTexture(colorA, colorB, density) {
+  const size = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = colorA; ctx.fillRect(0, 0, size, size);
+  const n = Math.round(60 + density * 40);
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * size, y = Math.random() * size, r = 1 + Math.random() * 3.2;
+    ctx.globalAlpha = 0.35 + Math.random() * 0.55;
+    ctx.fillStyle = colorB;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}`,
+};
+function toVarName(name, used) {
+  let base = (name || 'obj').replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(' ')
+    .map((w, i) => w ? (i === 0 ? w.charAt(0).toLowerCase() + w.slice(1) : w.charAt(0).toUpperCase() + w.slice(1)) : '').join('');
+  if (!base) base = 'obj';
+  if (!/^[a-zA-Z_]/.test(base)) base = 'o' + base;
+  let out = base, n = 2;
+  while (used.has(out)) { out = base + n; n++; }
+  used.add(out);
+  return out;
+}
+function emitTransformLines(node, varName, ind, lines) {
+  const t = node.transform, D = 1e-4;
+  if (Math.abs(t.position.x) > D || Math.abs(t.position.y) > D || Math.abs(t.position.z) > D)
+    lines.push(`${ind}${varName}.position.set(${f(t.position.x)}, ${f(t.position.y)}, ${f(t.position.z)});`);
+  if (Math.abs(t.rotation.x) > D || Math.abs(t.rotation.y) > D || Math.abs(t.rotation.z) > D)
+    lines.push(`${ind}${varName}.rotation.set(${degToRadCode(t.rotation.x)}, ${degToRadCode(t.rotation.y)}, ${degToRadCode(t.rotation.z)});`);
+  if (Math.abs(t.scale.x - 1) > D || Math.abs(t.scale.y - 1) > D || Math.abs(t.scale.z - 1) > D)
+    lines.push(`${ind}${varName}.scale.set(${f(t.scale.x)}, ${f(t.scale.y)}, ${f(t.scale.z)});`);
+}
+function materialObjectLiteral(node, ind) {
+  const m = node.material;
+  const parts = [
+    `color: ${'0x' + m.color.replace('#', '').toUpperCase()}`,
+    `roughness: ${f(m.roughness)}`,
+    `metalness: ${f(m.metalness)}`,
+    `flatShading: ${m.flatShading}`,
+  ];
+  if (m.wireframe) parts.push(`wireframe: true`);
+  if (m.transparent) { parts.push(`transparent: true`); parts.push(`opacity: ${f(m.opacity)}`); }
+  if (m.emissiveIntensity > 0) { parts.push(`emissive: ${'0x' + m.emissive.replace('#', '').toUpperCase()}`); parts.push(`emissiveIntensity: ${f(m.emissiveIntensity)}`); }
+  if (m.side !== 'front') parts.push(`side: THREE.${m.side === 'double' ? 'DoubleSide' : 'BackSide'}`);
+  return `{\n${ind}  ${parts.join(`,\n${ind}  `)}\n${ind}}`;
+}
+function genNodeCode(node, parentVar, used, lines, depth) {
+  const ind = '  '.repeat(depth);
+  const varName = toVarName(node.name, used);
+  if (node.type === 'group') {
+    lines.push(`${ind}const ${varName} = new THREE.Group();`);
+    lines.push(`${ind}${varName}.name = ${JSON.stringify(node.name)};`);
+    emitTransformLines(node, varName, ind, lines);
+    lines.push(`${ind}${parentVar}.add(${varName});`);
+    lines.push('');
+    getChildren(node.id).forEach(child => genNodeCode(child, varName, used, lines, depth));
+  } else {
+    const gdef = GEO_DEFS[node.type];
+    lines.push(`${ind}const ${varName}Geo = ${gdef.code(node.geometry)};`);
+    lines.push(`${ind}const ${varName}Mat = new THREE.MeshStandardMaterial(${materialObjectLiteral(node, ind)});`);
+    const tex = node.material.texture;
+    if (tex.type === 'checker' || tex.type === 'stripes' || tex.type === 'speckle') {
+      const fn = tex.type === 'checker' ? 'makeCheckerTexture' : tex.type === 'stripes' ? 'makeStripeTexture' : 'makeSpeckleTexture';
+      const colorA = tex.colorA || node.material.color;
+      const colorB = tex.colorB || shadeColor(node.material.color, -0.22);
+      lines.push(`${ind}${varName}Mat.map = ${fn}(${JSON.stringify(colorA)}, ${JSON.stringify(colorB)}, ${tex.tiles});`);
+      lines.push(`${ind}${varName}Mat.map.repeat.set(${f(tex.repeatX)}, ${f(tex.repeatY)});`);
+      lines.push(`${ind}${varName}Mat.map.wrapS = ${varName}Mat.map.wrapT = THREE.RepeatWrapping;`);
+    } else if (tex.type === 'image' && tex.dataUrl) {
+      lines.push(`${ind}// NOTE: replace this data URL with a real asset path in production`);
+      lines.push(`${ind}${varName}Mat.map = new THREE.TextureLoader().load(${JSON.stringify(tex.dataUrl)});`);
+      lines.push(`${ind}${varName}Mat.map.repeat.set(${f(tex.repeatX)}, ${f(tex.repeatY)});`);
+      lines.push(`${ind}${varName}Mat.map.wrapS = ${varName}Mat.map.wrapT = THREE.RepeatWrapping;`);
+      lines.push(`${ind}${varName}Mat.map.encoding = THREE.sRGBEncoding;`);
+    }
+    lines.push(`${ind}const ${varName} = new THREE.Mesh(${varName}Geo, ${varName}Mat);`);
+    lines.push(`${ind}${varName}.name = ${JSON.stringify(node.name)};`);
+    emitTransformLines(node, varName, ind, lines);
+    lines.push(`${ind}${varName}.castShadow = ${node.castShadow};`);
+    lines.push(`${ind}${varName}.receiveShadow = ${node.receiveShadow};`);
+    lines.push(`${ind}${parentVar}.add(${varName});`);
+    lines.push('');
+  }
+}
+function generateThreeCode(exportName) {
+  const roots = nodes.filter(n => !n.parentId);
+  const used = new Set(['g', 'g0']);
+  const helperTypes = usedTextureHelpers(roots.map(r => r.id));
+  const lines = [];
+  lines.push(`// Generated by Propsmith — assumes THREE is already imported in this file`);
+  if (helperTypes.size) {
+    lines.push('');
+    helperTypes.forEach(t => { lines.push(TEXTURE_HELPER_SRC[t]); lines.push(''); });
+  }
+  lines.push(`export function create${exportName}() {`);
+  lines.push(`  const g = new THREE.Group();`);
+  lines.push(`  g.name = ${JSON.stringify(exportName)};`);
+  lines.push('');
+  if (!roots.length) {
+    lines.push(`  // (empty scene — add some objects in Propsmith first)`);
+  } else {
+    roots.forEach(r => genNodeCode(r, 'g', used, lines, 1));
+  }
+  lines.push(`  return g;`);
+  lines.push(`}`);
+  return lines.join('\n');
+}
+function serializeProject() {
+  return JSON.stringify({ format: 'propsmith-v1', idCounter, nodes }, null, 2);
+}
+function loadProjectFromJSON(json) {
+  try {
+    const data = JSON.parse(json);
+    if (!data || !Array.isArray(data.nodes)) throw new Error('bad format');
+    nodes = data.nodes;
+    idCounter = data.idCounter || (Math.max(0, ...nodes.map(n => parseInt((n.id || 'n0').slice(1), 10) || 0)) + 1);
+    selectedIds = [];
+    threeObjects.forEach(obj => { obj.parent && obj.parent.remove(obj); });
+    threeObjects.clear();
+    requestSync(); renderTree(); renderInspector();
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
+/* =========================================================================
+   UI WIRING
+   ========================================================================= */
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function buildAddTray() {
+  const tray = document.getElementById('add-tray');
+  PRIMITIVE_TYPES.forEach(type => {
+    const b = el('div', 'tray-btn', GEO_DEFS[type].icon);
+    b.title = 'Add ' + GEO_DEFS[type].label;
+    b.onclick = () => addPrimitive(type);
+    tray.appendChild(b);
+  });
+  const sep = document.createElement('div'); sep.className = 'sep'; tray.appendChild(sep);
+  const gb = el('div', 'tray-btn', ICONS.group);
+  gb.title = 'Add empty group';
+  gb.onclick = addGroup;
+  tray.appendChild(gb);
+}
+
+function wireToolbar() {
+  document.getElementById('btn-group').onclick = groupSelection;
+  document.getElementById('btn-ungroup').onclick = ungroupSelection;
+  document.getElementById('btn-dup').onclick = duplicateSelection;
+  document.getElementById('btn-del').onclick = deleteSelection;
+
+  document.getElementById('vt-grid').onclick = (e) => {
+    showGrid = !showGrid; gridHelper.visible = showGrid; shadowPlane.visible = showGrid;
+    e.currentTarget.classList.toggle('active', showGrid);
+  };
+  document.getElementById('vt-wire').onclick = (e) => {
+    wireAll = !wireAll; e.currentTarget.classList.toggle('active', wireAll);
+    threeObjects.forEach(obj => { if (obj.material) obj.material.wireframe = wireAll || obj.userData.forceWire; });
+  };
+  document.getElementById('vt-focus').onclick = focusOnSelection;
+  document.getElementById('vt-bg').onclick = () => document.getElementById('bg-color-input').click();
+  document.getElementById('bg-color-input').oninput = (e) => {
+    bgColor = e.target.value;
+    scene.background.set(bgColor);
+    scene.fog.color.set(bgColor);
+  };
+
+  document.getElementById('btn-export').onclick = openExportModal;
+  document.getElementById('modal-close-btn').onclick = closeExportModal;
+  document.getElementById('modal-backdrop').onclick = (e) => { if (e.target.id === 'modal-backdrop') closeExportModal(); };
+  document.getElementById('tab-code').onclick = () => switchExportTab('code');
+  document.getElementById('tab-json').onclick = () => switchExportTab('json');
+  document.getElementById('export-name').oninput = refreshExportOutput;
+  document.getElementById('btn-copy').onclick = () => {
+    navigator.clipboard.writeText(document.getElementById('code-out').textContent).then(() => toast('Copied to clipboard'));
+  };
+  document.getElementById('btn-download').onclick = downloadExport;
+
+  document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+  document.getElementById('file-import').onchange = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      mark(null);
+      if (loadProjectFromJSON(reader.result)) toast('Project imported');
+      else toast('Could not read that file');
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  document.getElementById('btn-save').onclick = async () => {
+    const ok = await store.set('propsmith:session', serializeProject());
+    toast(ok ? 'Session saved' : 'Save failed — use Export instead');
+  };
+  document.getElementById('btn-load').onclick = async () => {
+    let val = await store.get('propsmith:session');
+    let label = 'Session loaded';
+    if (!val) { val = await store.get('propsmith:auto'); label = 'Autosave restored'; }
+    if (!val) { toast('No saved session found'); return; }
+    mark(null);
+    if (loadProjectFromJSON(val)) toast(label);
+    else toast('Could not read saved session');
+  };
+
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelection(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { duplicateSelection(); e.preventDefault(); }
+    else if (e.key.toLowerCase() === 'g' && selectedIds.length > 1) groupSelection();
+    else if (e.key.toLowerCase() === 'f') focusOnSelection();
+    else if (e.key === 'Escape') setSelection([]);
+  });
+}
+let exportTab = 'code';
+function switchExportTab(tab) {
+  exportTab = tab;
+  document.getElementById('tab-code').classList.toggle('active', tab === 'code');
+  document.getElementById('tab-json').classList.toggle('active', tab === 'json');
+  refreshExportOutput();
+}
+function refreshExportOutput() {
+  const name = (document.getElementById('export-name').value || 'MyProp').replace(/[^a-zA-Z0-9]/g, '') || 'MyProp';
+  const out = document.getElementById('code-out');
+  out.textContent = exportTab === 'code' ? generateThreeCode(name) : serializeProject();
+}
+function openExportModal() {
+  document.getElementById('modal-backdrop').classList.add('show');
+  refreshExportOutput();
+}
+function closeExportModal() { document.getElementById('modal-backdrop').classList.remove('show'); }
+function downloadExport() {
+  const name = (document.getElementById('export-name').value || 'MyProp').replace(/[^a-zA-Z0-9]/g, '') || 'MyProp';
+  const isCode = exportTab === 'code';
+  const blob = new Blob([document.getElementById('code-out').textContent], { type: isCode ? 'text/javascript' : 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = isCode ? `create${name}.js` : `${name}.propsmith.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* =========================================================================
+   SEED CONTENT — a small starter cluster so the tool isn't a blank void,
+   and so grouping/hierarchy is demonstrated immediately.
+   ========================================================================= */
+function seedStarterScene() {
+  const cluster = makeNode('group', null, { name: 'Boulder Cluster' });
+  cluster.transform.position = { x: 0, y: 0, z: 0 };
+  nodes.push(cluster);
+
+  const rocks = [
+    { r: 0.7, x: -0.7, z: 0.1, rot: 12, color: '#9a938c' },
+    { r: 0.5, x: 0.5, z: 0.5, rot: -20, color: '#847c73' },
+    { r: 0.85, x: 0.1, z: -0.6, rot: 40, color: '#6b6560' },
+  ];
+  rocks.forEach((rk, i) => {
+    const rock = makeNode('icosahedron', cluster.id, { name: 'Rock ' + (i + 1), color: rk.color });
+    rock.geometry.radius = rk.r;
+    rock.geometry.detail = 0;
+    rock.transform.position = { x: rk.x, y: rk.r * 0.75, z: rk.z };
+    rock.transform.rotation = { x: rk.rot * 0.6, y: rk.rot, z: 0 };
+    rock.material.texture = { type: 'speckle', colorA: rk.color, colorB: shadeColor(rk.color, -0.18), tiles: 10, repeatX: 1, repeatY: 1, dataUrl: null };
+    nodes.push(rock);
+  });
+}
+
+/* =========================================================================
+   PROPSMITH 0.9 — WORKSHOP LAYER
+   Undo/redo, viewport move gizmo, grid snapping, full batch editing,
+   arrangement tools, hierarchy drag-reparenting, autosave, shortcuts.
+   ========================================================================= */
+
+/* ---------- undo / redo -------------------------------------------------- */
+let undoStack = [], redoStack = [], lastMarkKey = null, lastMarkTime = 0;
+const HIST_LIMIT = 100;
+
+function snapshotState() { return JSON.stringify({ idCounter, nodes, selectedIds }); }
+
+function restoreState(s) {
+  const d = JSON.parse(s);
+  nodes = d.nodes;
+  idCounter = d.idCounter;
+  selectedIds = (d.selectedIds || []).filter(id => nodes.some(n => n.id === id));
+  requestSync(); renderTree(); renderInspector(); updateHistoryButtons();
+}
+
+/* Call BEFORE mutating. `key` coalesces rapid edits of the same control into
+   one undo step (dragging a slider shouldn't create 200 history entries). */
+function mark(key) {
+  const now = Date.now();
+  if (key && key === lastMarkKey && now - lastMarkTime < 900) { lastMarkTime = now; scheduleAutosave(); return; }
+  lastMarkKey = key || null;
+  lastMarkTime = now;
+  undoStack.push(snapshotState());
+  if (undoStack.length > HIST_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+  updateHistoryButtons();
+  scheduleAutosave();
+}
+
+function undo() {
+  if (!undoStack.length) { toast('Nothing to undo'); return; }
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+  lastMarkKey = null;
+}
+function redo() {
+  if (!redoStack.length) { toast('Nothing to redo'); return; }
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+  lastMarkKey = null;
+}
+function resetHistory() { undoStack = []; redoStack = []; lastMarkKey = null; updateHistoryButtons(); }
+function updateHistoryButtons() {
+  const u = document.getElementById('btn-undo'), r = document.getElementById('btn-redo');
+  if (u) u.disabled = !undoStack.length;
+  if (r) r.disabled = !redoStack.length;
+}
+
+/* ---------- snapping ----------------------------------------------------- */
+let snapEnabled = false;
+let snapStep = 0.25;
+function snapVal(v) { return snapEnabled ? Math.round(v / snapStep) * snapStep : v; }
+
+/* ---------- selection helpers -------------------------------------------- */
+/* Roots = selected nodes with no selected ancestor. Transform ops act on
+   these, so moving a group doesn't double-move its already-moved children. */
+function selectionRoots() {
+  return selectedIds.filter(id => {
+    let n = getNode(id);
+    while (n && n.parentId) {
+      if (selectedIds.includes(n.parentId)) return false;
+      n = getNode(n.parentId);
+    }
+    return true;
+  }).map(getNode).filter(Boolean);
+}
+/* Meshes = every non-group node touched by the selection. Material and
+   geometry batch edits act on these. */
+function selectionMeshes(includeChildren) {
+  const out = [], seen = new Set();
+  selectedIds.forEach(id => {
+    const n = getNode(id); if (!n) return;
+    const list = includeChildren ? [n].concat(getDescendants(id)) : [n];
+    list.forEach(x => {
+      if (x && x.type !== 'group' && !seen.has(x.id)) { seen.add(x.id); out.push(x); }
+    });
+  });
+  return out;
+}
+
+/* ---------- world-space helpers ------------------------------------------ */
+function worldBoxOf(node) {
+  const obj = threeObjects.get(node.id);
+  if (!obj) return null;
+  obj.updateWorldMatrix(true, true);
+  return new THREE.Box3().setFromObject(obj);
+}
+/* Translate a node by a world-space delta, correcting for parent rotation. */
+function nudgeWorld(node, axis, delta) {
+  if (!delta) return;
+  const obj = threeObjects.get(node.id); if (!obj) return;
+  const parent = obj.parent || sceneRoot;
+  parent.updateWorldMatrix(true, false);
+  const world = new THREE.Vector3(); world[axis] = delta;
+  const a = parent.worldToLocal(new THREE.Vector3(0, 0, 0));
+  const b = parent.worldToLocal(world);
+  node.transform.position.x = round3(node.transform.position.x + (b.x - a.x));
+  node.transform.position.y = round3(node.transform.position.y + (b.y - a.y));
+  node.transform.position.z = round3(node.transform.position.z + (b.z - a.z));
+}
+
+/* ---------- arrangement tools -------------------------------------------- */
+function alignSelection(axis, mode) {
+  const roots = selectionRoots();
+  if (roots.length < 2) { toast('Select at least two objects'); return; }
+  mark(null);
+  const items = roots.map(n => ({ n, b: worldBoxOf(n) })).filter(x => x.b);
+  const valOf = b => mode === 'min' ? b.min[axis] : mode === 'max' ? b.max[axis] : (b.min[axis] + b.max[axis]) / 2;
+  const vals = items.map(x => valOf(x.b));
+  const target = mode === 'min' ? Math.min.apply(null, vals)
+    : mode === 'max' ? Math.max.apply(null, vals)
+      : vals.reduce((a, b) => a + b, 0) / vals.length;
+  items.forEach((x, i) => nudgeWorld(x.n, axis, target - vals[i]));
+  requestSync(); renderInspector();
+  toast('Aligned ' + axis.toUpperCase());
+}
+
+function distributeSelection(axis) {
+  const roots = selectionRoots();
+  if (roots.length < 3) { toast('Select three or more objects'); return; }
+  mark(null);
+  const items = roots.map(n => { const b = worldBoxOf(n); return b ? { n, v: (b.min[axis] + b.max[axis]) / 2 } : null; }).filter(Boolean);
+  items.sort((a, b) => a.v - b.v);
+  const first = items[0].v, last = items[items.length - 1].v;
+  const step = (last - first) / (items.length - 1);
+  items.forEach((it, i) => nudgeWorld(it.n, axis, first + step * i - it.v));
+  requestSync(); renderInspector();
+  toast('Distributed along ' + axis.toUpperCase());
+}
+
+function dropToGround() {
+  const roots = selectionRoots();
+  if (!roots.length) { toast('Nothing selected'); return; }
+  mark(null);
+  roots.forEach(n => { const b = worldBoxOf(n); if (b) nudgeWorld(n, 'y', -b.min.y); });
+  requestSync(); renderInspector();
+  toast('Dropped to ground');
+}
+
+
+function randomizeSelection() {
+  const roots = selectionRoots();
+  if (!roots.length) return;
+  mark(null);
+  roots.forEach(n => {
+    n.transform.rotation.y = round3(n.transform.rotation.y + (Math.random() * 2 - 1) * 180);
+    n.transform.rotation.x = round3(n.transform.rotation.x + (Math.random() * 2 - 1) * 12);
+    n.transform.rotation.z = round3(n.transform.rotation.z + (Math.random() * 2 - 1) * 12);
+    const s = 1 + (Math.random() * 2 - 1) * 0.18;
+    n.transform.scale.x = round3(n.transform.scale.x * s);
+    n.transform.scale.y = round3(n.transform.scale.y * s);
+    n.transform.scale.z = round3(n.transform.scale.z * s);
+  });
+  requestSync(); renderInspector();
+  toast('Randomized');
+}
+
+function resetTransform(kind) {
+  const roots = selectionRoots();
+  if (!roots.length) return;
+  mark(null);
+  roots.forEach(n => {
+    if (kind === 'rotation') n.transform.rotation = { x: 0, y: 0, z: 0 };
+    else if (kind === 'scale') n.transform.scale = { x: 1, y: 1, z: 1 };
+    else n.transform.position = { x: 0, y: 0, z: 0 };
+  });
+  requestSync(); renderInspector();
+}
+
+/* ---------- material clipboard ------------------------------------------- */
+let materialClipboard = null;
+function copyMaterialFrom(node) {
+  if (!node || !node.material) return;
+  materialClipboard = JSON.parse(JSON.stringify(node.material));
+  toast('Material copied');
+}
+function pasteMaterialToSelection() {
+  if (!materialClipboard) { toast('Copy a material first'); return; }
+  const meshes = selectionMeshes(true);
+  if (!meshes.length) { toast('No meshes selected'); return; }
+  mark(null);
+  meshes.forEach(n => { n.material = JSON.parse(JSON.stringify(materialClipboard)); });
+  requestSync(); renderInspector();
+  toast('Material pasted to ' + meshes.length);
+}
+
+/* ---------- small UI helpers --------------------------------------------- */
+const MIXED = '\u0000MIXED\u0000';
+function commonValue(list, get) {
+  if (!list.length) return undefined;
+  const first = get(list[0]);
+  for (let i = 1; i < list.length; i++) if (get(list[i]) !== first) return MIXED;
+  return first;
+}
+function avgValue(list, get) {
+  if (!list.length) return 0;
+  return list.reduce((a, n) => a + (parseFloat(get(n)) || 0), 0) / list.length;
+}
+function btnRow(container, label, defs) {
+  const wrap = el('div', 'field');
+  if (label) wrap.appendChild(el('div', 'field-label', '<span class="fname">' + label + '</span>'));
+  const row = el('div', 'btn-row');
+  defs.forEach(d => {
+    const b = el('button', 'mini-btn', d.label);
+    if (d.title) b.title = d.title;
+    b.onclick = d.onClick;
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+  container.appendChild(wrap);
+}
+
+/* ---------- batch inspector ---------------------------------------------- */
+let batchIncludeChildren = true;
+
+
+function batchTriple(container, label, list, key, step) {
+  const wrap = el('div', 'field');
+  wrap.appendChild(el('div', 'field-label', '<span class="fname">' + label + '</span>'));
+  const row = el('div', 'row3');
+  ['x', 'y', 'z'].forEach(axis => {
+    const mf = el('div', 'minifield');
+    mf.appendChild(el('label', null, axis.toUpperCase()));
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.step = step;
+    const cv = commonValue(list, n => round3(n.transform[key][axis]));
+    if (cv === MIXED) { inp.value = ''; inp.placeholder = '—'; inp.classList.add('mixed'); }
+    else inp.value = cv;
+    inp.oninput = () => {
+      if (inp.value === '') return;
+      const v = parseFloat(inp.value);
+      if (isNaN(v)) return;
+      mark('bt:' + key + axis);
+      list.forEach(n => { n.transform[key][axis] = v; });
+      inp.classList.remove('mixed');
+      requestSync(); updateSpecPlate();
+    };
+    mf.appendChild(inp);
+    row.appendChild(mf);
+  });
+  wrap.appendChild(row);
+  container.appendChild(wrap);
+}
+
+function offsetRow(container, list) {
+  const wrap = el('div', 'field');
+  wrap.appendChild(el('div', 'field-label', '<span class="fname">Offset all</span><span class="fval">enter to apply</span>'));
+  const row = el('div', 'row3');
+  ['x', 'y', 'z'].forEach(axis => {
+    const mf = el('div', 'minifield');
+    mf.appendChild(el('label', null, 'Δ' + axis.toUpperCase()));
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.step = 0.1; inp.value = 0;
+    inp.onkeydown = (e) => {
+      if (e.key !== 'Enter') return;
+      const d = parseFloat(inp.value) || 0;
+      if (!d) return;
+      mark(null);
+      list.forEach(n => { n.transform.position[axis] = round3(n.transform.position[axis] + d); });
+      inp.value = 0;
+      requestSync(); renderInspector();
+    };
+    mf.appendChild(inp);
+    row.appendChild(mf);
+  });
+  wrap.appendChild(row);
+  container.appendChild(wrap);
+}
+
+function uniformScaleRow(container, list) {
+  btnRow(container, 'Uniform scale', [
+    { label: '×0.9', onClick: () => scaleAll(list, 0.9) },
+    { label: '×1.1', onClick: () => scaleAll(list, 1.1) },
+    { label: '×0.5', onClick: () => scaleAll(list, 0.5) },
+    { label: '×2', onClick: () => scaleAll(list, 2) },
+  ]);
+}
+function scaleAll(list, f) {
+  if (!list.length) return;
+  mark(null);
+  list.forEach(n => {
+    n.transform.scale.x = round3(n.transform.scale.x * f);
+    n.transform.scale.y = round3(n.transform.scale.y * f);
+    n.transform.scale.z = round3(n.transform.scale.z * f);
+  });
+  requestSync(); renderInspector();
+}
+
+function batchMaterialSection(body, meshes) {
+  if (!meshes.length) return;
+  const ms = el('div', 'section');
+  ms.appendChild(el('div', 'section-title', 'Material (batch)'));
+  const setAll = (key, fn) => { mark('bm:' + key); meshes.forEach(n => fn(n.material)); requestSync(); };
+
+  const cvColor = commonValue(meshes, n => n.material.color);
+  fieldColor(ms, {
+    label: 'Color', value: cvColor === MIXED ? '#96897c' : cvColor, mixed: cvColor === MIXED, noHistory: true,
+    onChange: v => setAll('color', m => { m.color = v; })
+  });
+
+  const sw = el('div', 'swatches');
+  PALETTE.forEach(pair => {
+    const s = el('div', 'swatch');
+    s.style.background = pair[0];
+    s.title = pair[1];
+    s.onclick = () => { setAll('swatch' + pair[0], m => { m.color = pair[0]; }); renderInspector(); };
+    sw.appendChild(s);
+  });
+  ms.appendChild(sw);
+
+  batchSlider(ms, meshes, 'Roughness', n => n.material.roughness, (m, v) => { m.roughness = v; }, 0, 1, 0.01, false, setAll);
+  batchSlider(ms, meshes, 'Metalness', n => n.material.metalness, (m, v) => { m.metalness = v; }, 0, 1, 0.01, false, setAll);
+  batchToggle(ms, meshes, 'Flat shading', n => n.material.flatShading, (m, v) => { m.flatShading = v; }, setAll);
+  batchToggle(ms, meshes, 'Wireframe', n => n.material.wireframe, (m, v) => { m.wireframe = v; }, setAll);
+  batchToggle(ms, meshes, 'Transparent', n => n.material.transparent, (m, v) => { m.transparent = v; }, setAll);
+  batchSlider(ms, meshes, 'Opacity', n => n.material.opacity, (m, v) => { m.opacity = v; }, 0, 1, 0.01, false, setAll);
+
+  const cvEm = commonValue(meshes, n => n.material.emissive);
+  fieldColor(ms, {
+    label: 'Emissive', value: cvEm === MIXED ? '#000000' : cvEm, mixed: cvEm === MIXED, noHistory: true,
+    onChange: v => setAll('emissive', m => { m.emissive = v; })
+  });
+  batchSlider(ms, meshes, 'Emissive intensity', n => n.material.emissiveIntensity, (m, v) => { m.emissiveIntensity = v; }, 0, 3, 0.05, false, setAll);
+
+  const cvSide = commonValue(meshes, n => n.material.side);
+  fieldSelect(ms, {
+    label: 'Side', value: cvSide === MIXED ? 'front' : cvSide, noHistory: true,
+    options: [{ value: 'front', label: cvSide === MIXED ? 'Front (mixed)' : 'Front' }, { value: 'back', label: 'Back' }, { value: 'double', label: 'Double' }],
+    onChange: v => setAll('side', m => { m.side = v; })
+  });
+
+  /* texture */
+  const cvTex = commonValue(meshes, n => (n.material.texture && n.material.texture.type) || 'none');
+  fieldSelect(ms, {
+    label: 'Texture', value: cvTex === MIXED ? 'none' : cvTex, noHistory: true,
+    options: [
+      { value: 'none', label: cvTex === MIXED ? 'None (mixed)' : 'None' },
+      { value: 'checker', label: 'Checker' },
+      { value: 'stripes', label: 'Stripes' },
+      { value: 'speckle', label: 'Speckle' },
+    ],
+    onChange: v => {
+      mark('btex');
+      meshes.forEach(n => {
+        if (!n.material.texture) n.material.texture = { type: 'none', colorA: null, colorB: null, tiles: 8, repeatX: 1, repeatY: 1, dataUrl: null };
+        n.material.texture.type = v;
+        if (v !== 'none' && !n.material.texture.colorA) {
+          n.material.texture.colorA = n.material.color;
+          n.material.texture.colorB = shadeColor(n.material.color, -0.2);
+        }
+      });
+      requestSync(); renderInspector();
+    }
+  });
+  if (cvTex !== MIXED && cvTex !== 'none' && cvTex !== 'image') {
+    batchSlider(ms, meshes, cvTex === 'speckle' ? 'Density' : 'Tiles',
+      n => n.material.texture.tiles, (m, v) => { m.texture.tiles = v; }, 2, 24, 1, true, setAll);
+    btnRow(ms, 'Texture colors', [
+      {
+        label: 'Auto from base', title: 'Derive A/B from each object\u2019s own color',
+        onClick: () => {
+          mark(null);
+          meshes.forEach(n => {
+            n.material.texture.colorA = n.material.color;
+            n.material.texture.colorB = shadeColor(n.material.color, -0.2);
+          });
+          requestSync(); toast('Texture colors matched');
+        }
+      },
+    ]);
+  }
+  body.appendChild(ms);
+}
+
+function batchSlider(container, meshes, label, get, set, min, max, step, int, setAll) {
+  const cv = commonValue(meshes, get);
+  const val = cv === MIXED ? avgValue(meshes, get) : cv;
+  fieldSlider(container, {
+    label: label, value: val, min: min, max: max, step: step, int: int,
+    mixed: cv === MIXED, noHistory: true,
+    onInput: v => setAll(label, m => set(m, v))
+  });
+}
+function batchToggle(container, meshes, label, get, set, setAll) {
+  const cv = commonValue(meshes, get);
+  fieldToggle(container, {
+    label: label, value: cv === MIXED ? false : !!cv, mixed: cv === MIXED, noHistory: true,
+    onChange: v => { setAll(label, m => set(m, v)); renderInspector(); }
+  });
+}
+
+function batchGeometrySection(body, meshes) {
+  if (!meshes.length) return;
+  const type = commonValue(meshes, n => n.type);
+  const gs = el('div', 'section');
+  if (type === MIXED) {
+    gs.appendChild(el('div', 'section-title', 'Shape (batch)'));
+    gs.appendChild(el('div', 'batch-note', 'Selection mixes shape types, so shape parameters are hidden. Select objects of a single type to batch-edit their geometry.'));
+    body.appendChild(gs);
+    return;
+  }
+  const gdef = GEO_DEFS[type];
+  if (!gdef) return;
+  gs.appendChild(el('div', 'section-title', gdef.label + ' shape (batch)'));
+  gdef.fields.forEach(fld => {
+    const cv = commonValue(meshes, n => n.geometry[fld.key]);
+    if (fld.bool) {
+      fieldToggle(gs, {
+        label: fld.label, value: cv === MIXED ? false : !!cv, mixed: cv === MIXED, noHistory: true,
+        onChange: v => { mark('bg:' + fld.key); meshes.forEach(n => { n.geometry[fld.key] = v; }); requestSync(); }
+      });
+    } else {
+      const val = cv === MIXED ? avgValue(meshes, n => n.geometry[fld.key]) : cv;
+      fieldSlider(gs, {
+        label: fld.label, value: val, min: fld.min, max: fld.max, step: fld.step, int: fld.int,
+        mixed: cv === MIXED, noHistory: true,
+        onInput: v => { mark('bg:' + fld.key); meshes.forEach(n => { n.geometry[fld.key] = v; }); requestSync(); updateSpecPlate(); }
+      });
+    }
+  });
+  body.appendChild(gs);
+}
+
+function batchFlagsSection(body, meshes) {
+  if (!meshes.length) return;
+  const ss = el('div', 'section');
+  ss.appendChild(el('div', 'section-title', 'Shadows (batch)'));
+  const cvCast = commonValue(meshes, n => n.castShadow);
+  fieldToggle(ss, {
+    label: 'Cast shadow', value: cvCast === MIXED ? false : !!cvCast, mixed: cvCast === MIXED, noHistory: true,
+    onChange: v => { mark('bcast'); meshes.forEach(n => { n.castShadow = v; }); requestSync(); }
+  });
+  const cvRecv = commonValue(meshes, n => n.receiveShadow);
+  fieldToggle(ss, {
+    label: 'Receive shadow', value: cvRecv === MIXED ? false : !!cvRecv, mixed: cvRecv === MIXED, noHistory: true,
+    onChange: v => { mark('brecv'); meshes.forEach(n => { n.receiveShadow = v; }); requestSync(); }
+  });
+  btnRow(ss, 'Material', [
+    { label: 'Paste copied material', onClick: pasteMaterialToSelection },
+  ]);
+  body.appendChild(ss);
+}
+
+/* ---------- move gizmo --------------------------------------------------- */
+let gizmoGroup = null, gizmoDrag = null, gizmoWasDragging = false;
+
+
+
+
+/* Returns true if the pointer grabbed a gizmo handle (orbit must then stand down). */
+
+
+
+/* ---------- hierarchy drag-to-reparent ----------------------------------- */
+let dragNodeId = null;
+
+function isAncestorOf(ancestorId, id) {
+  let n = getNode(id);
+  while (n && n.parentId) {
+    if (n.parentId === ancestorId) return true;
+    n = getNode(n.parentId);
+  }
+  return false;
+}
+
+function attachRowDnD(row, node) {
+  row.draggable = true;
+  row.addEventListener('dragstart', e => {
+    dragNodeId = node.id;
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', node.id); } catch (_) { }
+  });
+  row.addEventListener('dragend', () => { dragNodeId = null; row.classList.remove('drop-into'); });
+  row.addEventListener('dragover', e => {
+    if (!dragNodeId || dragNodeId === node.id || isAncestorOf(dragNodeId, node.id)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    row.classList.add('drop-into');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-into'));
+  row.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    row.classList.remove('drop-into');
+    if (!dragNodeId || dragNodeId === node.id || isAncestorOf(dragNodeId, node.id)) return;
+    reparentNode(dragNodeId, node.type === 'group' ? node.id : node.parentId);
+    dragNodeId = null;
+  });
+}
+
+function reparentNode(id, newParentId) {
+  const node = getNode(id);
+  if (!node) return;
+  if ((node.parentId || null) === (newParentId || null)) return;
+  mark(null);
+  const obj = threeObjects.get(id);
+  let world = null;
+  if (obj) { obj.updateWorldMatrix(true, false); world = obj.getWorldPosition(new THREE.Vector3()); }
+  node.parentId = newParentId || null;
+  syncScene();
+  if (world) {
+    const o2 = threeObjects.get(id);
+    const parent = (o2 && o2.parent) || sceneRoot;
+    parent.updateWorldMatrix(true, false);
+    const local = parent.worldToLocal(world.clone());
+    node.transform.position = { x: round3(local.x), y: round3(local.y), z: round3(local.z) };
+  }
+  requestSync(); renderTree(); renderInspector();
+  toast('Moved in hierarchy');
+}
+
+/* ---------- storage + autosave ------------------------------------------- */
+const store = {
+  set: async function (key, val) {
+    if (window.storage) {
+      try { await window.storage.set(key, val, false); return true; } catch (_) { }
+    }
+    try { localStorage.setItem(key, val); return true; } catch (_) { return false; }
+  },
+  get: async function (key) {
+    if (window.storage) {
+      try { const r = await window.storage.get(key, false); if (r && r.value) return r.value; } catch (_) { }
+    }
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+};
+let autosaveTimer = null;
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => { store.set('propsmith:auto', serializeProject()); }, 1500);
+}
+
+/* ---------- help overlay ------------------------------------------------- */
+function toggleHelp() {
+  const o = document.getElementById('help-overlay');
+  if (o) o.classList.toggle('show');
+}
+
+/* ---------- wiring ------------------------------------------------------- */
+
+function nudgeByKey(e) {
+  const roots = selectionRoots();
+  if (!roots.length) return;
+  const map = { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['z', -1], ArrowDown: ['z', 1] };
+  const entry = map[e.key];
+  if (!entry) return;
+  e.preventDefault();
+  let axis = entry[0], sign = entry[1];
+  if (e.shiftKey) { axis = 'y'; sign = (e.key === 'ArrowUp' || e.key === 'ArrowRight') ? 1 : -1; }
+  const step = snapEnabled ? snapStep : 0.1;
+  mark('nudge:' + axis);
+  roots.forEach(n => { n.transform.position[axis] = round3(n.transform.position[axis] + sign * step); });
+  requestSync(); renderInspector();
+}
+
+
+/* =========================================================================
+   PROPSMITH 0.10 — gizmo modes, plane flips, recent colors, tabbed
+   inspector, segmented controls, group stats, WASD camera.
+   ========================================================================= */
+
+const D2R = THREE.MathUtils.degToRad;
+const R2D = THREE.MathUtils.radToDeg;
+
+/* ---------- snap steps --------------------------------------------------- */
+const SNAP_STEPS = [0, 0.1, 0.25, 0.5, 1];
+let snapIndex = 0;
+function cycleSnap() {
+  snapIndex = (snapIndex + 1) % SNAP_STEPS.length;
+  snapStep = SNAP_STEPS[snapIndex] || 0.25;
+  snapEnabled = SNAP_STEPS[snapIndex] !== 0;
+  setSnapUI();
+  toast(snapEnabled ? 'Snapping to ' + snapStep + ' units (15° on rotate)' : 'Snapping off — free movement');
+}
+function setSnapUI() {
+  const b = document.getElementById('btn-snap');
+  if (!b) return;
+  b.classList.toggle('active', snapEnabled);
+  b.textContent = snapEnabled ? 'Snap ' + snapStep : 'Snap off';
+  b.title = 'Rounds every move to a fixed grid so objects line up exactly. Rotation snaps to 15°. Click to cycle: off / 0.1 / 0.25 / 0.5 / 1. (X)';
+}
+
+/* ---------- recent colors ------------------------------------------------ */
+let recentColors = [];
+try {
+  const raw = localStorage.getItem('propsmith:recentColors');
+  if (raw) recentColors = JSON.parse(raw) || [];
+} catch (_) { }
+function pushRecentColor(hex) {
+  if (!hex) return;
+  hex = String(hex).toLowerCase();
+  recentColors = [hex].concat(recentColors.filter(c => c !== hex)).slice(0, 5);
+  try { localStorage.setItem('propsmith:recentColors', JSON.stringify(recentColors)); } catch (_) { }
+}
+
+/* Color field with a shared "recently picked" strip underneath. */
+function fieldColor(container, opts) {
+  const row = el('div', 'color-row');
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.value = opts.value || '#000000';
+  const name = el('span', 'fname', opts.label);
+  const hex = el('span', 'hex', opts.mixed ? 'mixed' : opts.value);
+  if (opts.mixed) hex.classList.add('mixed');
+  const apply = v => {
+    if (!opts.noHistory) mark('col:' + opts.label);
+    hex.classList.remove('mixed');
+    hex.textContent = v;
+    opts.onChange(v);
+  };
+  inp.oninput = () => apply(inp.value);
+  inp.onchange = () => { pushRecentColor(inp.value); drawRecents(); };
+  row.appendChild(inp); row.appendChild(name); row.appendChild(hex);
+  container.appendChild(row);
+
+  const strip = el('div', 'recent-strip');
+  function drawRecents() {
+    strip.innerHTML = '';
+    if (!recentColors.length) { strip.style.display = 'none'; return; }
+    strip.style.display = 'flex';
+    strip.appendChild(el('span', 'recent-label', 'recent'));
+    recentColors.forEach(c => {
+      const s = el('div', 'swatch sm');
+      s.style.background = c;
+      s.title = c;
+      s.onclick = () => { inp.value = c; apply(c); };
+      strip.appendChild(s);
+    });
+  }
+  if (opts.recents !== false) { drawRecents(); container.appendChild(strip); }
+  return inp;
+}
+
+/* ---------- segmented button group --------------------------------------- */
+function fieldSegmented(container, opts) {
+  const wrap = el('div', 'field');
+  if (opts.label) wrap.appendChild(el('div', 'field-label', '<span class="fname">' + opts.label + '</span>'));
+  const row = el('div', 'seg');
+  opts.options.forEach(o => {
+    const b = el('button', 'seg-btn' + (o.value === opts.value ? ' on' : ''), o.label);
+    if (o.title) b.title = o.title;
+    b.onclick = () => { if (!opts.noHistory) mark(null); opts.onChange(o.value); };
+    row.appendChild(b);
+  });
+  wrap.appendChild(row);
+  container.appendChild(wrap);
+}
+
+/* ---------- flip across a plane ------------------------------------------
+   Plane XY has normal Z, so "flip across XY" mirrors the Z axis. Position is
+   mirrored about the selection's own centre, orientation is conjugated by the
+   reflection (so a rotated prop mirrors properly), and the normal axis of the
+   scale is negated so the geometry itself flips. Flipping twice is identity.
+   ------------------------------------------------------------------------- */
+const PLANE_NORMAL = { xy: 'z', yz: 'x', zx: 'y' };
+
+function flipAcross(plane) {
+  const normal = PLANE_NORMAL[plane];
+  const roots = selectionRoots();
+  if (!roots.length) { toast('Nothing selected'); return; }
+  mark(null);
+
+  const box = new THREE.Box3();
+  let any = false;
+  roots.forEach(n => {
+    const o = threeObjects.get(n.id);
+    if (o) { o.updateWorldMatrix(true, true); box.expandByObject(o); any = true; }
+  });
+  const centre = any ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3();
+
+  roots.forEach(n => {
+    const o = threeObjects.get(n.id);
+    if (o) {
+      o.updateWorldMatrix(true, false);
+      const wp = o.getWorldPosition(new THREE.Vector3());
+      nudgeWorld(n, normal, 2 * (centre[normal] - wp[normal]));
+    }
+    const r = n.transform.rotation;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(D2R(r.x), D2R(r.y), D2R(r.z), 'XYZ'));
+    if (normal === 'x') q.set(q.x, -q.y, -q.z, q.w);
+    else if (normal === 'y') q.set(-q.x, q.y, -q.z, q.w);
+    else q.set(-q.x, -q.y, q.z, q.w);
+    const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+    n.transform.rotation = { x: round3(R2D(e.x)), y: round3(R2D(e.y)), z: round3(R2D(e.z)) };
+    n.transform.scale[normal] = round3(-n.transform.scale[normal]);
+  });
+  requestSync(); renderInspector();
+  toast('Flipped across ' + plane.toUpperCase());
+}
+
+function flipRow(container) {
+  btnRow(container, 'Flip across plane', [
+    { label: 'XY', title: 'Mirror front-to-back (flips Z)', onClick: () => flipAcross('xy') },
+    { label: 'YZ', title: 'Mirror left-to-right (flips X)', onClick: () => flipAcross('yz') },
+    { label: 'ZX', title: 'Mirror top-to-bottom (flips Y)', onClick: () => flipAcross('zx') },
+  ]);
+}
+
+/* ---------- gizmos: translate / rotate / scale ---------------------------- */
+let gizmoMode = 'translate';
+const gizmoParts = {};
+const gizmoHandlesByMode = { translate: [], rotate: [], scale: [] };
+const AXIS_INFO = [
+  { axis: 'x', dir: new THREE.Vector3(1, 0, 0), color: 0xe0555f, rot: [0, 0, -Math.PI / 2], ring: [0, Math.PI / 2, 0] },
+  { axis: 'y', dir: new THREE.Vector3(0, 1, 0), color: 0x86c25c, rot: [0, 0, 0], ring: [Math.PI / 2, 0, 0] },
+  { axis: 'z', dir: new THREE.Vector3(0, 0, 1), color: 0x5b9de0, rot: [Math.PI / 2, 0, 0], ring: [0, 0, 0] },
+];
+const PLANE_INFO = [
+  { name: 'xy', normal: new THREE.Vector3(0, 0, 1), color: 0x5b9de0, pos: [0.26, 0.26, 0], rot: [0, 0, 0] },
+  { name: 'yz', normal: new THREE.Vector3(1, 0, 0), color: 0xe0555f, pos: [0, 0.26, 0.26], rot: [0, Math.PI / 2, 0] },
+  { name: 'zx', normal: new THREE.Vector3(0, 1, 0), color: 0x86c25c, pos: [0.26, 0, 0.26], rot: [-Math.PI / 2, 0, 0] },
+];
+function gzMat(hex, opacity) {
+  return new THREE.MeshBasicMaterial({
+    color: hex, depthTest: false, transparent: true,
+    opacity: opacity === undefined ? 0.95 : opacity, side: THREE.DoubleSide
+  });
+}
+function gzPick() { return new THREE.MeshBasicMaterial({ visible: false }); }
+
+function buildGizmo() {
+  gizmoGroup = new THREE.Group();
+  gizmoGroup.visible = false;
+  helpersGroup.add(gizmoGroup);
+
+  /* translate — arrows both ways on every axis, plus three plane handles */
+  const tG = new THREE.Group();
+  AXIS_INFO.forEach(a => {
+    [1, -1].forEach(sign => {
+      const arm = new THREE.Group();
+      const mat = gzMat(a.color);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.74, 8), mat);
+      shaft.position.y = 0.41; shaft.renderOrder = 999;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.17, 12), mat);
+      tip.position.y = 0.88; tip.renderOrder = 999;
+      const pick = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.84, 6), gzPick());
+      pick.position.y = 0.55;
+      pick.userData.gizmoDir = a.dir;
+      arm.add(shaft); arm.add(tip); arm.add(pick);
+      arm.rotation.set(a.rot[0], a.rot[1], a.rot[2]);
+      if (sign < 0) arm.scale.y = -1;
+      tG.add(arm);
+      gizmoHandlesByMode.translate.push(pick);
+    });
+  });
+  PLANE_INFO.forEach(p => {
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), gzMat(p.color, 0.32));
+    quad.position.set(p.pos[0], p.pos[1], p.pos[2]);
+    quad.rotation.set(p.rot[0], p.rot[1], p.rot[2]);
+    quad.renderOrder = 999;
+    quad.userData.gizmoPlane = p.normal;
+    tG.add(quad);
+    gizmoHandlesByMode.translate.push(quad);
+  });
+
+  /* rotate — one ring per axis */
+  const rG = new THREE.Group();
+  AXIS_INFO.forEach(a => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.012, 8, 56), gzMat(a.color));
+    ring.rotation.set(a.ring[0], a.ring[1], a.ring[2]);
+    ring.renderOrder = 999;
+    const pick = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.06, 6, 32), gzPick());
+    pick.rotation.set(a.ring[0], a.ring[1], a.ring[2]);
+    pick.userData.gizmoRotAxis = a.dir;
+    rG.add(ring); rG.add(pick);
+    gizmoHandlesByMode.rotate.push(pick);
+  });
+
+  /* scale — knobs per axis plus a uniform cube at the centre */
+  const sG = new THREE.Group();
+  AXIS_INFO.forEach(a => {
+    const arm = new THREE.Group();
+    const mat = gzMat(a.color);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.74, 8), mat);
+    shaft.position.y = 0.4; shaft.renderOrder = 999;
+    const knob = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.11), mat);
+    knob.position.y = 0.84; knob.renderOrder = 999;
+    const pick = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.84, 6), gzPick());
+    pick.position.y = 0.55;
+    pick.userData.gizmoScaleAxis = a.axis;
+    arm.add(shaft); arm.add(knob); arm.add(pick);
+    arm.rotation.set(a.rot[0], a.rot[1], a.rot[2]);
+    sG.add(arm);
+    gizmoHandlesByMode.scale.push(pick);
+  });
+  const uni = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), gzMat(0xe2a35f));
+  uni.renderOrder = 999;
+  uni.userData.gizmoScaleAxis = 'uniform';
+  sG.add(uni);
+  gizmoHandlesByMode.scale.push(uni);
+
+  gizmoParts.translate = tG;
+  gizmoParts.rotate = rG;
+  gizmoParts.scale = sG;
+  gizmoGroup.add(tG); gizmoGroup.add(rG); gizmoGroup.add(sG);
+}
+
+function setGizmoMode(mode) {
+  gizmoMode = mode;
+  ['translate', 'rotate', 'scale'].forEach(m => {
+    const b = document.getElementById('vt-' + m);
+    if (b) b.classList.toggle('active', m === mode);
+  });
+}
+
+function updateGizmo() {
+  if (!gizmoGroup) return;
+  if (!selectedIds.length) { gizmoGroup.visible = false; return; }
+  const roots = selectionRoots();
+  const c = new THREE.Vector3();
+  let count = 0;
+  roots.forEach(nd => {
+    const o = threeObjects.get(nd.id);
+    if (o) { o.updateWorldMatrix(true, false); c.add(o.getWorldPosition(new THREE.Vector3())); count++; }
+  });
+  if (!count) { gizmoGroup.visible = false; return; }
+  c.divideScalar(count);
+  gizmoGroup.position.copy(c);
+  gizmoGroup.visible = true;
+  gizmoParts.translate.visible = gizmoMode === 'translate';
+  gizmoParts.rotate.visible = gizmoMode === 'rotate';
+  gizmoParts.scale.visible = gizmoMode === 'scale';
+  gizmoGroup.scale.setScalar(Math.max(0.35, camera.position.distanceTo(c) * 0.15));
+}
+
+function pointerNDC(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  return new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+}
+function cameraFacingPlane(origin) {
+  const n = new THREE.Vector3().subVectors(camera.position, origin).normalize();
+  return new THREE.Plane().setFromNormalAndCoplanarPoint(n, origin);
+}
+
+function gizmoTryGrab(e) {
+  if (!gizmoGroup || !gizmoGroup.visible || gizmoDrag) return false;
+  raycaster.setFromCamera(pointerNDC(e), camera);
+  const hits = raycaster.intersectObjects(gizmoHandlesByMode[gizmoMode], false);
+  if (!hits.length) return false;
+  const h = hits[0].object;
+  const origin = gizmoGroup.position.clone();
+  const roots = selectionRoots();
+  if (!roots.length) return false;
+
+  const targets = roots.map(nd => {
+    const obj = threeObjects.get(nd.id);
+    const parent = (obj && obj.parent) || sceneRoot;
+    parent.updateWorldMatrix(true, false);
+    const t = {
+      node: nd,
+      parent: parent,
+      start: { x: nd.transform.position.x, y: nd.transform.position.y, z: nd.transform.position.z },
+      startScale: { x: nd.transform.scale.x, y: nd.transform.scale.y, z: nd.transform.scale.z },
+    };
+    if (obj) {
+      obj.updateWorldMatrix(true, false);
+      t.startWorldPos = obj.getWorldPosition(new THREE.Vector3());
+      t.startWorldQ = obj.getWorldQuaternion(new THREE.Quaternion());
+      t.parentWorldQInv = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+    }
+    return t;
+  });
+
+  let plane, axisDir = null, rotAxis = null, scaleAxis = null, startProj = 0, startVec = null;
+
+  if (gizmoMode === 'rotate') {
+    rotAxis = h.userData.gizmoRotAxis.clone();
+    plane = new THREE.Plane().setFromNormalAndCoplanarPoint(rotAxis.clone(), origin);
+    const p0 = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(plane, p0)) return false;
+    startVec = p0.clone().sub(origin);
+    if (startVec.lengthSq() < 1e-8) return false;
+  } else if (gizmoMode === 'scale') {
+    scaleAxis = h.userData.gizmoScaleAxis;
+    if (scaleAxis === 'uniform') {
+      plane = cameraFacingPlane(origin);
+      const p0 = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(plane, p0)) return false;
+      axisDir = p0.clone().sub(origin);
+      if (axisDir.lengthSq() < 1e-8) return false;
+      startProj = axisDir.length();
+      axisDir.normalize();
+    } else {
+      const info = AXIS_INFO.filter(a => a.axis === scaleAxis)[0];
+      axisDir = info.dir.clone();
+      const camDir = new THREE.Vector3().subVectors(camera.position, origin).normalize();
+      const nrm = new THREE.Vector3().crossVectors(axisDir, camDir).cross(axisDir);
+      if (nrm.lengthSq() < 1e-6) nrm.set(0, 1, 0);
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(nrm.normalize(), origin);
+      const p0 = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(plane, p0)) return false;
+      startProj = p0.clone().sub(origin).dot(axisDir);
+      if (Math.abs(startProj) < 1e-4) return false;
+    }
+  } else {
+    if (h.userData.gizmoPlane) {
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(h.userData.gizmoPlane.clone(), origin);
+    } else {
+      axisDir = h.userData.gizmoDir.clone();
+      const camDir = new THREE.Vector3().subVectors(camera.position, origin).normalize();
+      const nrm = new THREE.Vector3().crossVectors(axisDir, camDir).cross(axisDir);
+      if (nrm.lengthSq() < 1e-6) nrm.set(0, 1, 0);
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(nrm.normalize(), origin);
+    }
+    const p0 = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(plane, p0)) return false;
+    startVec = p0;
+  }
+
+  mark('gizmo:' + Date.now());
+  gizmoDrag = {
+    mode: gizmoMode, plane: plane, origin: origin, targets: targets,
+    axisDir: axisDir, rotAxis: rotAxis, scaleAxis: scaleAxis,
+    startProj: startProj, startVec: startVec,
+    p0: gizmoMode === 'translate' ? startVec : null,
+  };
+  gizmoWasDragging = true;
+  window.addEventListener('pointermove', onGizmoMove);
+  window.addEventListener('pointerup', onGizmoUp);
+  return true;
+}
+
+function onGizmoMove(e) {
+  if (!gizmoDrag) return;
+  raycaster.setFromCamera(pointerNDC(e), camera);
+  const p = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(gizmoDrag.plane, p)) return;
+
+  if (gizmoDrag.mode === 'translate') {
+    let delta = new THREE.Vector3().subVectors(p, gizmoDrag.p0);
+    if (gizmoDrag.axisDir) delta = gizmoDrag.axisDir.clone().multiplyScalar(delta.dot(gizmoDrag.axisDir));
+    gizmoDrag.targets.forEach(t => {
+      t.parent.updateWorldMatrix(true, false);
+      const a = t.parent.worldToLocal(new THREE.Vector3(0, 0, 0));
+      const b = t.parent.worldToLocal(delta.clone());
+      t.node.transform.position.x = round3(snapVal(t.start.x + (b.x - a.x)));
+      t.node.transform.position.y = round3(snapVal(t.start.y + (b.y - a.y)));
+      t.node.transform.position.z = round3(snapVal(t.start.z + (b.z - a.z)));
+    });
+  } else if (gizmoDrag.mode === 'rotate') {
+    const v = p.clone().sub(gizmoDrag.origin);
+    if (v.lengthSq() < 1e-8) return;
+    let angle = Math.atan2(
+      new THREE.Vector3().crossVectors(gizmoDrag.startVec, v).dot(gizmoDrag.rotAxis),
+      gizmoDrag.startVec.dot(v)
+    );
+    if (snapEnabled) { const s = Math.PI / 12; angle = Math.round(angle / s) * s; }
+    const dq = new THREE.Quaternion().setFromAxisAngle(gizmoDrag.rotAxis, angle);
+    gizmoDrag.targets.forEach(t => {
+      if (!t.startWorldQ) return;
+      const worldQ = dq.clone().multiply(t.startWorldQ);
+      const localQ = t.parentWorldQInv.clone().multiply(worldQ);
+      const eul = new THREE.Euler().setFromQuaternion(localQ, 'XYZ');
+      t.node.transform.rotation = { x: round3(R2D(eul.x)), y: round3(R2D(eul.y)), z: round3(R2D(eul.z)) };
+      if (gizmoDrag.targets.length > 1) {
+        const rel = t.startWorldPos.clone().sub(gizmoDrag.origin).applyQuaternion(dq).add(gizmoDrag.origin);
+        t.parent.updateWorldMatrix(true, false);
+        const local = t.parent.worldToLocal(rel);
+        t.node.transform.position = { x: round3(local.x), y: round3(local.y), z: round3(local.z) };
+      }
+    });
+  } else {
+    const cur = p.clone().sub(gizmoDrag.origin);
+    const proj = gizmoDrag.scaleAxis === 'uniform' ? cur.dot(gizmoDrag.axisDir) : cur.dot(gizmoDrag.axisDir);
+    let f = proj / gizmoDrag.startProj;
+    if (!isFinite(f)) return;
+    f = Math.max(0.02, Math.min(40, f));
+    if (snapEnabled) f = Math.round(f * 10) / 10 || 0.1;
+    gizmoDrag.targets.forEach(t => {
+      if (gizmoDrag.scaleAxis === 'uniform') {
+        t.node.transform.scale.x = round3(t.startScale.x * f);
+        t.node.transform.scale.y = round3(t.startScale.y * f);
+        t.node.transform.scale.z = round3(t.startScale.z * f);
+      } else {
+        t.node.transform.scale[gizmoDrag.scaleAxis] = round3(t.startScale[gizmoDrag.scaleAxis] * f);
+      }
+    });
+  }
+  requestSync(); updateSpecPlate();
+}
+
+function onGizmoUp() {
+  window.removeEventListener('pointermove', onGizmoMove);
+  window.removeEventListener('pointerup', onGizmoUp);
+  if (!gizmoDrag) return;
+  gizmoDrag = null;
+  requestSync(); renderInspector();
+  setTimeout(() => { gizmoWasDragging = false; }, 0);
+}
+
+/* ---------- spec plate: works for groups and multi-selection -------------- */
+function updateSpecPlate() {
+  const plate = document.getElementById('specplate');
+  if (!plate) return;
+  if (!selectedIds.length) { plate.style.display = 'none'; return; }
+  const roots = selectionRoots();
+  const meshes = selectionMeshes(true);
+  let tris = 0, any = false;
+  const box = new THREE.Box3();
+  roots.forEach(n => {
+    const o = threeObjects.get(n.id);
+    if (o) { o.updateWorldMatrix(true, true); tris += countTris(o); box.expandByObject(o); any = true; }
+  });
+  if (!any) { plate.style.display = 'none'; return; }
+  const size = box.getSize(new THREE.Vector3());
+  const single = selectedIds.length === 1 ? getNode(selectedIds[0]) : null;
+  const rows = [];
+  if (single) {
+    rows.push(['type', single.type === 'group' ? 'group' : GEO_DEFS[single.type].label]);
+    if (single.type === 'group') rows.push(['meshes', String(meshes.length)]);
+  } else {
+    rows.push(['selected', selectedIds.length + ' objects']);
+    rows.push(['meshes', String(meshes.length)]);
+  }
+  rows.push(['tris', String(tris)]);
+  rows.push(['size', size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2)]);
+  if (single) {
+    const p = single.transform.position;
+    rows.push(['pos', p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ', ' + p.z.toFixed(1)]);
+  }
+  plate.style.display = 'block';
+  plate.innerHTML = '<div class="sp-title">' + (single ? single.name : selectedIds.length + ' selected') + '</div>' +
+    rows.map(r => '<div class="sp-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
+}
+
+/* ---------- inspector ---------------------------------------------------- */
+let inspectorTab = 'shape';
+
+function renderInspector() {
+  const body = document.getElementById('inspect-body');
+  body.innerHTML = '';
+  if (selectedIds.length === 0) {
+    body.appendChild(el('div', 'empty-inspect',
+      'Select an object in the viewport or hierarchy to edit it.<br><br>Add primitives from the shape tray, then use the actions under the hierarchy to group, duplicate or delete.'));
+    return;
+  }
+  if (selectedIds.length > 1) { renderMultiInspector(body); return; }
+
+  const node = getNode(selectedIds[0]);
+  if (!node) return;
+
+  const nameInput = document.createElement('input');
+  nameInput.className = 'name-input';
+  nameInput.value = node.name;
+  nameInput.oninput = () => { mark('name:' + node.id); node.name = nameInput.value; requestSync(); renderTree(); };
+  body.appendChild(nameInput);
+
+  if (node.type === 'group') {
+    transformSection(body, node);
+    const info = el('div', 'section');
+    info.appendChild(el('div', 'section-title', 'Group'));
+    info.appendChild(el('div', 'batch-note',
+      getDescendants(node.id).length + ' descendants. Select the children to batch-edit their material or shape.'));
+    body.appendChild(info);
+    return;
+  }
+
+  const tabs = el('div', 'itabs');
+  [['shape', 'Shape'], ['surface', 'Surface']].forEach(pair => {
+    const t = el('div', 'itab' + (inspectorTab === pair[0] ? ' active' : ''), pair[1]);
+    t.onclick = () => { inspectorTab = pair[0]; renderInspector(); };
+    tabs.appendChild(t);
+  });
+  body.appendChild(tabs);
+
+  if (inspectorTab === 'shape') {
+    transformSection(body, node);
+    geometrySection(body, node);
+  } else {
+    materialSection(body, node);
+    shadowSection(body, node);
+  }
+}
+
+function transformSection(body, node) {
+  const t = el('div', 'section');
+  t.appendChild(el('div', 'section-title', 'Transform'));
+  fieldMiniNumbers(t, 'Position', Object.assign({ step: 0.1 }, node.transform.position),
+    (axis, v) => { node.transform.position[axis] = v; requestSync(); updateSpecPlate(); });
+  fieldMiniNumbers(t, 'Rotation °', Object.assign({ step: 5 }, node.transform.rotation),
+    (axis, v) => { node.transform.rotation[axis] = v; requestSync(); });
+  fieldMiniNumbers(t, 'Scale', Object.assign({ step: 0.1 }, node.transform.scale),
+    (axis, v) => { node.transform.scale[axis] = v; requestSync(); });
+  flipRow(t);
+  btnRow(t, null, [
+    { label: 'Drop to ground', onClick: dropToGround },
+    { label: 'Reset rot', onClick: () => resetTransform('rotation') },
+    { label: 'Reset scale', onClick: () => resetTransform('scale') },
+  ]);
+  body.appendChild(t);
+}
+
+function geometrySection(body, node) {
+  const gdef = GEO_DEFS[node.type];
+  const gs = el('div', 'section');
+  gs.appendChild(el('div', 'section-title', gdef.label + ' geometry'));
+  gdef.fields.forEach(fld => {
+    if (fld.bool) {
+      fieldToggle(gs, {
+        label: fld.label, value: !!node.geometry[fld.key],
+        onChange: v => { node.geometry[fld.key] = v; requestSync(); }
+      });
+    } else {
+      fieldSlider(gs, {
+        label: fld.label, value: node.geometry[fld.key], min: fld.min, max: fld.max, step: fld.step, int: fld.int,
+        onInput: v => { node.geometry[fld.key] = v; requestSync(); updateSpecPlate(); }
+      });
+    }
+  });
+  body.appendChild(gs);
+}
+
+function materialSection(body, node) {
+  const ms = el('div', 'section');
+  ms.appendChild(el('div', 'section-title', 'Material'));
+  fieldColor(ms, { label: 'Color', value: node.material.color, onChange: v => { node.material.color = v; requestSync(); } });
+  const sw = el('div', 'swatches');
+  PALETTE.forEach(pair => {
+    const s = el('div', 'swatch');
+    s.style.background = pair[0]; s.title = pair[1];
+    s.onclick = () => { mark(null); node.material.color = pair[0]; requestSync(); renderInspector(); };
+    sw.appendChild(s);
+  });
+  ms.appendChild(sw);
+  fieldSlider(ms, { label: 'Roughness', value: node.material.roughness, min: 0, max: 1, step: 0.01, onInput: v => { node.material.roughness = v; requestSync(); } });
+  fieldSlider(ms, { label: 'Metalness', value: node.material.metalness, min: 0, max: 1, step: 0.01, onInput: v => { node.material.metalness = v; requestSync(); } });
+  fieldToggle(ms, { label: 'Flat shading', value: node.material.flatShading, onChange: v => { node.material.flatShading = v; requestSync(); } });
+  fieldToggle(ms, { label: 'Wireframe', value: node.material.wireframe, onChange: v => { node.material.wireframe = v; requestSync(); } });
+  fieldToggle(ms, { label: 'Transparent', value: node.material.transparent, onChange: v => { node.material.transparent = v; renderInspector(); requestSync(); } });
+  if (node.material.transparent) {
+    fieldSlider(ms, { label: 'Opacity', value: node.material.opacity, min: 0, max: 1, step: 0.01, onInput: v => { node.material.opacity = v; requestSync(); } });
+  }
+  fieldColor(ms, { label: 'Emissive', value: node.material.emissive, onChange: v => { node.material.emissive = v; requestSync(); } });
+  fieldSlider(ms, { label: 'Emissive intensity', value: node.material.emissiveIntensity, min: 0, max: 3, step: 0.05, onInput: v => { node.material.emissiveIntensity = v; requestSync(); } });
+  fieldSegmented(ms, {
+    label: 'Side', value: node.material.side,
+    options: [{ value: 'front', label: 'Front' }, { value: 'back', label: 'Back' }, { value: 'double', label: 'Double' }],
+    onChange: v => { node.material.side = v; requestSync(); renderInspector(); }
+  });
+  body.appendChild(ms);
+  textureSection(body, node);
+}
+
+function textureSection(body, node) {
+  if (!node.material.texture) {
+    node.material.texture = { type: 'none', colorA: null, colorB: null, tiles: 8, repeatX: 1, repeatY: 1, dataUrl: null };
+  }
+  const tex = node.material.texture;
+  const ts = el('div', 'section');
+  ts.appendChild(el('div', 'section-title', 'Texture'));
+
+  const opts = [
+    { value: 'none', label: 'None' },
+    { value: 'checker', label: 'Checker' },
+    { value: 'stripes', label: 'Stripes' },
+    { value: 'speckle', label: 'Speckle' },
+  ];
+  if (tex.dataUrl) opts.push({ value: 'image', label: 'Image (uploaded)' });
+  fieldSelect(ts, {
+    label: 'Pattern', value: tex.type, options: opts,
+    onChange: v => { tex.type = v; requestSync(); renderInspector(); }
+  });
+
+  /* image upload always available — it overrides whatever pattern is set */
+  const hidden = document.createElement('input');
+  hidden.type = 'file'; hidden.accept = 'image/*'; hidden.style.display = 'none';
+  hidden.onchange = () => {
+    const file = hidden.files && hidden.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      mark(null);
+      tex.dataUrl = reader.result;
+      tex.type = 'image';
+      requestSync(); renderInspector();
+      toast('Image texture applied');
+    };
+    reader.readAsDataURL(file);
+  };
+  ts.appendChild(hidden);
+  const imgButtons = [{ label: tex.dataUrl ? 'Replace image' : 'Upload image', onClick: () => hidden.click() }];
+  if (tex.dataUrl) {
+    imgButtons.push({
+      label: 'Remove image', onClick: () => {
+        mark(null);
+        tex.dataUrl = null;
+        if (tex.type === 'image') tex.type = 'none';
+        requestSync(); renderInspector();
+      }
+    });
+  }
+  btnRow(ts, null, imgButtons);
+
+  if (tex.type === 'checker' || tex.type === 'stripes' || tex.type === 'speckle') {
+    fieldColor(ts, { label: 'Color A', value: tex.colorA || node.material.color, onChange: v => { tex.colorA = v; requestSync(); } });
+    fieldColor(ts, { label: 'Color B', value: tex.colorB || shadeColor(node.material.color, -0.22), onChange: v => { tex.colorB = v; requestSync(); } });
+    fieldSlider(ts, {
+      label: tex.type === 'speckle' ? 'Density' : 'Tiles', value: tex.tiles, min: 2, max: 24, step: 1, int: true,
+      onInput: v => { tex.tiles = v; requestSync(); }
+    });
+  }
+  if (tex.type !== 'none') {
+    fieldSlider(ts, { label: 'Repeat X', value: tex.repeatX, min: 0.25, max: 8, step: 0.25, onInput: v => { tex.repeatX = v; requestSync(); } });
+    fieldSlider(ts, { label: 'Repeat Y', value: tex.repeatY, min: 0.25, max: 8, step: 0.25, onInput: v => { tex.repeatY = v; requestSync(); } });
+  }
+  body.appendChild(ts);
+}
+
+function shadowSection(body, node) {
+  const ss = el('div', 'section');
+  ss.appendChild(el('div', 'section-title', 'Shadows'));
+  fieldToggle(ss, { label: 'Cast shadow', value: node.castShadow, onChange: v => { node.castShadow = v; requestSync(); } });
+  fieldToggle(ss, { label: 'Receive shadow', value: node.receiveShadow, onChange: v => { node.receiveShadow = v; requestSync(); } });
+  body.appendChild(ss);
+}
+
+/* ---------- batch inspector (rebuilt on the same helpers) ----------------- */
+function renderMultiInspector(body) {
+  const roots = selectionRoots();
+  const meshes = selectionMeshes(batchIncludeChildren);
+
+  body.appendChild(el('div', 'section-title', selectedIds.length + ' objects selected'));
+  const list = el('div', 'multi-list');
+  selectedIds.forEach(id => { const n = getNode(id); if (n) list.appendChild(el('div', null, n.name)); });
+  body.appendChild(list);
+
+  const scope = el('div', 'section');
+  fieldToggle(scope, {
+    label: 'Include children', value: batchIncludeChildren, noHistory: true,
+    onChange: v => { batchIncludeChildren = v; renderInspector(); }
+  });
+  scope.appendChild(el('div', 'batch-note',
+    'Transforms apply to ' + roots.length + ' top-level object' + (roots.length === 1 ? '' : 's') +
+    '. Material and shape apply to ' + meshes.length + ' mesh' + (meshes.length === 1 ? '' : 'es') + '.'));
+  body.appendChild(scope);
+
+  const tabs = el('div', 'itabs');
+  [['shape', 'Shape'], ['surface', 'Surface']].forEach(pair => {
+    const t = el('div', 'itab' + (inspectorTab === pair[0] ? ' active' : ''), pair[1]);
+    t.onclick = () => { inspectorTab = pair[0]; renderInspector(); };
+    tabs.appendChild(t);
+  });
+  body.appendChild(tabs);
+
+  if (inspectorTab === 'shape') {
+    const t = el('div', 'section');
+    t.appendChild(el('div', 'section-title', 'Transform (batch)'));
+    batchTriple(t, 'Position', roots, 'position', 0.1);
+    batchTriple(t, 'Rotation °', roots, 'rotation', 5);
+    batchTriple(t, 'Scale', roots, 'scale', 0.1);
+    offsetRow(t, roots);
+    uniformScaleRow(t, roots);
+    flipRow(t);
+    btnRow(t, 'Reset', [
+      { label: 'Position', onClick: () => resetTransform('position') },
+      { label: 'Rotation', onClick: () => resetTransform('rotation') },
+      { label: 'Scale', onClick: () => resetTransform('scale') },
+    ]);
+    body.appendChild(t);
+
+    const ar = el('div', 'section');
+    ar.appendChild(el('div', 'section-title', 'Arrange'));
+    ['x', 'y', 'z'].forEach(axis => {
+      btnRow(ar, 'Align ' + axis.toUpperCase(), [
+        { label: 'min', onClick: () => alignSelection(axis, 'min') },
+        { label: 'center', onClick: () => alignSelection(axis, 'center') },
+        { label: 'max', onClick: () => alignSelection(axis, 'max') },
+        { label: 'spread', title: 'Distribute evenly', onClick: () => distributeSelection(axis) },
+      ]);
+    });
+    btnRow(ar, 'Tools', [
+      { label: 'Drop to ground', onClick: dropToGround },
+      { label: 'Randomize', title: 'Jitter rotation + scale', onClick: randomizeSelection },
+    ]);
+    body.appendChild(ar);
+
+    batchGeometrySection(body, meshes);
+  } else {
+    batchMaterialSection(body, meshes);
+    batchFlagsSection(body, meshes);
+  }
+}
+
+/* ---------- help overlay ------------------------------------------------- */
+const SHORTCUT_ROWS = [
+  ['Click', 'Select object'],
+  ['Ctrl/Cmd + click', 'Add to selection'],
+  ['1 / 2 / 3', 'Move / rotate / scale gizmo'],
+  ['Drag arrow or ring', 'Transform along that axis'],
+  ['Drag plane square', 'Move on that plane'],
+  ['WASD', 'Pan the camera'],
+  ['Shift + WASD', 'Orbit the camera'],
+  ['Arrows / Shift+Arrows', 'Nudge selection on XZ / Y'],
+  ['X', 'Cycle grid snap'],
+  ['G', 'Group selection'],
+  ['Ctrl/Cmd + D', 'Duplicate'],
+  ['Ctrl/Cmd + Z', 'Undo'],
+  ['Ctrl/Cmd + Shift + Z', 'Redo'],
+  ['Ctrl/Cmd + A', 'Select all top-level'],
+  ['F / double-click', 'Frame selection'],
+  ['Del', 'Delete selection'],
+  ['Esc', 'Deselect'],
+  ['?', 'This panel'],
+];
+function buildHelpOverlay() {
+  const wrap = el('div', 'help-overlay');
+  wrap.id = 'help-overlay';
+  const rows = SHORTCUT_ROWS.map(s => '<kbd>' + s[0] + '</kbd><span>' + s[1] + '</span>').join('');
+  wrap.innerHTML = '<div class="help-card"><h3>Keyboard &amp; mouse</h3><div class="help-grid">' + rows +
+    '</div><button class="btn" id="help-close">Close</button></div>';
+  document.body.appendChild(wrap);
+  wrap.onclick = e => { if (e.target === wrap || e.target.id === 'help-close') wrap.classList.remove('show'); };
+}
+
+/* ---------- camera keys (WASD pan, Shift+WASD orbit) --------------------- */
+const heldKeys = new Set();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+function updateCameraKeys() {
+  if (!heldKeys.size || !controls) return;
+  const sph = controls.spherical;
+  if (heldKeys.has('shift')) {
+    if (heldKeys.has('a')) sph.theta += 0.028;
+    if (heldKeys.has('d')) sph.theta -= 0.028;
+    if (heldKeys.has('w')) sph.phi = Math.max(0.06, sph.phi - 0.02);
+    if (heldKeys.has('s')) sph.phi = Math.min(Math.PI - 0.06, sph.phi + 0.02);
+    return;
+  }
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-6) return;
+  forward.normalize();
+  const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
+  const dir = new THREE.Vector3();
+  if (heldKeys.has('w')) dir.add(forward);
+  if (heldKeys.has('s')) dir.sub(forward);
+  if (heldKeys.has('d')) dir.add(right);
+  if (heldKeys.has('a')) dir.sub(right);
+  if (dir.lengthSq() < 1e-6) return;
+  controls.target.addScaledVector(dir.normalize(), sph.radius * 0.018);
+}
+
+/* ---------- wiring ------------------------------------------------------- */
+function wireEnhancements() {
+  const bind = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+  bind('btn-undo', undo);
+  bind('btn-redo', redo);
+  bind('btn-help', toggleHelp);
+  bind('btn-snap', cycleSnap);
+  bind('btn-drop', dropToGround);
+  bind('btn-copymat', () => {
+    const n = selectedIds.length === 1 ? getNode(selectedIds[0]) : null;
+    if (n && n.material) copyMaterialFrom(n);
+    else toast('Select a single mesh to copy from');
+  });
+  bind('btn-pastemat', pasteMaterialToSelection);
+  bind('vt-translate', () => setGizmoMode('translate'));
+  bind('vt-rotate', () => setGizmoMode('rotate'));
+  bind('vt-scale', () => setGizmoMode('scale'));
+  setSnapUI();
+  setGizmoMode('translate');
+
+  renderer.domElement.addEventListener('dblclick', focusOnSelection);
+
+  const tree = document.getElementById('tree');
+  tree.addEventListener('dragover', e => { if (dragNodeId) e.preventDefault(); });
+  tree.addEventListener('drop', e => {
+    if (!dragNodeId || e.target.id !== 'tree') return;
+    e.preventDefault();
+    reparentNode(dragNodeId, null);
+    dragNodeId = null;
+  });
+
+  window.addEventListener('blur', () => heldKeys.clear());
+
+  document.addEventListener('keyup', e => {
+    const k = (e.key || '').toLowerCase();
+    if (k === 'shift') heldKeys.delete('shift');
+    else heldKeys.delete(k);
+  });
+
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const k = (e.key || '').toLowerCase();
+    const meta = e.ctrlKey || e.metaKey;
+
+    if (k === 'shift') { heldKeys.add('shift'); return; }
+    if (!meta && (k === 'w' || k === 'a' || k === 's' || k === 'd')) { heldKeys.add(k); e.preventDefault(); return; }
+
+    if (meta && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+    else if (meta && k === 'y') { e.preventDefault(); redo(); }
+    else if (meta && k === 'a') { e.preventDefault(); setSelection(nodes.filter(n => !n.parentId).map(n => n.id)); }
+    else if (!meta && k === 'x') { cycleSnap(); }
+    else if (!meta && k === '1') { setGizmoMode('translate'); }
+    else if (!meta && k === '2') { setGizmoMode('rotate'); }
+    else if (!meta && k === '3') { setGizmoMode('scale'); }
+    else if (k === '?' || (k === '/' && e.shiftKey)) { toggleHelp(); }
+    else if (e.key && e.key.indexOf('Arrow') === 0) { nudgeByKey(e); }
+  });
+}
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+init3D();
+buildAddTray();
+wireToolbar();
+buildGizmo();
+buildHelpOverlay();
+wireEnhancements();
+seedStarterScene();
+requestSync();
+renderTree();
+renderInspector();
+resetHistory();
+
+})();
+</script>
+</body>
+</html>

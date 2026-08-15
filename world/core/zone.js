@@ -82,7 +82,7 @@ export function validateZone(zone) {
 // core/interactables.js) — a portal must win over disembarking so a
 // boat-borne crossing actually fires on E instead of hopping the rider out.
 const PORTAL_PRIORITY = 100;
-const PORTAL_RADIUS = 3.5;
+const PORTAL_RADIUS = 5;
 
 // Registers a zone's portals as interactables (E to enter, in range) — one
 // shared implementation so Grassland and Lagoon don't each duplicate the
